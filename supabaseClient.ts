@@ -91,7 +91,7 @@ export const dbSaveRaceResult = async (result: RaceResult) => {
 export const dbPlaceBet = async (ticket: Ticket, user: User) => {
     if (!supabase) throw new Error("Supabase not connected");
     const isOnlineCustomer = user.role === 'Customer';
-    const { data, error } = await supabase.rpc('place_bet_transaction', {
+    const rpcPayload = {
         p_ticket_id: ticket.id,
         p_vendor_id: isOnlineCustomer ? null : user.id,
         p_vendor_name: user.name,
@@ -100,9 +100,63 @@ export const dbPlaceBet = async (ticket: Ticket, user: User) => {
         p_selections: ticket.selections,
         p_status: ticket.status,
         p_booking_code: ticket.bookingCode || null
-    });
-    if (error) throw new Error(error.message);
-    return data;
+    };
+
+    const { data, error } = await supabase.rpc('place_bet_transaction', rpcPayload);
+    if (!error) return data;
+
+    const missingRpc = (error.message || '').includes("Could not find the function public.place_bet_transaction");
+    if (!missingRpc) throw new Error(error.message);
+
+    // Fallback path for environments where the RPC function is not deployed yet.
+    if (isOnlineCustomer) {
+        const { data: userRow, error: walletFetchError } = await supabase
+            .from('users')
+            .select('wallet_balance')
+            .eq('id', user.id)
+            .single();
+
+        if (walletFetchError) throw new Error(walletFetchError.message);
+
+        const currentBalance = Number(userRow?.wallet_balance || 0);
+        const betCost = Number(ticket.totalCost || 0);
+        if (currentBalance < betCost) {
+            throw new Error('Insufficient wallet balance');
+        }
+
+        const nextBalance = Number((currentBalance - betCost).toFixed(2));
+        const { error: walletUpdateError } = await supabase
+            .from('users')
+            .update({ wallet_balance: nextBalance })
+            .eq('id', user.id);
+
+        if (walletUpdateError) throw new Error(walletUpdateError.message);
+    }
+
+    const ticketInsertPayload = {
+        id: ticket.id,
+        timestamp: ticket.timestamp.toISOString(),
+        vendor_id: isOnlineCustomer ? null : ticket.vendorId || user.id,
+        vendor_name: ticket.vendorName || user.name,
+        customer_id: isOnlineCustomer ? user.id : ticket.customerId || null,
+        status: ticket.status,
+        booking_code: ticket.bookingCode || null,
+        selections: ticket.selections,
+        total_cost: ticket.totalCost,
+        winnings: ticket.winnings || null,
+        winnings_breakdown: ticket.winningsBreakdown || null,
+        paid_at: ticket.paidAt ? ticket.paidAt.toISOString() : null,
+        paid_by_id: ticket.paidById || null,
+        paid_by_name: ticket.paidByName || null,
+        canceled_at: ticket.canceledAt ? ticket.canceledAt.toISOString() : null,
+        canceled_by_id: ticket.canceledById || null,
+        canceled_by_name: ticket.canceledByName || null
+    };
+
+    const { error: insertError } = await supabase.from('tickets').insert(ticketInsertPayload);
+    if (insertError) throw new Error(insertError.message);
+
+    return { success: true, fallback: true };
 };
 
 export const dbPayoutTicket = async (ticketId: string, amount: number, staffId: string, staffName: string) => {
