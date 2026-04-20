@@ -13,6 +13,7 @@ import { HorseSelector } from './HorseSelector';
 import { TicketCheckPanel } from './TicketCheckPanel';
 import { TicketDetailsTable } from './TicketDetailsTable';
 import { PendingManualBetsPanel } from './PendingManualBetsPanel';
+import { RapportPrintPanel } from './RapportPrintPanel';
 import RaceTimerButton from './RaceTimerButton';
 import { BET_PRICING } from '../constants';
 import { BETTING_CUTOFF_MS, triggerPrint } from '../utils';
@@ -246,6 +247,37 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in">
                         <CustomerDepositPanel customers={customers} onDeposit={onDeposit} depositLogs={depositLogs} currentUserRole={currentUser.role} depositRequests={depositRequests} onApproveDepositRequest={onApproveDepositRequest} onRejectDepositRequest={onRejectDepositRequest} />
                         <ProcessWithdrawalPanel onProcessWithdrawal={onProcessWithdrawal} withdrawalRequests={withdrawalRequests} customers={customers} />
+                    </div>
+                );
+            case 'RAPPORTS':
+                return (
+                    <div className="animate-fade-in">
+                        <RapportPrintPanel
+                            races={races.filter(r => r.result).sort((a, b) => b.endDate.getTime() - a.endDate.getTime())}
+                            onPrintRequest={(race) => setRapportModalRace(race)}
+                        />
+                    </div>
+                );
+            case 'UPDATE_RESULTS':
+                return (
+                    <div className="animate-fade-in">
+                        <RaceResultsManagement
+                            races={races}
+                            tickets={allTickets}
+                            effectiveTime={effectiveTime}
+                            onSave={onSaveRaceResult}
+                        />
+                    </div>
+                );
+            case 'MANUAL_BETS':
+                return (
+                    <div className="animate-fade-in">
+                        <PendingManualBetsPanel
+                            manualBetOrders={manualBetOrders}
+                            currentUser={currentUser}
+                            races={races}
+                            onProcessManualBet={onProcessManualBet}
+                        />
                     </div>
                 );
             case 'SALES_REPORT':

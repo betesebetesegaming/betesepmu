@@ -1,5 +1,5 @@
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { ProgramImage } from '../types';
 
 // Make TypeScript aware of the html2canvas library loaded from the CDN
@@ -183,6 +183,7 @@ interface ProgramModalProps {
 export const ProgramModal: React.FC<ProgramModalProps> = ({ isOpen, onClose, programImages }) => {
     const programRef = useRef<HTMLDivElement>(null);
     const [activeIndex, setActiveIndex] = useState(0);
+    const [isFullscreen, setIsFullscreen] = useState(false);
 
     // Zoom and Pan state
     const [zoom, setZoom] = useState(1);
@@ -190,197 +191,311 @@ export const ProgramModal: React.FC<ProgramModalProps> = ({ isOpen, onClose, pro
     const [isDragging, setIsDragging] = useState(false);
     const [startDrag, setStartDrag] = useState({ x: 0, y: 0 });
 
+    // Touch pinch-to-zoom state
+    const lastPinchDistRef = useRef<number | null>(null);
+    const lastZoomRef = useRef(1);
+
+    // Touch swipe state
+    const touchStartXRef = useRef<number | null>(null);
+
     useEffect(() => {
-        // Reset zoom and position when modal is opened or image changes
         setZoom(1);
         setPosition({ x: 0, y: 0 });
     }, [isOpen, activeIndex]);
-    
-    if (!isOpen) return null;
 
-    const handleNext = () => setActiveIndex((prev) => (prev + 1) % programImages.length);
-    const handlePrev = () => setActiveIndex((prev) => (prev - 1 + programImages.length) % programImages.length);
-    
-    const handleZoomIn = () => setZoom(prev => Math.min(prev + 0.2, 3));
-    const handleZoomOut = () => setZoom(prev => Math.max(prev - 0.2, 1));
+    const handleNext = useCallback(() => setActiveIndex((prev) => (prev + 1) % programImages.length), [programImages.length]);
+    const handlePrev = useCallback(() => setActiveIndex((prev) => (prev - 1 + programImages.length) % programImages.length), [programImages.length]);
+
+    const handleZoomIn  = () => setZoom(prev => Math.min(parseFloat((prev + 0.25).toFixed(2)), 4));
+    const handleZoomOut = () => { setZoom(prev => { const next = Math.max(parseFloat((prev - 0.25).toFixed(2)), 1); if (next === 1) setPosition({ x: 0, y: 0 }); return next; }); };
     const handleZoomReset = () => { setZoom(1); setPosition({ x: 0, y: 0 }); };
 
+    // Keyboard navigation
+    useEffect(() => {
+        if (!isOpen) return;
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') onClose();
+            if (e.key === 'ArrowRight') handleNext();
+            if (e.key === 'ArrowLeft') handlePrev();
+            if (e.key === '+' || e.key === '=') handleZoomIn();
+            if (e.key === '-') handleZoomOut();
+            if (e.key === '0') handleZoomReset();
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [isOpen, handleNext, handlePrev, onClose]);
+
     const handleImageClick = () => {
-        if (zoom === 1) {
-            setZoom(2);
-        } else {
-            handleZoomReset();
-        }
+        if (zoom === 1) setZoom(2);
+        else handleZoomReset();
     };
 
+    // Mouse drag
     const handleMouseDown = (e: React.MouseEvent) => {
-        if (zoom > 1) {
-            e.preventDefault();
-            setIsDragging(true);
-            setStartDrag({
-                x: e.clientX - position.x,
-                y: e.clientY - position.y,
-            });
-        }
+        if (zoom > 1) { e.preventDefault(); setIsDragging(true); setStartDrag({ x: e.clientX - position.x, y: e.clientY - position.y }); }
     };
-
     const handleMouseMove = (e: React.MouseEvent) => {
-        if (isDragging) {
+        if (isDragging) { e.preventDefault(); setPosition({ x: e.clientX - startDrag.x, y: e.clientY - startDrag.y }); }
+    };
+    const handleMouseUpOrLeave = () => setIsDragging(false);
+
+    // Touch events — swipe to navigate, pinch to zoom
+    const handleTouchStart = (e: React.TouchEvent) => {
+        if (e.touches.length === 1) {
+            touchStartXRef.current = e.touches[0].clientX;
+        } else if (e.touches.length === 2) {
+            touchStartXRef.current = null;
+            const dx = e.touches[0].clientX - e.touches[1].clientX;
+            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            lastPinchDistRef.current = Math.hypot(dx, dy);
+            lastZoomRef.current = zoom;
+        }
+    };
+    const handleTouchMove = (e: React.TouchEvent) => {
+        if (e.touches.length === 2) {
             e.preventDefault();
-            setPosition({
-                x: e.clientX - startDrag.x,
-                y: e.clientY - startDrag.y,
-            });
-        }
-    };
-
-    const handleMouseUpOrLeave = () => {
-        setIsDragging(false);
-    };
-
-    const handleDownload = async () => {
-        if (programRef.current) {
-            try {
-                // Temporarily reset transform for clean capture
-                const originalTransform = programRef.current.style.transform;
-                programRef.current.style.transform = 'scale(1) translate(0,0)';
-                
-                const canvas = await html2canvas(programRef.current, { scale: 2, useCORS: true });
-                
-                // Restore transform
-                programRef.current.style.transform = originalTransform;
-
-                const link = document.createElement('a');
-                link.download = `betese-${programImages[activeIndex]?.type || 'program'}-${activeIndex + 1}.png`;
-                link.href = canvas.toDataURL('image/png');
-                link.click();
-            } catch (error) {
-                console.error("Error generating image:", error);
-                alert("Sorry, there was an error generating the image for download.");
+            const dx = e.touches[0].clientX - e.touches[1].clientX;
+            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            const dist = Math.hypot(dx, dy);
+            if (lastPinchDistRef.current !== null) {
+                const scale = dist / lastPinchDistRef.current;
+                const newZoom = Math.min(Math.max(parseFloat((lastZoomRef.current * scale).toFixed(2)), 1), 4);
+                setZoom(newZoom);
+                if (newZoom === 1) setPosition({ x: 0, y: 0 });
             }
         }
     };
-
-    const handleShare = async () => {
-        if (programRef.current && navigator.share) {
-            try {
-                // Temporarily reset transform for clean capture
-                const originalTransform = programRef.current.style.transform;
-                programRef.current.style.transform = 'scale(1) translate(0,0)';
-
-                const canvas = await html2canvas(programRef.current, { scale: 2, useCORS: true });
-                
-                 // Restore transform
-                programRef.current.style.transform = originalTransform;
-
-                canvas.toBlob(async (blob) => {
-                    if (blob) {
-                        const file = new File([blob], `betese-${programImages[activeIndex]?.type || 'program'}.png`, { type: 'image/png' });
-                        await navigator.share({
-                            title: "Betese PMU Content",
-                            text: `Here is today's ${programImages[activeIndex]?.type || 'program'} from Betese PMU!`,
-                            files: [file],
-                        });
-                    }
-                }, 'image/png');
-            } catch (error) {
-                 if ((error as DOMException).name !== 'AbortError') {
-                    alert('An error occurred while trying to share.');
-                }
+    const handleTouchEnd = (e: React.TouchEvent) => {
+        lastPinchDistRef.current = null;
+        if (e.changedTouches.length === 1 && touchStartXRef.current !== null && zoom === 1) {
+            const diff = e.changedTouches[0].clientX - touchStartXRef.current;
+            if (Math.abs(diff) > 50) {
+                if (diff < 0) handleNext();
+                else handlePrev();
             }
-        } else {
-            alert('Web Share is not supported by your browser. Try downloading the image instead.');
         }
+        touchStartXRef.current = null;
     };
-    
+
     const hasImages = programImages.length > 0;
     const currentImage = hasImages ? programImages[activeIndex] : null;
 
     const getCursorStyle = () => {
         if (zoom > 1) return isDragging ? 'grabbing' : 'grab';
         return hasImages ? 'zoom-in' : 'default';
-    }
+    };
+
+    const handleDownload = async () => {
+        const imageUrl = currentImage?.url;
+        if (imageUrl) {
+            try {
+                const response = await fetch(imageUrl);
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.download = `betese-${currentImage?.type || 'program'}-${activeIndex + 1}.png`;
+                link.href = url;
+                link.click();
+                URL.revokeObjectURL(url);
+                return;
+            } catch { /* fall through */ }
+        }
+        if (programRef.current) {
+            try {
+                const orig = programRef.current.style.transform;
+                programRef.current.style.transform = 'scale(1) translate(0,0)';
+                const canvas = await html2canvas(programRef.current, { scale: 2, useCORS: true });
+                programRef.current.style.transform = orig;
+                const link = document.createElement('a');
+                link.download = `betese-${currentImage?.type || 'program'}-${activeIndex + 1}.png`;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            } catch (error) {
+                alert('Sorry, there was an error generating the image for download.');
+            }
+        }
+    };
+
+    const handleShare = async () => {
+        if (!navigator.share) {
+            const imageUrl = currentImage?.url;
+            if (imageUrl && navigator.clipboard) {
+                try { await navigator.clipboard.writeText(imageUrl); alert('Image link copied to clipboard! You can now paste and share it.'); }
+                catch { alert('Sharing is not supported by your browser. Try downloading the image instead.'); }
+            } else {
+                alert('Sharing is not supported by your browser. Try downloading the image instead.');
+            }
+            return;
+        }
+        try {
+            const imageUrl = currentImage?.url;
+            if (imageUrl) {
+                try {
+                    const response = await fetch(imageUrl);
+                    const blob = await response.blob();
+                    const file = new File([blob], `betese-${currentImage?.type || 'program'}.png`, { type: blob.type || 'image/png' });
+                    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                        await navigator.share({ title: 'Betese PMU', text: `Today's racing program from Betese PMU!`, files: [file] });
+                        return;
+                    }
+                } catch { /* fall through */ }
+            }
+            if (programRef.current) {
+                const orig = programRef.current.style.transform;
+                programRef.current.style.transform = 'scale(1) translate(0,0)';
+                const canvas = await html2canvas(programRef.current, { scale: 2, useCORS: true });
+                programRef.current.style.transform = orig;
+                canvas.toBlob(async (blob) => {
+                    if (blob) {
+                        const file = new File([blob], `betese-program.png`, { type: 'image/png' });
+                        await navigator.share({ title: 'Betese PMU', text: `Today's racing program!`, files: [file] });
+                    }
+                }, 'image/png');
+            }
+        } catch (error) {
+            if ((error as DOMException).name !== 'AbortError') alert('An error occurred while trying to share.');
+        }
+    };
+
+    if (!isOpen) return null;
+
+    const today = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    const zoomPct = Math.round(zoom * 100);
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4" onClick={onClose}>
-            <div 
-                className="bg-white rounded-lg shadow-2xl w-full max-w-4xl h-[90vh] flex flex-col"
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-2 sm:p-4" onClick={onClose}>
+            <div
+                className={`bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden transition-all ${isFullscreen ? 'w-screen h-screen rounded-none' : 'w-full max-w-5xl h-[95vh]'}`}
                 onClick={e => e.stopPropagation()}
             >
-                <div className="flex justify-between items-center p-4 border-b">
-                     <h2 className="text-xl font-bold text-betese-dark">
-                        {currentImage ? `${currentImage.type.charAt(0).toUpperCase() + currentImage.type.slice(1)} (${activeIndex + 1}/${programImages.length})` : "Today's Racing Program"}
-                    </h2>
-                    <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-200">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </button>
+                {/* ── Header ── */}
+                <div className="bg-gradient-to-r from-blue-800 to-blue-600 px-4 py-3 flex items-center justify-between flex-shrink-0">
+                    <div className="flex items-center gap-3 min-w-0">
+                        <span className="text-2xl">📋</span>
+                        <div className="min-w-0">
+                            <p className="text-white font-black text-sm sm:text-base uppercase leading-none truncate">
+                                {currentImage ? `Program — Page ${activeIndex + 1} of ${programImages.length}` : "Today's Racing Program"}
+                            </p>
+                            <p className="text-blue-200 text-[11px] font-medium leading-none mt-0.5">{today}</p>
+                        </div>
+                        <span className="flex-shrink-0 bg-yellow-400 text-blue-900 text-[10px] font-black px-2 py-0.5 rounded-full uppercase animate-pulse">LIVE</span>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                        <button
+                            onClick={() => setIsFullscreen(f => !f)}
+                            title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+                            className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+                        >
+                            {isFullscreen
+                                ? <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5M15 15l5.25 5.25" /></svg>
+                                : <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>
+                            }
+                        </button>
+                        <button onClick={onClose} title="Close (Esc)" className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
                 </div>
-                <div 
-                    className="flex-1 p-4 bg-gray-100 relative overflow-hidden"
+
+                {/* ── Hint bar ── */}
+                <div className="bg-blue-50 border-b border-blue-100 px-4 py-1 flex items-center justify-center gap-3 text-blue-600 text-[11px] font-semibold flex-shrink-0 flex-wrap">
+                    <span>🔍 Tap image to zoom</span>
+                    <span>·</span>
+                    <span>✋ Drag to pan when zoomed</span>
+                    {programImages.length > 1 && <><span>·</span><span>👈 Swipe or arrows to navigate</span></>}
+                    <span>·</span>
+                    <span>⌨️ ← → + - 0 keys work too</span>
+                </div>
+
+                {/* ── Main image area ── */}
+                <div
+                    className="flex-1 bg-gray-900 relative overflow-hidden"
                     style={{ cursor: getCursorStyle() }}
                     onMouseDown={handleMouseDown}
                     onMouseMove={handleMouseMove}
                     onMouseUp={handleMouseUpOrLeave}
                     onMouseLeave={handleMouseUpOrLeave}
                     onClick={handleImageClick}
+                    onTouchStart={handleTouchStart}
+                    onTouchMove={handleTouchMove}
+                    onTouchEnd={handleTouchEnd}
                 >
-                     <ActualProgram ref={programRef} imageSrc={currentImage?.url ?? null} zoom={zoom} position={position} />
-                     {hasImages && programImages.length > 1 && (
-                         <>
-                         <button onClick={(e) => { e.stopPropagation(); handlePrev(); }} className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/40 text-white p-2 rounded-full hover:bg-black/60 z-10">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-                         </button>
-                         <button onClick={(e) => { e.stopPropagation(); handleNext(); }} className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/40 text-white p-2 rounded-full hover:bg-black/60 z-10">
-                             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                         </button>
-                         </>
-                     )}
+                    <ActualProgram ref={programRef} imageSrc={currentImage?.url ?? null} zoom={zoom} position={position} />
+
+                    {/* Zoom badge */}
+                    {zoom !== 1 && (
+                        <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-black/60 text-white text-xs font-black px-3 py-1 rounded-full pointer-events-none">
+                            {zoomPct}%
+                        </div>
+                    )}
+
+                    {/* Prev / Next arrows */}
+                    {hasImages && programImages.length > 1 && (
+                        <>
+                            <button onClick={(e) => { e.stopPropagation(); handlePrev(); }} className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/75 text-white p-3 rounded-full z-10 transition-colors">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                            </button>
+                            <button onClick={(e) => { e.stopPropagation(); handleNext(); }} className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/75 text-white p-3 rounded-full z-10 transition-colors">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                            </button>
+                        </>
+                    )}
                 </div>
-                 {hasImages && programImages.length > 1 && (
-                     <div className="p-2 bg-gray-200 border-t">
+
+                {/* ── Thumbnail strip ── */}
+                {hasImages && programImages.length > 1 && (
+                    <div className="bg-gray-800 border-t border-gray-700 px-2 py-2 flex-shrink-0">
                         <div className="flex justify-center items-center gap-2 overflow-x-auto">
-                             {programImages.map((image, index) => (
-                                 <button key={image.id} onClick={() => setActiveIndex(index)} className={`w-20 h-20 flex-shrink-0 rounded-md overflow-hidden border-2 ${index === activeIndex ? 'border-betese-green' : 'border-transparent'}`}>
-                                     <img src={image.url} alt={`${image.type} ${index + 1}`} className="w-full h-full object-cover" />
-                                 </button>
-                             ))}
-                         </div>
-                     </div>
-                 )}
-                <div className="p-3 border-t bg-white flex justify-between items-center flex-wrap gap-2">
-                     <div className="flex items-center gap-2">
-                         <button onClick={(e) => { e.stopPropagation(); handleZoomOut(); }} disabled={zoom <= 1} className="p-2 rounded-full bg-gray-200 hover:bg-gray-300 disabled:opacity-50">-</button>
-                         <button onClick={(e) => { e.stopPropagation(); handleZoomReset(); }} className="text-sm px-3 py-1 rounded-md bg-gray-200 hover:bg-gray-300">Reset</button>
-                         <button onClick={(e) => { e.stopPropagation(); handleZoomIn(); }} disabled={zoom >= 3} className="p-2 rounded-full bg-gray-200 hover:bg-gray-300 disabled:opacity-50">+</button>
-                     </div>
-                     <div className="flex gap-2">
+                            {programImages.map((image, index) => (
+                                <button
+                                    key={image.id}
+                                    onClick={() => setActiveIndex(index)}
+                                    className={`relative w-16 h-12 sm:w-20 sm:h-14 flex-shrink-0 rounded-md overflow-hidden border-2 transition-all ${index === activeIndex ? 'border-yellow-400 scale-110 shadow-lg' : 'border-transparent opacity-60 hover:opacity-90'}`}
+                                >
+                                    <img src={image.url} alt={`Page ${index + 1}`} className="w-full h-full object-cover" />
+                                    <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[9px] text-center py-0.5 font-bold">{index + 1}</div>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* ── Bottom toolbar ── */}
+                <div className="bg-white border-t px-3 py-2 flex items-center justify-between flex-wrap gap-2 flex-shrink-0">
+                    {/* Zoom controls */}
+                    <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1">
+                        <button onClick={(e) => { e.stopPropagation(); handleZoomOut(); }} disabled={zoom <= 1} title="Zoom out (-)" className="w-8 h-8 rounded-lg bg-white shadow-sm font-black text-lg disabled:opacity-30 hover:bg-gray-50 transition-colors flex items-center justify-center">−</button>
+                        <button onClick={(e) => { e.stopPropagation(); handleZoomReset(); }} title="Reset zoom (0)" className="px-3 h-8 rounded-lg bg-white shadow-sm text-xs font-black hover:bg-gray-50 transition-colors min-w-[52px]">{zoomPct}%</button>
+                        <button onClick={(e) => { e.stopPropagation(); handleZoomIn(); }} disabled={zoom >= 4} title="Zoom in (+)" className="w-8 h-8 rounded-lg bg-white shadow-sm font-black text-lg disabled:opacity-30 hover:bg-gray-50 transition-colors flex items-center justify-center">+</button>
+                    </div>
+
+                    {/* Action buttons */}
+                    <div className="flex items-center gap-2">
                         <button
-                           onClick={handleDownload}
-                           disabled={!hasImages}
-                           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400"
+                            onClick={handleDownload}
+                            disabled={!hasImages}
+                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-sm disabled:bg-gray-300 transition-colors text-sm"
                         >
-                           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
-                           Download
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+                            Download
                         </button>
-                        {navigator.share && (
-                           <button
-                              onClick={handleShare}
-                              disabled={!hasImages}
-                              className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition-colors disabled:bg-gray-400"
-                           >
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z" /></svg>
-                              Share
-                           </button>
-                        )}
-                     </div>
-                     <button
-                        onClick={onClose}
-                        className="px-6 py-2 bg-gray-600 text-white font-semibold rounded-lg hover:bg-gray-700"
-                    >
-                        Close
-                    </button>
+                        <button
+                            onClick={handleShare}
+                            disabled={!hasImages}
+                            className="flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white font-bold rounded-xl shadow-sm disabled:bg-gray-300 transition-colors text-sm"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z" /></svg>
+                            Share
+                        </button>
+                        <button
+                            onClick={onClose}
+                            className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-xl transition-colors text-sm"
+                        >
+                            Close
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
