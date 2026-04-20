@@ -109,6 +109,7 @@ const AdminMenu: React.FC<{ setView: (view: AdminView) => void; }> = ({ setView 
         { view: 'REPORTS', label: 'Payout Reports', icon: '📊', color: 'from-yellow-500 to-yellow-600' },
         { view: 'INTEGRATIONS', label: 'Payment API', icon: '🔗', color: 'from-yellow-600 to-orange-600' },
         { view: 'SUPPORT', label: 'Support & Snapshot', icon: '🚑', color: 'from-red-600 to-red-800' },
+        { view: 'PRINTING', label: 'Test Print', icon: '🖨️', color: 'from-slate-500 to-slate-700' },
     ];
     return (
         <div>
@@ -151,6 +152,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
             case 'TICKET_PAYOUT': return <TicketToolsView allTickets={allTickets} onCancelTicket={onCancelTicket} races={races} onPayoutTicket={onPayoutTicket} effectiveTime={effectiveTime} currentUser={currentUser} onReprintTicket={onReprintTicket} />;
             case 'INTEGRATIONS': return <IntegrationSettingsPanel configs={paymentConfigs} onSave={onSavePaymentConfig} />;
             case 'SUPPORT': return <SupportPanel />;
+            case 'PRINTING': return <TestPrintPanel />;
             case 'DASHBOARD':
             default: return <div className="space-y-6"><RecentResultsPanel races={races} effectiveTime={effectiveTime} /><AdminMenu setView={setView} /></div>;
         }

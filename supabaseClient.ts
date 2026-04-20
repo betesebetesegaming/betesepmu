@@ -45,7 +45,6 @@ export const dbSaveRace = async (race: Race) => {
         end_date: race.endDate.toISOString(),
         horse_count: race.horseCount,
         non_runners: race.nonRunners || [],
-        disabled_bet_types: race.disabledBetTypes || [],
         jackpot: race.jackpot || 0
     });
     if (error) throw error;
@@ -58,7 +57,6 @@ export const dbUpdateRace = async (race: Race) => {
         start_date: race.startDate.toISOString(),
         end_date: race.endDate.toISOString(),
         horse_count: race.horseCount,
-        disabled_bet_types: race.disabledBetTypes || [],
         jackpot: race.jackpot || 0
     }).eq('id', race.id);
     if (error) throw error;
