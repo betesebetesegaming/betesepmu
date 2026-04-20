@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+@theme {
+  --color-betese-green: #008000;
+  --color-betese-yellow: #FFFF00;
+  --color-betese-dark: #008000;
+}
+
+@layer base {
+  body {
+    @apply bg-gray-100;
+  }
+}
+
+/* High-contrast styles for printing via html2canvas - migrated from index.html */
+.print-mode {
+    &, & * {
+        color: #000000 !important;
+        background-color: #ffffff !important;
+        background-image: none !important;
+        border-color: #000000 !important;
+        
+        /* FORCE EXTREME BOLDNESS/DARKNESS */
+        font-weight: 900 !important;
+        
+        /* OPTIMIZE TEXT FOR THERMAL PRINTING (Sharp edges) */
+        text-rendering: geometricPrecision !important;
+        -webkit-font-smoothing: none !important;
+        
+        /* Performance optimizations for html2canvas */
+        text-shadow: none !important;
+        box-shadow: none !important;
+        filter: none !important;
+        backdrop-filter: none !important;
+        transform: none !important;
+        
+        -webkit-print-color-adjust: exact;
+        color-adjust: exact;
+    }
+
+    .printable-content {
+        border: none !important;
+        padding: 0 !important;
+    }
+}
