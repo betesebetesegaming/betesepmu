@@ -1,0 +1,8 @@
+{
+  "name": "Remix: Betese PMU System",
+  "description": "Professional PMU betting interface for Android terminals and PC. Features sales tracking, ticket printing, and real-time race management.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}

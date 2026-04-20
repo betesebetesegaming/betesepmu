@@ -1,0 +1,78 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <!-- Viewport optimized for Android Terminals: Disables zooming for a native app feel -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#008000" />
+    <title>Betese PMU System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              'betese-green': '#008000',
+              'betese-yellow': '#FFFF00',
+              'betese-dark': '#008000',
+            },
+          },
+        },
+      }
+    </script>
+    <style>
+      /* High-contrast styles for printing via html2canvas */
+      .print-mode, .print-mode * {
+        color: #000000 !important;
+        background-color: #ffffff !important;
+        background-image: none !important;
+        border-color: #000000 !important;
+        
+        /* FORCE EXTREME BOLDNESS/DARKNESS */
+        font-weight: 900 !important;
+        
+        /* OPTIMIZE TEXT FOR THERMAL PRINTING (Sharp edges) */
+        text-rendering: geometricPrecision !important;
+        -webkit-font-smoothing: none !important;
+        
+        /* Performance optimizations for html2canvas */
+        text-shadow: none !important;
+        box-shadow: none !important;
+        filter: none !important;
+        backdrop-filter: none !important;
+        transform: none !important;
+        
+        -webkit-print-color-adjust: exact;
+        color-adjust: exact;
+      }
+      .print-mode .printable-content {
+        border: none !important;
+        padding: 0 !important;
+      }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- Scripts for browser compatibility -->
+    <!-- Use PRODUCTION builds of React for performance on terminals -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.87.1"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body class="bg-gray-100">
+    <div id="root"></div>
+    <script type="text/babel" src="/index.tsx"></script>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>
