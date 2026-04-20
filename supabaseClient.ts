@@ -91,24 +91,6 @@ export const dbSaveRaceResult = async (result: RaceResult) => {
 export const dbPlaceBet = async (ticket: Ticket, user: User) => {
     if (!supabase) throw new Error("Supabase not connected");
     const isOnlineCustomer = user.role === 'Customer';
-    const rpcPayload = {
-        p_ticket_id: ticket.id,
-        p_vendor_id: isOnlineCustomer ? null : user.id,
-        p_vendor_name: user.name,
-        p_customer_id: isOnlineCustomer ? user.id : null,
-        p_total_cost: ticket.totalCost,
-        p_selections: ticket.selections,
-        p_status: ticket.status,
-        p_booking_code: ticket.bookingCode || null
-    };
-
-    const { data, error } = await supabase.rpc('place_bet_transaction', rpcPayload);
-    if (!error) return data;
-
-    const missingRpc = (error.message || '').includes("Could not find the function public.place_bet_transaction");
-    if (!missingRpc) throw new Error(error.message);
-
-    // Fallback path for environments where the RPC function is not deployed yet.
     if (isOnlineCustomer) {
         const { data: userRow, error: walletFetchError } = await supabase
             .from('users')
@@ -156,7 +138,7 @@ export const dbPlaceBet = async (ticket: Ticket, user: User) => {
     const { error: insertError } = await supabase.from('tickets').insert(ticketInsertPayload);
     if (insertError) throw new Error(insertError.message);
 
-    return { success: true, fallback: true };
+    return { success: true };
 };
 
 export const dbPayoutTicket = async (ticketId: string, amount: number, staffId: string, staffName: string) => {
