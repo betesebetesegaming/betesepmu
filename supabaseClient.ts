@@ -203,9 +203,10 @@ export const dbFetchDepositRequests = async (): Promise<any[]> => {
 
 export const dbDepositRequest = async (request: any) => {
     if (!supabase) throw new Error("Database not connected");
+    const normalizedAmount = Number(Number(request.amount).toFixed(2));
     const { error } = await supabase.from('deposit_requests').insert({
         id: request.id,
-        amount: request.amount,
+        amount: normalizedAmount,
         method: request.method,
         transaction_id: request.transactionId,
         customer_id: request.customerId,
@@ -235,6 +236,52 @@ export const dbApproveDepositRequest = async (requestId: string, adminId: string
         }
         throw error;
     }
+};
+
+export const dbApproveDepositRequestExact = async (
+    requestId: string,
+    customerId: string,
+    amount: number,
+    adminId: string,
+    adminName: string,
+    time: Date
+) => {
+    if (!supabase) throw new Error("Database not connected");
+
+    const creditAmount = Number(amount);
+    if (!Number.isFinite(creditAmount) || creditAmount <= 0) {
+        throw new Error("Invalid deposit amount");
+    }
+
+    const { data: userRow, error: userFetchError } = await supabase
+        .from('users')
+        .select('wallet_balance')
+        .eq('id', customerId)
+        .single();
+
+    if (userFetchError) throw userFetchError;
+
+    const currentBalance = Number(userRow?.wallet_balance) || 0;
+    const nextBalance = Number((currentBalance + creditAmount).toFixed(2));
+
+    const { error: walletUpdateError } = await supabase
+        .from('users')
+        .update({ wallet_balance: nextBalance })
+        .eq('id', customerId);
+
+    if (walletUpdateError) throw walletUpdateError;
+
+    const { error: requestUpdateError } = await supabase
+        .from('deposit_requests')
+        .update({
+            status: 'Approved',
+            processed_by: adminId,
+            processed_by_name: adminName,
+            processed_at: time.toISOString()
+        })
+        .eq('id', requestId);
+
+    if (requestUpdateError) throw requestUpdateError;
 };
 
 export const dbRejectDepositRequest = async (requestId: string, adminId: string, adminName: string, time: Date) => {

@@ -22,9 +22,17 @@ import {
     dbFetchLiveTickets, checkBackendConnection, dbSaveRace, 
     dbUpdateRace, dbDeleteRace, dbUpdateNonRunners, dbSaveRaceResult,
     dbFetchDepositRequests, dbFetchWithdrawalRequests, dbDepositRequest,
-    dbApproveDepositRequest, dbRejectDepositRequest, dbCancelWithdrawal,
+    dbApproveDepositRequestExact, dbRejectDepositRequest, dbCancelWithdrawal,
     dbCreateWithdrawalRequest, dbAddUser
 } from './supabaseClient';
+
+const normalizeRole = (role: unknown): Role => {
+    const value = String(role || '').trim().toLowerCase();
+    if (value === 'admin') return 'Admin';
+    if (value === 'supervisor') return 'Supervisor';
+    if (value === 'vendor') return 'Vendor';
+    return 'Customer';
+};
 
 const AppContent: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -66,7 +74,9 @@ const AppContent: React.FC = () => {
               dbFetchWithdrawalRequests()
           ]);
           
-          if(fetchedUsers && fetchedUsers.length > 0) setUsers(fetchedUsers);
+          if (fetchedUsers && fetchedUsers.length > 0) {
+              setUsers(fetchedUsers.map(u => ({ ...u, role: normalizeRole(u.role) })));
+          }
           if(fetchedRaces) setRaces(fetchedRaces);
           
           // Map snake_case to camelCase for requests with robust safety
@@ -117,8 +127,9 @@ const AppContent: React.FC = () => {
   useEffect(() => {
       if (!supabase || !currentUser) return;
       const userSub = supabase.channel('public:users').on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'users', filter: `id=eq.${currentUser.id}` }, async (payload) => {
-          setCurrentUser(prev => prev ? { ...prev, ...payload.new } : null);
-          const updatedUsers = await dbFetchUsers(); setUsers(updatedUsers);
+          setCurrentUser(prev => prev ? { ...prev, ...payload.new, role: normalizeRole((payload.new as any)?.role) } : null);
+          const updatedUsers = await dbFetchUsers();
+          setUsers((updatedUsers || []).map(u => ({ ...u, role: normalizeRole(u.role) })));
       }).subscribe();
       
       let ticketFilter = '';
@@ -285,11 +296,12 @@ const AppContent: React.FC = () => {
 
   const handleCreateDepositRequest = async (amount: number, method: 'Wave' | 'AfriMoney', phone: string) => {
     if (!currentUser) return;
+    const normalizedAmount = Number(amount.toFixed(2));
     const newRequest: DepositRequest = {
         id: Math.floor(10000000 + Math.random() * 90000000).toString(),
         customerId: currentUser.id,
         customerName: currentUser.name, // Added missing property
-        amount,
+        amount: normalizedAmount,
         method,
         transactionId: phone,
         status: 'Pending',
@@ -314,7 +326,31 @@ const AppContent: React.FC = () => {
       
       try {
           if (supabase) {
-              await dbApproveDepositRequest(requestId, currentUser.id, currentUser.name, effectiveTime);
+              await dbApproveDepositRequestExact(
+                  requestId,
+                  request.customerId,
+                  Number(request.amount.toFixed(2)),
+                  currentUser.id,
+                  currentUser.name,
+                  effectiveTime
+              );
+
+              // Keep UI in sync immediately with the exact approved amount.
+              setUsers(prev => (prev || []).map(u => {
+                  if (u.id !== request.customerId) return u;
+                  return { ...u, walletBalance: Number(((u.walletBalance || 0) + Number(request.amount.toFixed(2))).toFixed(2)) };
+              }));
+
+              setCurrentUser(prev => {
+                  if (!prev || prev.id !== request.customerId) return prev;
+                  return { ...prev, walletBalance: Number(((prev.walletBalance || 0) + Number(request.amount.toFixed(2))).toFixed(2)) };
+              });
+
+              setDepositRequests(prev => (prev || []).map(r =>
+                  r.id === requestId
+                      ? { ...r, status: 'Approved', processedBy: currentUser.id, processedByName: currentUser.name, processedAt: effectiveTime }
+                      : r
+              ));
           } else {
               handleDeposit(request.customerId, request.amount, request.method, request.transactionId);
               setDepositRequests(prev => (prev || []).map(r => r.id === requestId ? { ...r, status: 'Approved', processedBy: currentUser.id, processedByName: currentUser.name, processedAt: effectiveTime } : r));
@@ -376,7 +412,13 @@ const AppContent: React.FC = () => {
       return true;
   };
 
-  const handleLogin = (user: User) => { setCurrentUser(user); if (supabase) { loadLiveSystemData(user); } };
+  const handleLogin = (user: User) => {
+      const normalizedUser = { ...user, role: normalizeRole(user.role) };
+      setCurrentUser(normalizedUser);
+      if (supabase) {
+          loadLiveSystemData(normalizedUser);
+      }
+  };
   const handleLogout = () => { setCurrentUser(null); setPlacedTickets([]); };
 
   const handleCancelWithdrawal = async (requestId: string) => {
