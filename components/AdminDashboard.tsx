@@ -20,9 +20,10 @@ import { SupportPanel } from './SupportPanel';
 import { ManualBetCreationPanel } from './ManualBetCreationPanel';
 import { TicketCheckPanel } from './TicketCheckPanel';
 import { BookingRetrievalPanel } from './BookingRetrievalPanel';
+import { AutomaticRaffleDrawerPanel } from './AutomaticRaffleDrawerPanel';
 
 type FilterRole = Role | 'All';
-type AdminView = 'DASHBOARD' | 'ANALYTICS' | 'PROGRAM' | 'USERS' | 'EOD' | 'RACES' | 'REPORTS' | 'TICKETS' | 'PRINTING' | 'TICKET_PAYOUT' | 'INTEGRATIONS' | 'SUPPORT' | 'MANUAL_BETS';
+type AdminView = 'DASHBOARD' | 'ANALYTICS' | 'PROGRAM' | 'USERS' | 'EOD' | 'RACES' | 'REPORTS' | 'TICKETS' | 'PRINTING' | 'TICKET_PAYOUT' | 'INTEGRATIONS' | 'SUPPORT' | 'MANUAL_BETS' | 'RAFFLE_DRAW';
 
 export const TicketToolsView: React.FC<{
     allTickets: Ticket[];
@@ -102,6 +103,7 @@ const AdminMenu: React.FC<{ setView: (view: AdminView) => void; }> = ({ setView 
     const menuItems = [
         { view: 'ANALYTICS', label: 'Analytics Dashboard', icon: '💰', color: 'from-green-500 to-green-700' },
         { view: 'MANUAL_BETS', label: 'Assign Manual Bets', icon: '📝', color: 'from-indigo-500 to-indigo-700' },
+        { view: 'RAFFLE_DRAW', label: 'Automatic Raffle Draw', icon: '🎟️', color: 'from-amber-500 to-orange-700' },
         { view: 'PROGRAM', label: 'Program & Ads', icon: '🖼️', color: 'from-blue-500 to-blue-700' },
         { view: 'USERS', label: 'User Accounts', icon: '👥', color: 'from-purple-500 to-purple-700' },
         { view: 'RACES', label: 'Race Management', icon: '🏇', color: 'from-orange-500 to-orange-700' },
@@ -145,6 +147,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
         switch (view) {
             case 'ANALYTICS': return <div className="space-y-6"><AnalyticsDashboard tickets={allTickets} races={races} /><PromotionManagementPanel promotions={promotions} onToggleStatus={onTogglePromotionStatus} onUpdatePromotion={onUpdatePromotion} onMovePromotion={onMovePromotion} onCreatePromotion={onCreatePromotion} onDeletePromotion={onDeletePromotion} /></div>;
             case 'MANUAL_BETS': return <ManualBetCreationPanel races={races} users={users} manualBetOrders={manualBetOrders} onCreateManualBet={onCreateManualBet} onCancelManualBet={onCancelManualBet} effectiveTime={effectiveTime} />;
+            case 'RAFFLE_DRAW': return <AutomaticRaffleDrawerPanel users={users} tickets={allTickets} effectiveTime={effectiveTime} />;
             case 'PROGRAM': return <div className="space-y-6"><ProgramManagementPanel programImages={programImages} onUpload={onAddProgramImage} onDelete={onDeleteProgramImage} /><CombinationSearch allTickets={allTickets} races={races} onCancelTicket={onCancelTicket} effectiveTime={effectiveTime} /></div>;
             case 'USERS': return <div className="flex flex-col md:flex-row gap-6"><RoleFilter selectedRole={selectedRole} onSelectRole={setSelectedRole} /><div className="flex-1 space-y-6"><UserAccountManagement users={selectedRole === 'All' ? users : users.filter(u => u.role === selectedRole)} onToggleLock={onToggleLock} onAddUser={onAddUser} onAdminResetPassword={onAdminResetPassword} creatableRoles={['Supervisor', 'Vendor', 'Customer']} /><CustomerDepositPanel customers={users.filter(u => u.role === 'Customer')} onDeposit={onDeposit} depositLogs={depositLogs} depositRequests={depositRequests} onApproveDepositRequest={props.onApproveDepositRequest} onRejectDepositRequest={props.onRejectDepositRequest} currentUserRole={currentUser.role} /></div></div>;
             case 'RACES': return <div className="space-y-6"><RaceManagement races={races} onAddRace={onAddRace} onUpdateNonRunners={props.onUpdateNonRunners} onUpdateRace={onUpdateRace} onDeleteRace={onDeleteRace} effectiveTime={effectiveTime} /><RaceResultsManagement races={races} tickets={allTickets} onSave={onSaveRaceResult} effectiveTime={effectiveTime} /></div>;
