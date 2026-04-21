@@ -27,7 +27,7 @@ const PayoutInput: React.FC<{label: string, value: number | '', onChange: (val: 
 );
 
 const allPayoutKeys: (keyof Payouts)[] = [
-    'ordreGagnant', 'desordreGagnant', 'coupleA', 'coupleB', 'coupleC', 
+    'ordreGagnant', 'coupleA', 'coupleB', 'coupleC', 
     'tierceOrdre', 'tierceDesordre', 'quarteOrdre', 'quarteDesordre', 
     'quarteBonus3', 'quinteOrdre', 'quinteDesordre', 'quinteBonus4', 
     'quinteBonus3', 'simpleGagnant', 'simplePlaceA', 'simplePlaceB', 
@@ -35,9 +35,8 @@ const allPayoutKeys: (keyof Payouts)[] = [
 ];
 
 const payoutFields: {key: keyof Payouts, label: string, group: string}[] = [
-    { key: 'ordreGagnant', label: 'Ordre Gagnant', group: 'Gagnant'},
-    { key: 'desordreGagnant', label: 'Deso Gagnant', group: 'Gagnant'},
-    { key: 'coupleA', label: 'Couple A (1-2)', group: 'Couplé'},
+    { key: 'ordreGagnant', label: 'Gagnant (1-2 Any Order)', group: 'Couplé'},
+    { key: 'coupleA', label: 'Placé (1-2)', group: 'Couplé'},
     { key: 'coupleB', label: 'Couple B (1-3)', group: 'Couplé'},
     { key: 'coupleC', label: 'Couple C (2-3)', group: 'Couplé'},
     { key: 'tierceOrdre', label: 'Tiercé Ordre', group: 'Tiercé'},

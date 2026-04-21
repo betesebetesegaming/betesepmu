@@ -80,7 +80,7 @@ const SingleRapportSection: React.FC<{
                 </PayoutGroup>
 
                 <PayoutGroup title="Couplé">
-                    <PayoutRow label="Gagnant" value={payouts.ordreGagnant || payouts.desordreGagnant} />
+                    <PayoutRow label="Gagnant (1-2 Any Order)" value={payouts.ordreGagnant ?? payouts.desordreGagnant} />
                     <PayoutRow label="Placé A" value={payouts.coupleA} />
                     <PayoutRow label="Placé B" value={payouts.coupleB} />
                     <PayoutRow label="Placé C" value={payouts.coupleC} />

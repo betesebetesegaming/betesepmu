@@ -11,7 +11,7 @@ interface WinDividendReportProps {
 const WIN_TYPE_DETAILS: { [winType: string]: { betType: BetTypeOption, payoutKey: keyof Payouts } } = {
     'Simple Gagnant': { betType: BetTypeOption.SimpleGagnant, payoutKey: 'simpleGagnant' },
     'Simple Placé': { betType: BetTypeOption.SimplePlace, payoutKey: 'simplePlaceA' }, // Assumption: use 'A' for all placed
-    'Couplé Gagnant': { betType: BetTypeOption.CoupleGagnant, payoutKey: 'coupleA' }, // Assumption based on existing logic
+  'Couplé Gagnant': { betType: BetTypeOption.CoupleGagnant, payoutKey: 'ordreGagnant' },
     'Couplé Placé': { betType: BetTypeOption.CouplePlace, payoutKey: 'coupleA' }, // Assumption
     'Tiercé Ordre': { betType: BetTypeOption.Tierce, payoutKey: 'tierceOrdre' },
     'Tiercé Désordre': { betType: BetTypeOption.Tierce, payoutKey: 'tierceDesordre' },
@@ -46,7 +46,9 @@ export const WinDividendReport: React.FC<WinDividendReportProps> = ({ summary, p
     const { betType, payoutKey } = details;
     const pricing = BET_PRICING[betType];
     const basePrice = pricing?.basePrice ?? pricing?.perHorsePrice ?? 1;
-    const payoutValue = payouts[payoutKey];
+    const payoutValue = winType === 'Couplé Gagnant'
+      ? (payouts.ordreGagnant ?? payouts.desordreGagnant)
+      : payouts[payoutKey];
     const { stake } = summary[winType];
 
     if (typeof payoutValue === 'number' && basePrice > 0) {
@@ -77,7 +79,9 @@ export const WinDividendReport: React.FC<WinDividendReportProps> = ({ summary, p
                   const { betType, payoutKey } = details;
                   const pricing = BET_PRICING[betType];
                   const basePrice = pricing?.basePrice ?? pricing?.perHorsePrice ?? 1;
-                  const payoutValue = payouts[payoutKey];
+                  const payoutValue = winType === 'Couplé Gagnant'
+                    ? (payouts.ordreGagnant ?? payouts.desordreGagnant)
+                    : payouts[payoutKey];
                   
                   if (typeof payoutValue === 'number' && basePrice > 0) {
                       totalPayout = (stake / basePrice) * payoutValue;

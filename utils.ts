@@ -128,6 +128,8 @@ export const WIN_CATEGORY_ORDER = [
 export function calculateWinSummary(race: Race, winningNumbers: number[], tickets: Ticket[]): WinSummary {
     const summary: WinSummary = {};
     if (!winningNumbers.length) return summary;
+    const first = winningNumbers[0];
+    const second = winningNumbers[1];
     const add = (cat: string, stake: number) => {
         if (!summary[cat]) summary[cat] = { count: 0, stake: 0 };
         summary[cat].count++;
@@ -138,7 +140,16 @@ export function calculateWinSummary(race: Race, winningNumbers: number[], ticket
         t.selections.forEach(sel => {
             if (sel.raceId !== race.id) return;
             const stake = sel.cost * sel.multiplier;
-            if (sel.betType === BetTypeOption.SimpleGagnant && sel.numbers[0] === winningNumbers[0]) add('Simple Gagnant', stake);
+            if (sel.betType === BetTypeOption.SimpleGagnant && sel.numbers[0] === first) add('Simple Gagnant', stake);
+            if (
+                sel.betType === BetTypeOption.CoupleGagnant &&
+                first !== undefined &&
+                second !== undefined &&
+                sel.numbers.includes(first) &&
+                sel.numbers.includes(second)
+            ) {
+                add('Couplé Gagnant', stake);
+            }
         });
     });
     return summary;
@@ -149,8 +160,29 @@ export function calculateTicketWinnings(ticket: Ticket, allRaces: Race[]): { tot
     const finalBreakdown: WinningsBreakdown[] = [];
     ticket.selections.forEach((sel, index) => {
         const race = allRaces.find(r => r.id === sel.raceId);
-        if (race?.result && sel.numbers.includes(race.result.winningNumbers[0])) {
-            const payout = (race.result.payouts as any).simpleGagnant || 0;
+        if (!race?.result) {
+            finalBreakdown.push({ selectionIndex: index, status: 'Loss' });
+            return;
+        }
+
+        const first = race.result.winningNumbers[0];
+        const second = race.result.winningNumbers[1];
+        let isWin = false;
+        let payout = 0;
+
+        if (sel.betType === BetTypeOption.SimpleGagnant) {
+            isWin = sel.numbers[0] === first;
+            payout = (race.result.payouts as any).simpleGagnant || 0;
+        } else if (sel.betType === BetTypeOption.CoupleGagnant) {
+            isWin = first !== undefined && second !== undefined && sel.numbers.includes(first) && sel.numbers.includes(second);
+            payout = (race.result.payouts as any).ordreGagnant || (race.result.payouts as any).desordreGagnant || 0;
+        } else {
+            // Preserve legacy fallback for other bet types until full rules are implemented.
+            isWin = sel.numbers.includes(first);
+            payout = (race.result.payouts as any).simpleGagnant || 0;
+        }
+
+        if (isWin) {
             const winAmt = sel.cost * payout * sel.multiplier;
             grandTotalWinnings += winAmt;
             finalBreakdown.push({ selectionIndex: index, status: 'Win', totalPayout: winAmt, winType: sel.betType });

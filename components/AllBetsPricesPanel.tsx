@@ -37,7 +37,7 @@ export const OfficialPayoutsPanel: React.FC<OfficialPayoutsPanelProps> = ({ late
             </div>
              <div>
                 <h4 className="font-bold text-betese-green mb-1">Couplé</h4>
-                <PayoutRow label="Gagnant (1-2)" value={payouts.coupleA} />
+               <PayoutRow label="Gagnant (1-2 Any Order)" value={payouts.ordreGagnant ?? payouts.desordreGagnant} />
                 <PayoutRow label="Placé (1-2)" value={payouts.coupleA} />
                 <PayoutRow label="Placé (1-3)" value={payouts.coupleB} />
                 <PayoutRow label="Placé (2-3)" value={payouts.coupleC} />
