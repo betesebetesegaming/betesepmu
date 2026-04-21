@@ -18,9 +18,9 @@ export const BET_PRICING: Record<BetTypeOption, BetPricing> = {
   },
   [BetTypeOption.Tierce]: {
     minHorses: 3,
-    basePrice: 15,
-    priceMap: { 3: 15, 4: 60, 5: 150, 6: 300, 7: 525, 8: 840, 9: 1260, 10: 1800, 11: 2475, 12: 3300, 13: 4290, 14: 5460, 15: 6825, 16: 8400 },
-    xPriceMap: { 1: { 2: 210 }, 2: { 1: 3150 } },
+    basePrice: 25,
+    priceMap: { 3: 25, 4: 100, 5: 250, 6: 500, 7: 875, 8: 1400, 9: 2100, 10: 3000, 11: 4125, 12: 5500, 13: 7150, 14: 9100, 15: 11375, 16: 14000 },
+    xPriceMap: { 1: { 2: 350 }, 2: { 1: 5250 } },
   },
   [BetTypeOption.Quarte]: {
     minHorses: 4,
