@@ -6,15 +6,15 @@ export const BET_PRICING: Record<BetTypeOption, BetPricing> = {
   [BetTypeOption.SimplePlace]: { minHorses: 1, perHorsePrice: 25, priceMap: {} },
   [BetTypeOption.CoupleGagnant]: {
     minHorses: 2,
-    basePrice: 25,
-    priceMap: { 2: 25, 3: 75, 4: 150, 5: 250, 6: 375, 7: 525, 8: 700, 9: 900, 10: 1125, 11: 1375, 12: 1650, 13: 1950, 14: 2275, 15: 2625, 16: 3000 },
-    xPriceMap: { 1: { 1: 375 } },
+    basePrice: 30,
+    priceMap: { 2: 30, 3: 90, 4: 180, 5: 300, 6: 450, 7: 630, 8: 840, 9: 1080, 10: 1350, 11: 1650, 12: 1980, 13: 2340, 14: 2730, 15: 3150, 16: 3600 },
+    xPriceMap: { 1: { 1: 450 } },
   },
   [BetTypeOption.CouplePlace]: {
     minHorses: 2,
-    basePrice: 25,
-    priceMap: { 2: 25, 3: 75, 4: 150, 5: 250, 6: 375, 7: 525, 8: 700, 9: 900, 10: 1125, 11: 1375, 12: 1650, 13: 1950, 14: 2275, 15: 2625, 16: 3000 },
-    xPriceMap: { 1: { 1: 375 } },
+    basePrice: 30,
+    priceMap: { 2: 30, 3: 90, 4: 180, 5: 300, 6: 450, 7: 630, 8: 840, 9: 1080, 10: 1350, 11: 1650, 12: 1980, 13: 2340, 14: 2730, 15: 3150, 16: 3600 },
+    xPriceMap: { 1: { 1: 450 } },
   },
   [BetTypeOption.Tierce]: {
     minHorses: 3,
