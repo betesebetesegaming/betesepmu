@@ -21,9 +21,10 @@ import { ManualBetCreationPanel } from './ManualBetCreationPanel';
 import { TicketCheckPanel } from './TicketCheckPanel';
 import { BookingRetrievalPanel } from './BookingRetrievalPanel';
 import { AutomaticRaffleDrawerPanel } from './AutomaticRaffleDrawerPanel';
+import { ParimutuelPayoutPanel } from './ParimutuelPayoutPanel';
 
 type FilterRole = Role | 'All';
-type AdminView = 'DASHBOARD' | 'ANALYTICS' | 'PROGRAM' | 'USERS' | 'EOD' | 'RACES' | 'REPORTS' | 'TICKETS' | 'PRINTING' | 'TICKET_PAYOUT' | 'INTEGRATIONS' | 'SUPPORT' | 'MANUAL_BETS' | 'RAFFLE_DRAW';
+type AdminView = 'DASHBOARD' | 'ANALYTICS' | 'PROGRAM' | 'USERS' | 'EOD' | 'RACES' | 'REPORTS' | 'TICKETS' | 'PRINTING' | 'TICKET_PAYOUT' | 'INTEGRATIONS' | 'SUPPORT' | 'MANUAL_BETS' | 'RAFFLE_DRAW' | 'PMU_PAYOUTS';
 
 export const TicketToolsView: React.FC<{
     allTickets: Ticket[];
@@ -99,7 +100,7 @@ const BackButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
   </button>
 );
 
-type AdminIconKind = 'analytics' | 'manual' | 'raffle' | 'program' | 'users' | 'races' | 'tools' | 'reports' | 'integrations' | 'support' | 'printing';
+type AdminIconKind = 'analytics' | 'manual' | 'raffle' | 'program' | 'users' | 'races' | 'tools' | 'reports' | 'integrations' | 'support' | 'printing' | 'pmu';
 
 const AdminMenuGraphic: React.FC<{ kind: AdminIconKind }> = ({ kind }) => {
     const photoMap: Record<AdminIconKind, { src: string; alt: string }> = {
@@ -114,6 +115,7 @@ const AdminMenuGraphic: React.FC<{ kind: AdminIconKind }> = ({ kind }) => {
         integrations: { src: 'https://images.unsplash.com/photo-1563013544-824ae1b704d3?w=140&h=140&fit=crop&q=80', alt: 'payment integration' },
         support: { src: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=140&h=140&fit=crop&q=80', alt: 'support' },
         printing: { src: 'https://images.unsplash.com/photo-1515879218367-8466d910aaa4?w=140&h=140&fit=crop&q=80', alt: 'printing' },
+        pmu: { src: 'https://images.unsplash.com/photo-1489515217757-5fd1be406fef?w=140&h=140&fit=crop&q=80', alt: 'pari mutuel' },
     };
 
     return (
@@ -132,6 +134,7 @@ const AdminMenu: React.FC<{ setView: (view: AdminView) => void; }> = ({ setView 
         { view: 'USERS', label: 'User Accounts', iconKind: 'users' as AdminIconKind, color: 'from-purple-500 to-purple-700' },
         { view: 'RACES', label: 'Race Management', iconKind: 'races' as AdminIconKind, color: 'from-orange-500 to-orange-700' },
         { view: 'TICKET_PAYOUT', label: 'Office Payouts', iconKind: 'tools' as AdminIconKind, color: 'from-cyan-500 to-blue-500' },
+        { view: 'PMU_PAYOUTS', label: 'PMU Dividend Engine', iconKind: 'pmu' as AdminIconKind, color: 'from-emerald-600 to-teal-700' },
         { view: 'REPORTS', label: 'Payout Reports', iconKind: 'reports' as AdminIconKind, color: 'from-yellow-500 to-yellow-600' },
         { view: 'INTEGRATIONS', label: 'Payment API', iconKind: 'integrations' as AdminIconKind, color: 'from-yellow-600 to-orange-600' },
         { view: 'SUPPORT', label: 'Support & Snapshot', iconKind: 'support' as AdminIconKind, color: 'from-red-600 to-red-800' },
@@ -177,6 +180,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
             case 'RACES': return <div className="space-y-6"><RaceManagement races={races} onAddRace={onAddRace} onUpdateNonRunners={props.onUpdateNonRunners} onUpdateRace={onUpdateRace} onDeleteRace={onDeleteRace} effectiveTime={effectiveTime} /><RaceResultsManagement races={races} tickets={allTickets} onSave={onSaveRaceResult} effectiveTime={effectiveTime} /></div>;
             case 'REPORTS': return <PayoutReportView races={races} onPrintRequest={setRapportModalRace} effectiveTime={effectiveTime} />;
             case 'TICKET_PAYOUT': return <TicketToolsView allTickets={allTickets} onCancelTicket={onCancelTicket} races={races} onPayoutTicket={onPayoutTicket} effectiveTime={effectiveTime} currentUser={currentUser} onReprintTicket={onReprintTicket} />;
+            case 'PMU_PAYOUTS': return <ParimutuelPayoutPanel races={races} />;
             case 'INTEGRATIONS': return <IntegrationSettingsPanel configs={paymentConfigs} onSave={onSavePaymentConfig} />;
             case 'SUPPORT': return <SupportPanel />;
             case 'PRINTING': return <TestPrintPanel />;
