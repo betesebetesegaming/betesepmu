@@ -156,7 +156,7 @@ export const ProgramManagementPanel: React.FC<ProgramManagementPanelProps> = ({ 
                                     onClick={() => fileInputRef.current?.click()}
                                     className="w-full px-4 py-8 border-2 border-dashed border-gray-300 bg-gray-50 text-gray-600 font-semibold rounded-lg hover:bg-gray-100 transition-colors flex flex-col items-center justify-center gap-2"
                                 >
-                                    <span className="text-2xl">📂</span>
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 text-gray-500" viewBox="0 0 24 24" fill="currentColor"><path d="M19.5 21a3 3 0 003-3v-4.5a3 3 0 00-3-3h-15a3 3 0 00-3 3V18a3 3 0 003 3h15zM1.5 10.146V6a3 3 0 013-3h5.379a2.25 2.25 0 011.59.659l2.122 2.121c.14.141.331.22.53.22H19.5a3 3 0 013 3v1.146A4.483 4.483 0 0019.5 9h-15a4.483 4.483 0 00-3 1.146z" /></svg>
                                     <span>{preview ? 'Change File' : `Click to Upload ${mediaType === 'image' ? 'Image' : 'Video'}`}</span>
                                     {file && <span className="text-xs text-betese-green bg-green-100 px-2 py-1 rounded">{file.name}</span>}
                                 </button>
@@ -206,7 +206,7 @@ export const ProgramManagementPanel: React.FC<ProgramManagementPanelProps> = ({ 
                                      <div className="relative w-full h-40 bg-black rounded-md overflow-hidden">
                                         <video src={image.url} className="w-full h-full object-cover opacity-80" muted />
                                         <div className="absolute inset-0 flex items-center justify-center">
-                                            <span className="text-white text-3xl opacity-70">▶️</span>
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="w-12 h-12 text-white opacity-80" viewBox="0 0 24 24" fill="currentColor"><path fillRule="evenodd" d="M4.5 5.653c0-1.426 1.529-2.33 2.779-1.643l11.54 6.348c1.295.712 1.295 2.573 0 3.285L7.28 19.991c-1.25.687-2.779-.217-2.779-1.643V5.653z" clipRule="evenodd" /></svg>
                                         </div>
                                      </div>
                                 ) : (

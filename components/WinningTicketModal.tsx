@@ -15,7 +15,7 @@ export const WinningTicketModal: React.FC<WinningTicketModalProps> = ({ ticket, 
     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
       <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm text-center relative overflow-hidden transform transition-all animate-fade-in-up">
         <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-yellow-400 to-green-500"></div>
-        <div className="text-6xl mb-4">🎉</div>
+        <div className="mb-4 flex justify-center"><img src="https://images.unsplash.com/photo-1567427017942-4bb5ac2a3b4b?w=128&h=128&fit=crop&q=80" alt="trophy" className="w-24 h-24 rounded-full object-cover border-4 border-yellow-400 shadow-lg" /></div>
         <h2 className="text-3xl font-bold text-betese-dark">Congratulations!</h2>
         <p className="text-gray-600 mt-2">You've won on ticket #{ticket.id.slice(-6)}!</p>
         

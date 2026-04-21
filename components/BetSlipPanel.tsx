@@ -31,7 +31,7 @@ export const BetSlipPanel: React.FC<BetSlipPanelProps> = ({ betSlip, onClear, on
       <div className="space-y-3 max-h-[24rem] overflow-y-auto pr-2">
         {betSlip.selections.length === 0 ? (
           <div className="py-12 text-center">
-            <p className="text-4xl mb-2 opacity-20">🎫</p>
+            <div className="mb-2 flex justify-center opacity-30"><img src="https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=80&h=80&fit=crop&q=80" alt="horse racing" className="w-16 h-16 rounded-xl object-cover" /></div>
             <p className="text-gray-400 font-bold uppercase text-xs">{t('your_bet_slip_empty')}</p>
           </div>
         ) : (

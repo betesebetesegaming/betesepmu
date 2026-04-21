@@ -23,17 +23,17 @@ import { WhatsAppButton } from './WhatsAppButton';
 
 const Icon: React.FC<{ name: string }> = ({ name }) => {
     const icons: { [key: string]: React.ReactNode } = {
-        'Simple Gagnant': <span>🏆</span>,
-        'Simple Placé': <span>🏅</span>,
-        'Couplé Gagnant': <span>🥇🥈</span>,
-        'Couplé Placé': <span>🎖️</span>,
-        'Tiercé': <span>🥉</span>,
-        'Quarté+': <span>4️⃣</span>,
-        'Quinté+': <span>5️⃣</span>,
-        'Multi 4': <span>M4</span>,
-        'Multi 5': <span>M5</span>,
-        'Multi 6': <span>M6</span>,
-        'Multi 7': <span>M7</span>,
+        'Simple Gagnant': <img src="https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=64&h=64&fit=crop&q=80" alt="Win" className="w-7 h-7 rounded-full object-cover border-2 border-yellow-400" />,
+        'Simple Placé': <img src="https://images.unsplash.com/photo-1553284965-83fd3e82fa5a?w=64&h=64&fit=crop&q=80" alt="Place" className="w-7 h-7 rounded-full object-cover border-2 border-blue-400" />,
+        'Couplé Gagnant': <img src="https://images.unsplash.com/photo-1530651788726-1dbf58eeef1f?w=64&h=64&fit=crop&q=80" alt="Exacta" className="w-7 h-7 rounded-full object-cover border-2 border-green-400" />,
+        'Couplé Placé': <img src="https://images.unsplash.com/photo-1598974357801-cbca100e65d3?w=64&h=64&fit=crop&q=80" alt="Quinella" className="w-7 h-7 rounded-full object-cover border-2 border-purple-400" />,
+        'Tiercé': <img src="https://images.unsplash.com/photo-1548535880-2b8e15c86e5e?w=64&h=64&fit=crop&q=80" alt="Trifecta" className="w-7 h-7 rounded-full object-cover border-2 border-orange-400" />,
+        'Quarté+': <img src="https://images.unsplash.com/photo-1452378174528-d6fd5f5ad2da?w=64&h=64&fit=crop&q=80" alt="Superfecta" className="w-7 h-7 rounded-full object-cover border-2 border-red-400" />,
+        'Quinté+': <img src="https://images.unsplash.com/photo-1467516116939-81dc148a39ce?w=64&h=64&fit=crop&q=80" alt="Pick5" className="w-7 h-7 rounded-full object-cover border-2 border-pink-400" />,
+        'Multi 4': <img src="https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=64&h=64&fit=crop&q=80&crop=left" alt="Multi4" className="w-7 h-7 rounded-full object-cover border-2 border-teal-400" />,
+        'Multi 5': <img src="https://images.unsplash.com/photo-1553284965-83fd3e82fa5a?w=64&h=64&fit=crop&q=80&crop=right" alt="Multi5" className="w-7 h-7 rounded-full object-cover border-2 border-indigo-400" />,
+        'Multi 6': <img src="https://images.unsplash.com/photo-1530651788726-1dbf58eeef1f?w=64&h=64&fit=crop&q=80&crop=top" alt="Multi6" className="w-7 h-7 rounded-full object-cover border-2 border-amber-400" />,
+        'Multi 7': <img src="https://images.unsplash.com/photo-1598974357801-cbca100e65d3?w=64&h=64&fit=crop&q=80&crop=bottom" alt="Multi7" className="w-7 h-7 rounded-full object-cover border-2 border-lime-400" />,
     };
     return icons[name] || null;
 }
@@ -184,7 +184,7 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
           className="fixed bottom-6 right-6 z-40 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-full shadow-2xl w-14 h-14 flex flex-col items-center justify-center transition-all border-2 border-white"
           style={{ boxShadow: '0 4px 24px 0 rgba(37,99,235,0.5)' }}
         >
-          <span className="text-xl leading-none">📋</span>
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
           <span className="text-[8px] font-black uppercase leading-none mt-0.5">Prog</span>
         </button>
       )}
@@ -219,7 +219,7 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                         {/* Header bar */}
                         <div className="bg-gradient-to-r from-blue-700 to-blue-500 px-4 py-2 flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <span className="text-white text-lg">📋</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
                             <span className="text-white font-black uppercase tracking-wide text-sm">Today's Racing Program</span>
                             <span className="bg-yellow-400 text-blue-900 text-[10px] font-black px-2 py-0.5 rounded-full uppercase animate-pulse">
                               {programs.length} {programs.length === 1 ? 'Page' : 'Pages'}

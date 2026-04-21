@@ -40,7 +40,7 @@ export const TicketCheckPanel: React.FC<TicketCheckPanelProps> = ({ allTickets, 
   return (
     <div className="bg-white p-6 rounded-2xl shadow-lg border-t-4 border-orange-500">
       <h3 className="text-xl font-black text-gray-800 uppercase mb-4 flex items-center gap-2">
-        <span className="text-2xl">🔍</span> Scan & Payout
+        <svg xmlns="http://www.w3.org/2000/svg" className="w-7 h-7 text-orange-500" viewBox="0 0 24 24" fill="currentColor"><path fillRule="evenodd" d="M10.5 3.75a6.75 6.75 0 100 13.5 6.75 6.75 0 000-13.5zM2.25 10.5a8.25 8.25 0 1114.59 5.28l4.69 4.69a.75.75 0 11-1.06 1.06l-4.69-4.69A8.25 8.25 0 012.25 10.5z" clipRule="evenodd" /></svg> Scan &amp; Payout
       </h3>
       <div className="space-y-4">
         <div className="flex gap-2">

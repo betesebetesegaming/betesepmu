@@ -138,7 +138,7 @@ export const HorseSelector: React.FC<HorseSelectorProps> = ({
       
       {disabled && (
         <div className="absolute inset-0 z-50 bg-gray-200 flex flex-col items-center justify-center rounded-lg cursor-not-allowed border-4 border-red-500">
-            <div className="text-6xl mb-2">🔒</div>
+            <div className="mb-2"><svg xmlns="http://www.w3.org/2000/svg" className="w-16 h-16 text-red-600" viewBox="0 0 24 24" fill="currentColor"><path fillRule="evenodd" d="M12 1.5a5.25 5.25 0 00-5.25 5.25v3a3 3 0 00-3 3v6.75a3 3 0 003 3h10.5a3 3 0 003-3v-6.75a3 3 0 00-3-3v-3c0-2.9-2.35-5.25-5.25-5.25zm3.75 8.25v-3a3.75 3.75 0 10-7.5 0v3h7.5z" clipRule="evenodd" /></svg></div>
             <div className="text-red-600 font-black text-2xl uppercase tracking-widest">BETTING CLOSED</div>
             <p className="text-gray-600 font-bold text-sm mt-1">This race is now closed.</p>
         </div>
@@ -177,7 +177,7 @@ export const HorseSelector: React.FC<HorseSelectorProps> = ({
                   ⌫
                </button>
                <button onClick={handleClear} disabled={disabled || selectionSequence.length === 0} className="w-8 h-7 flex items-center justify-center bg-red-100 rounded hover:bg-red-200 text-red-600 disabled:opacity-50 text-xs" title="Clear All">
-                  🗑️
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path fillRule="evenodd" d="M16.5 4.478v.227a48.816 48.816 0 013.878.512.75.75 0 11-.256 1.478l-.209-.035-1.005 13.07a3 3 0 01-2.991 2.77H8.084a3 3 0 01-2.991-2.77L4.087 6.66l-.209.035a.75.75 0 01-.256-1.478A48.567 48.567 0 017.5 4.705v-.227c0-1.564 1.213-2.9 2.816-2.951a52.662 52.662 0 013.369 0c1.603.051 2.815 1.387 2.815 2.951zm-6.136-1.452a51.196 51.196 0 013.273 0C14.39 3.05 15 3.684 15 4.478v.113a49.488 49.488 0 00-6 0v-.113c0-.794.609-1.428 1.364-1.452zm-.355 5.945a.75.75 0 10-1.5.058l.347 9a.75.75 0 101.499-.058l-.346-9zm5.48.058a.75.75 0 10-1.498-.058l-.347 9a.75.75 0 001.5.058l.345-9z" clipRule="evenodd" /></svg>
                </button>
           </div>
       </div>

@@ -15,7 +15,7 @@ export const RulesModal: React.FC<RulesModalProps> = ({ isOpen, onClose }) => {
         {/* Header */}
         <div className="p-6 border-b border-gray-200 flex justify-between items-center bg-betese-dark text-white rounded-t-xl">
           <div className="flex items-center gap-3">
-            <span className="text-3xl">⚖️</span>
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-9 h-9 text-yellow-300" viewBox="0 0 24 24" fill="currentColor"><path fillRule="evenodd" d="M12 2.25a.75.75 0 01.75.75v.756a49.106 49.106 0 019.152 1.857.75.75 0 01-.498 1.416l-.016-.006-.063-.021a47.67 47.67 0 00-1.635-.407l-1.01 8.08A8.959 8.959 0 0119.5 15a8.96 8.96 0 01-1.965-.215l-1.01-8.08a47.67 47.67 0 00-4.525 0l-1.01 8.08A8.96 8.96 0 018.5 15a8.96 8.96 0 01-1.965-.215l-1.01-8.08a47.67 47.67 0 00-1.635.407l-.063.021-.016.006a.75.75 0 11-.498-1.416 49.106 49.106 0 019.152-1.857V3a.75.75 0 01.75-.75zm-4.635 8.773l.81 6.476c.352.09.72.138 1.098.138h.109l.028-.001.028.001h.109c.378 0 .746-.048 1.098-.138l.81-6.476a47.273 47.273 0 00-4.09 0zm8.635 0l.81 6.476c.352.09.72.138 1.098.138h.109l.028-.001.028.001h.109c.378 0 .746-.048 1.098-.138l.81-6.476a47.273 47.273 0 00-4.09 0zm-12.25 7.977a.75.75 0 01.75-.75H12a.75.75 0 010 1.5H4.5a.75.75 0 01-.75-.75zm15 0a.75.75 0 01.75-.75h.008a.75.75 0 010 1.5H19.5a.75.75 0 01-.75-.75z" clipRule="evenodd" /></svg>
             <h2 className="text-2xl font-bold tracking-wide">BETESE — Official Betting Rules</h2>
           </div>
           <button onClick={onClose} className="text-white hover:text-gray-300 transition-colors focus:outline-none">
@@ -63,7 +63,7 @@ export const RulesModal: React.FC<RulesModalProps> = ({ isOpen, onClose }) => {
                     3. Age Restrictions
                 </h3>
                 <div className="flex items-start gap-4 bg-red-50 p-4 rounded-lg border border-red-200">
-                    <div className="text-4xl">🔞</div>
+                    <div className="flex-shrink-0 w-14 h-14 bg-red-600 rounded-full flex items-center justify-center border-2 border-red-800"><span className="text-white font-black text-base leading-none">18+</span></div>
                     <div className="text-sm md:text-base text-gray-700 leading-relaxed">
                         <p className="font-bold text-red-700 mb-1">Betting on BETESE is strictly limited to individuals 18 years and above.</p>
                         <p>Under no circumstances should anyone under the age of 18 place a bet or be sent to place a bet on behalf of others.</p>

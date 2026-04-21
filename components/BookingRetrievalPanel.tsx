@@ -126,7 +126,7 @@ export const BookingRetrievalPanel: React.FC<BookingRetrievalPanelProps> = ({ al
                             <>⛔ CANNOT PAY (RACE STARTED)</>
                         ) : (
                             <>
-                                <span className="text-xl">💵</span> CONFIRM PAYMENT & PRINT
+                                <img src="https://images.unsplash.com/photo-1554672408-730436b60dde?w=48&h=48&fit=crop&q=80" alt="money" className="w-6 h-6 rounded object-cover inline-block" /> CONFIRM PAYMENT &amp; PRINT
                             </>
                         )}
                     </button>

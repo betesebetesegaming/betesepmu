@@ -101,7 +101,7 @@ export const SupportPanel: React.FC = () => {
             {/* LEFT: REPORTING */}
             <div className="bg-white p-6 rounded-lg shadow-lg border-l-8 border-blue-600">
                 <h2 className="text-2xl font-bold text-betese-dark mb-4 flex items-center gap-2">
-                    <span className="text-3xl">🛠️</span> Report a Problem
+                    <svg viewBox="0 0 24 24" fill="none" className="w-7 h-7" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"><path d="M14 5L19 10L10 19L5 19L5 14L14 5Z"/><path d="M13 6L18 11"/></svg> Report a Problem
                 </h2>
                 <p className="text-gray-600 mb-4 text-sm">
                     Found a bug? Don't worry. Describe it below and click the button. 
@@ -127,7 +127,7 @@ export const SupportPanel: React.FC = () => {
                 {/* Update Center */}
                 <div className="bg-white p-6 rounded-lg shadow-lg border-l-8 border-green-500">
                     <h2 className="text-2xl font-bold text-betese-dark mb-2 flex items-center gap-2">
-                        <span className="text-3xl">🔄</span> System Updates
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 text-green-600" viewBox="0 0 24 24" fill="currentColor"><path fillRule="evenodd" d="M4.755 10.059a7.5 7.5 0 0112.548-3.364l1.903 1.903h-3.183a.75.75 0 100 1.5h4.992a.75.75 0 00.75-.75V4.356a.75.75 0 00-1.5 0v3.18l-1.9-1.9A9 9 0 003.306 9.67a.75.75 0 101.45.388zm15.408 3.352a.75.75 0 00-.919.53 7.5 7.5 0 01-12.548 3.364l-1.902-1.903h3.183a.75.75 0 000-1.5H2.984a.75.75 0 00-.75.75v4.992a.75.75 0 001.5 0v-3.18l1.9 1.9a9 9 0 0015.059-4.035.75.75 0 00-.53-.918z" clipRule="evenodd" /></svg> System Updates
                     </h2>
                     <div className="flex items-center justify-between mb-6 bg-gray-50 p-3 rounded">
                         <span className="font-semibold text-gray-700">Current Version:</span>
@@ -148,7 +148,7 @@ export const SupportPanel: React.FC = () => {
                 {/* Safety Snapshot */}
                 <div className="bg-white p-6 rounded-lg shadow-lg border-l-8 border-yellow-500">
                     <h2 className="text-2xl font-bold text-betese-dark mb-2 flex items-center gap-2">
-                        <span className="text-3xl">💾</span> Safety Snapshot
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 text-yellow-500" viewBox="0 0 24 24" fill="currentColor"><path d="M3.375 3C2.339 3 1.5 3.84 1.5 4.875v.75c0 1.036.84 1.875 1.875 1.875h17.25c1.035 0 1.875-.84 1.875-1.875v-.75C22.5 3.839 21.66 3 20.625 3H3.375z" /><path fillRule="evenodd" d="M3.087 9l.54 9.176A3 3 0 006.62 21h10.757a3 3 0 002.995-2.824L20.913 9H3.087zm6.163 3.75A.75.75 0 0110 12h4a.75.75 0 010 1.5h-4a.75.75 0 01-.75-.75z" clipRule="evenodd" /></svg> Safety Snapshot
                     </h2>
                     <p className="text-sm text-gray-600 mb-4">
                         Before updating or if something feels wrong, click "Save Snapshot". 
