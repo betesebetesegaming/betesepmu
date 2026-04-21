@@ -32,7 +32,7 @@ export const BET_PRICING: Record<BetTypeOption, BetPricing> = {
     minHorses: 5,
     basePrice: 30,
     priceMap: { 5: 30, 6: 180, 7: 630, 8: 1680, 9: 3780, 10: 7560, 11: 13860, 12: 23760, 13: 38610, 14: 60060, 15: 90090, 16: 131040 },
-    xPriceMap: { 1: { 4: 250 }, 2: { 3: 2750 }, 3: { 2: 33000 }, 4: { 1: 429000 } },
+    xPriceMap: { 1: { 4: 360 }, 2: { 3: 4705 }, 3: { 2: 65520 }, 4: { 1: 982800 } },
   },
   [BetTypeOption.Multi4]: {
     minHorses: 4,
