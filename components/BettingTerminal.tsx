@@ -142,12 +142,12 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
     const [xCount, setXCount] = useState<number>(0);
     const [rapportModalRace, setRapportModalRace] = useState<Race | null>(null);
 
-    const sortedRaces = useMemo(() => {
+    const availableRaces = useMemo(() => {
         if (!races || !Array.isArray(races)) return [];
         return [...races]
-            .filter(r => r && r.endDate instanceof Date)
+            .filter(r => r && r.endDate instanceof Date && r.endDate > effectiveTime)
             .sort((a,b) => a.endDate.getTime() - b.endDate.getTime());
-    }, [races]);
+    }, [races, effectiveTime]);
 
     const handleReturn = () => {
         onClearBetSlip();
@@ -158,11 +158,14 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
     };
 
     useEffect(() => {
-        if (!selectedRace && sortedRaces.length > 0) {
-            const next = sortedRaces.find(r => r.endDate > effectiveTime);
-            if (next) setSelectedRace(next);
+        if (!selectedRace && availableRaces.length > 0) {
+            setSelectedRace(availableRaces[0]);
+            return;
         }
-    }, [sortedRaces, effectiveTime, selectedRace]);
+        if (selectedRace && selectedRace.endDate <= effectiveTime) {
+            setSelectedRace(availableRaces[0] || null);
+        }
+    }, [availableRaces, effectiveTime, selectedRace]);
 
     const timeRemaining = selectedRace ? selectedRace.endDate.getTime() - effectiveTime.getTime() : 0;
     const isBettingClosed = timeRemaining <= BETTING_CUTOFF_MS;
@@ -235,7 +238,7 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                                     Select Race
                                 </h3>
                                 <div className="flex flex-wrap gap-2">
-                                    {sortedRaces.map(r => (
+                                    {availableRaces.map(r => (
                                         <RaceTimerButton key={r.id} race={r} isSelected={selectedRace?.id === r.id} onClick={() => setSelectedRace(r)} initialEffectiveTime={effectiveTime} />
                                     ))}
                                 </div>

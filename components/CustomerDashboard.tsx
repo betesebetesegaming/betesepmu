@@ -113,8 +113,11 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   const [showPromoTV, setShowPromoTV] = useState(true);
   const { t } = useLanguage();
   
-  const sortedRaces = useMemo(() => [...races].sort((a,b) => a.endDate.getTime() - b.endDate.getTime()), [races]);
-  const [selectedRace, setSelectedRace] = useState<Race | null>(sortedRaces.find(r => r.endDate > effectiveTime) || null);
+  const availableRaces = useMemo(
+    () => [...races].filter(r => r.endDate > effectiveTime).sort((a,b) => a.endDate.getTime() - b.endDate.getTime()),
+    [races, effectiveTime]
+  );
+  const [selectedRace, setSelectedRace] = useState<Race | null>(availableRaces[0] || null);
   const [selectedBetType, setSelectedBetType] = useState<BetTypeOption | null>(null);
   const [selectedNumbers, setSelectedNumbers] = useState<number[]>([]);
   const [xCount, setXCount] = useState<number>(0);
@@ -131,10 +134,14 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   }, [races]);
   
   useEffect(() => {
-    if (selectedRace && effectiveTime >= selectedRace.endDate) {
-        setSelectedRace(sortedRaces.find(r => r.endDate > effectiveTime) || null);
+    if (!selectedRace && availableRaces.length > 0) {
+      setSelectedRace(availableRaces[0]);
+      return;
     }
-  }, [effectiveTime, selectedRace, sortedRaces]);
+    if (selectedRace && effectiveTime >= selectedRace.endDate) {
+      setSelectedRace(availableRaces[0] || null);
+    }
+    }, [effectiveTime, selectedRace, availableRaces]);
 
   const timeRemaining = selectedRace ? selectedRace.endDate.getTime() - effectiveTime.getTime() : 0;
   const isBettingClosed = timeRemaining <= BETTING_CUTOFF_MS;
@@ -277,12 +284,12 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                   <div className="mb-6">
                     <h3 className="text-lg font-black uppercase mb-3 text-gray-700">{t('select_race')}</h3>
                     <div className="flex flex-wrap gap-3">
-                        {sortedRaces.map((race) => (
+                        {availableRaces.map((race) => (
                             <RaceTimerButton
                                 key={race.id}
                                 race={race}
                                 isSelected={selectedRace?.id === race.id}
-                                onClick={(id) => setSelectedRace(sortedRaces.find(r => r.id === id) || null)}
+                            onClick={(id) => setSelectedRace(availableRaces.find(r => r.id === id) || null)}
                                 initialEffectiveTime={effectiveTime}
                                 variant="customer"
                             />
