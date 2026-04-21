@@ -179,7 +179,14 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
             alert("CLOSED: 2-min cutoff reached.");
             return;
         }
-        onUpdateBetSlip({ raceId: selectedRace.id, raceName: selectedRace.name, betType: selectedBetType, numbers: selectedNumbers, xCount: xCount, pattern: [] });
+        onUpdateBetSlip({
+            raceId: selectedRace.id,
+            raceName: selectedRace.name,
+            betType: selectedBetType,
+            numbers: selectedNumbers,
+            xCount: xCount,
+            pattern: [...Array.from({ length: xCount }, () => 'X'), ...selectedNumbers.map(n => String(n))]
+        });
         setSelectedNumbers([]);
         setXCount(0);
         setSelectedBetType(null);

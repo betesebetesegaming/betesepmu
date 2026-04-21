@@ -51,11 +51,18 @@ export const BetSlipPanel: React.FC<BetSlipPanelProps> = ({ betSlip, onClear, on
                             </span>
                         ))
                      ) : (
-                        selection.numbers.map((num, i) => (
-                            <span key={i} className="px-2 py-1 bg-betese-dark text-white rounded font-black text-sm border border-betese-green">
-                                {num}
+                        <>
+                          {Array.from({ length: selection.xCount || 0 }).map((_, i) => (
+                            <span key={`x-${i}`} className="px-2 py-1 rounded font-black text-sm border bg-yellow-400 text-black border-yellow-600">
+                              X
                             </span>
-                        ))
+                          ))}
+                          {selection.numbers.map((num, i) => (
+                              <span key={`n-${i}`} className="px-2 py-1 bg-betese-dark text-white rounded font-black text-sm border border-betese-green">
+                                  {num}
+                              </span>
+                          ))}
+                        </>
                      )}
                   </div>
                 </div>
