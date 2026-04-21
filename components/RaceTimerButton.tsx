@@ -44,7 +44,12 @@ const RaceTimerButton: React.FC<RaceTimerButtonProps> = ({ race, isSelected, onC
       disabled={isEnded}
       className={`p-3 rounded-xl font-black transition-all flex flex-col items-center justify-center gap-1 w-32 h-28 text-center ${buttonClasses}`}
     >
-      <span className="text-xl">🏇</span>
+      <span className="flex justify-center">
+        <svg viewBox="0 0 24 24" fill="none" className="w-6 h-6" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
+          <path d="M4 14L8 9L13 8L16 10L20 10L19 13L16 13L14 16L10 16L8 19H5L6 16L4 14Z"/>
+          <circle cx="14.5" cy="10.5" r="0.9" fill="currentColor"/>
+        </svg>
+      </span>
       <span className="text-sm uppercase tracking-tighter">{race.name}</span>
       
       {isEnded ? (

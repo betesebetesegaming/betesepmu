@@ -155,8 +155,8 @@ export const SupervisorDashboard: React.FC<SupervisorDashboardProps> = (props) =
                         <RaceResultsManagement 
                             races={races}
                             tickets={allTickets}
-                            onSave={onSaveRaceResult}
                             effectiveTime={effectiveTime}
+                            canEdit={false}
                         />
                     </div>
                 );

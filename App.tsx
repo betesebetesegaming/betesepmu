@@ -171,6 +171,10 @@ const AppContent: React.FC = () => {
   };
 
   const handleSaveRaceResult = async (result: RaceResult) => {
+      if (!currentUser || currentUser.role !== 'Admin') {
+          alert("Only Admin can enter or edit race results.");
+          return;
+      }
       try {
           if (supabase) { await dbSaveRaceResult(result); }
           else { setRaces(prev => (prev || []).map(r => r.id === result.raceId ? { ...r, result } : r)); }

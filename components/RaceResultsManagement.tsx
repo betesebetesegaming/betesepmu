@@ -8,10 +8,11 @@ interface RaceResultsManagementProps {
     races: Race[];
     tickets: Ticket[];
     effectiveTime: Date;
-    onSave: (result: RaceResult) => void;
+    onSave?: (result: RaceResult) => void;
+    canEdit?: boolean;
 }
 
-export const RaceResultsManagement: React.FC<RaceResultsManagementProps> = ({ races, tickets, effectiveTime, onSave }) => {
+export const RaceResultsManagement: React.FC<RaceResultsManagementProps> = ({ races, tickets, effectiveTime, onSave, canEdit = true }) => {
     const [editingRace, setEditingRace] = useState<Race | null>(null);
 
     const pastRaces = useMemo(() => {
@@ -25,6 +26,7 @@ export const RaceResultsManagement: React.FC<RaceResultsManagementProps> = ({ ra
     };
     
     const handleSaveResult = (result: RaceResult) => {
+        if (!canEdit || !onSave) return;
         onSave(result);
         setEditingRace(null);
     }
@@ -41,7 +43,7 @@ export const RaceResultsManagement: React.FC<RaceResultsManagementProps> = ({ ra
         )}
         <div className="bg-white p-6 rounded-lg shadow-lg">
             <h2 className="text-xl font-bold text-betese-dark mb-4">Race Results & Payouts</h2>
-            <p className="text-sm text-gray-600 mb-4">This is the dedicated area to enter or edit the winning numbers and payout dividends for all completed races.</p>
+            <p className="text-sm text-gray-600 mb-4">{canEdit ? 'This is the dedicated area to enter or edit the winning numbers and payout dividends for all completed races.' : 'This area is view-only. Race results and tie brackets can only be entered or edited by Admin.'}</p>
             
             <div className="overflow-x-auto mt-4">
                 <table className="min-w-full bg-white">
@@ -51,7 +53,7 @@ export const RaceResultsManagement: React.FC<RaceResultsManagementProps> = ({ ra
                             <th className="text-left py-2 px-3">Completed At</th>
                             <th className="text-left py-2 px-3">Result Status</th>
                             <th className="text-left py-2 px-3">Winning Numbers</th>
-                            <th className="text-left py-2 px-3">Actions</th>
+                            {canEdit && <th className="text-left py-2 px-3">Actions</th>}
                         </tr>
                     </thead>
                     <tbody>
@@ -72,24 +74,31 @@ export const RaceResultsManagement: React.FC<RaceResultsManagementProps> = ({ ra
                                             {formatWinningNumbersForDisplay(race.result.winningNumbers)}
                                             {race.result.bracketWinningNumbers && race.result.bracketWinningNumbers.length > 0 && (
                                                 <span className="block text-xs text-blue-600 mt-1">
-                                                    Bracket: {formatWinningNumbersForDisplay(race.result.bracketWinningNumbers)}
+                                                    Tie 1: {formatWinningNumbersForDisplay(race.result.bracketWinningNumbers)}
+                                                </span>
+                                            )}
+                                            {race.result.bracket2WinningNumbers && race.result.bracket2WinningNumbers.length > 0 && (
+                                                <span className="block text-xs text-indigo-600 mt-1">
+                                                    Tie 2: {formatWinningNumbersForDisplay(race.result.bracket2WinningNumbers)}
                                                 </span>
                                             )}
                                         </>
                                     ) : '---'}
                                 </td>
-                                <td className="py-2 px-3">
-                                    <button
-                                        onClick={() => setEditingRace(race)}
-                                        className="px-3 py-1 text-sm text-white font-semibold rounded-lg bg-blue-600 hover:bg-blue-700"
-                                    >
-                                        Enter/Edit Results
-                                    </button>
-                                </td>
+                                {canEdit && (
+                                    <td className="py-2 px-3">
+                                        <button
+                                            onClick={() => setEditingRace(race)}
+                                            className="px-3 py-1 text-sm text-white font-semibold rounded-lg bg-blue-600 hover:bg-blue-700"
+                                        >
+                                            Enter/Edit Results
+                                        </button>
+                                    </td>
+                                )}
                             </tr>
                         ))}
                         {pastRaces.length === 0 && (
-                             <tr><td colSpan={5} className="text-center py-4 text-gray-500">No completed races found.</td></tr>
+                             <tr><td colSpan={canEdit ? 5 : 4} className="text-center py-4 text-gray-500">No completed races found.</td></tr>
                         )}
                     </tbody>
                 </table>

@@ -15,7 +15,15 @@ export const WithdrawalCodeModal: React.FC<WithdrawalCodeModalProps> = ({ reques
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
       <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm text-center transform transition-all animate-fade-in-up">
-        <div className="text-5xl mb-4">💸</div>
+        <div className="flex justify-center mb-4">
+          <div className="w-16 h-16 rounded-2xl bg-betese-green flex items-center justify-center shadow-lg">
+            <svg viewBox="0 0 24 24" fill="none" className="w-9 h-9 text-white">
+              <path d="M12 4C9 4 7 6 7 8V10L5 12L7 20H17L19 12L17 10V8C17 6 15 4 12 4Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/>
+              <path d="M10 8H14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+              <path d="M12 12V16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+            </svg>
+          </div>
+        </div>
         <h2 className="text-2xl font-bold text-betese-dark">Withdrawal Requested</h2>
         <p className="text-gray-600 mt-2">Take this code to any Betese vendor to receive your cash.</p>
         

@@ -37,7 +37,16 @@ export const BookingCodeModal: React.FC<BookingCodeModalProps> = ({ ticket, onCl
         <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm text-center transform transition-all animate-fade-in-up">
           <div id={`booking-print-${ticket.bookingCode}`}>
             <div className="printable-content">
-              <div className="text-5xl mb-4 print:hidden">🎟️</div>
+              <div className="flex justify-center mb-4 print:hidden">
+                <div className="w-16 h-16 rounded-2xl bg-betese-green flex items-center justify-center shadow-lg">
+                  <svg viewBox="0 0 24 24" fill="none" className="w-9 h-9 text-white">
+                    <rect x="3" y="7" width="18" height="11" rx="2" stroke="currentColor" strokeWidth="1.8"/>
+                    <path d="M3 11h18" stroke="currentColor" strokeWidth="1.5" strokeDasharray="3 2"/>
+                    <circle cx="8" cy="14.5" r="1.2" fill="currentColor"/>
+                    <path d="M11 14h6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                  </svg>
+                </div>
+              </div>
               <div className="print:text-black print:bg-white bg-white">
                   <div className="text-center mb-4 border-b-2 border-dashed border-black pb-2">
                     <div className="flex justify-center"><Logo className="text-4xl" /></div>
