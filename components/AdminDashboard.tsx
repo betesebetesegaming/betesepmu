@@ -99,19 +99,43 @@ const BackButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
   </button>
 );
 
+type AdminIconKind = 'analytics' | 'manual' | 'raffle' | 'program' | 'users' | 'races' | 'tools' | 'reports' | 'integrations' | 'support' | 'printing';
+
+const AdminMenuGraphic: React.FC<{ kind: AdminIconKind }> = ({ kind }) => {
+    const photoMap: Record<AdminIconKind, { src: string; alt: string }> = {
+        analytics: { src: 'https://images.unsplash.com/photo-1551281044-8b25b0b5c8ce?w=140&h=140&fit=crop&q=80', alt: 'analytics' },
+        manual: { src: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=140&h=140&fit=crop&q=80', alt: 'manual bets' },
+        raffle: { src: 'https://images.unsplash.com/photo-1518546305927-5a555bb7020d?w=140&h=140&fit=crop&q=80', alt: 'raffle' },
+        program: { src: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=140&h=140&fit=crop&q=80', alt: 'program' },
+        users: { src: 'https://images.unsplash.com/photo-1521737604893-d14cc237f11d?w=140&h=140&fit=crop&q=80', alt: 'users' },
+        races: { src: 'https://images.unsplash.com/photo-1553284965-83fd3e82fa5a?w=140&h=140&fit=crop&q=80', alt: 'horse race' },
+        tools: { src: 'https://images.unsplash.com/photo-1498079022511-d15614cb1c02?w=140&h=140&fit=crop&q=80', alt: 'tools' },
+        reports: { src: 'https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=140&h=140&fit=crop&q=80', alt: 'reports' },
+        integrations: { src: 'https://images.unsplash.com/photo-1563013544-824ae1b704d3?w=140&h=140&fit=crop&q=80', alt: 'payment integration' },
+        support: { src: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=140&h=140&fit=crop&q=80', alt: 'support' },
+        printing: { src: 'https://images.unsplash.com/photo-1515879218367-8466d910aaa4?w=140&h=140&fit=crop&q=80', alt: 'printing' },
+    };
+
+    return (
+        <div className="w-16 h-16 rounded-2xl overflow-hidden border border-white/40 shadow-lg ring-2 ring-white/25">
+            <img src={photoMap[kind].src} alt={photoMap[kind].alt} className="w-full h-full object-cover" loading="lazy" />
+        </div>
+    );
+};
+
 const AdminMenu: React.FC<{ setView: (view: AdminView) => void; }> = ({ setView }) => {
     const menuItems = [
-        { view: 'ANALYTICS', label: 'Analytics Dashboard', icon: '💰', color: 'from-green-500 to-green-700' },
-        { view: 'MANUAL_BETS', label: 'Assign Manual Bets', icon: '📝', color: 'from-indigo-500 to-indigo-700' },
-        { view: 'RAFFLE_DRAW', label: 'Automatic Raffle Draw', icon: '🎟️', color: 'from-amber-500 to-orange-700' },
-        { view: 'PROGRAM', label: 'Program & Ads', icon: '🖼️', color: 'from-blue-500 to-blue-700' },
-        { view: 'USERS', label: 'User Accounts', icon: '👥', color: 'from-purple-500 to-purple-700' },
-        { view: 'RACES', label: 'Race Management', icon: '🏇', color: 'from-orange-500 to-orange-700' },
-        { view: 'TICKET_PAYOUT', label: 'Office Payouts', icon: '🛠️', color: 'from-cyan-500 to-blue-500' },
-        { view: 'REPORTS', label: 'Payout Reports', icon: '📊', color: 'from-yellow-500 to-yellow-600' },
-        { view: 'INTEGRATIONS', label: 'Payment API', icon: '🔗', color: 'from-yellow-600 to-orange-600' },
-        { view: 'SUPPORT', label: 'Support & Snapshot', icon: '🚑', color: 'from-red-600 to-red-800' },
-        { view: 'PRINTING', label: 'Test Print', icon: '🖨️', color: 'from-slate-500 to-slate-700' },
+        { view: 'ANALYTICS', label: 'Analytics Dashboard', iconKind: 'analytics' as AdminIconKind, color: 'from-green-500 to-green-700' },
+        { view: 'MANUAL_BETS', label: 'Assign Manual Bets', iconKind: 'manual' as AdminIconKind, color: 'from-indigo-500 to-indigo-700' },
+        { view: 'RAFFLE_DRAW', label: 'Automatic Raffle Draw', iconKind: 'raffle' as AdminIconKind, color: 'from-amber-500 to-orange-700' },
+        { view: 'PROGRAM', label: 'Program & Ads', iconKind: 'program' as AdminIconKind, color: 'from-blue-500 to-blue-700' },
+        { view: 'USERS', label: 'User Accounts', iconKind: 'users' as AdminIconKind, color: 'from-purple-500 to-purple-700' },
+        { view: 'RACES', label: 'Race Management', iconKind: 'races' as AdminIconKind, color: 'from-orange-500 to-orange-700' },
+        { view: 'TICKET_PAYOUT', label: 'Office Payouts', iconKind: 'tools' as AdminIconKind, color: 'from-cyan-500 to-blue-500' },
+        { view: 'REPORTS', label: 'Payout Reports', iconKind: 'reports' as AdminIconKind, color: 'from-yellow-500 to-yellow-600' },
+        { view: 'INTEGRATIONS', label: 'Payment API', iconKind: 'integrations' as AdminIconKind, color: 'from-yellow-600 to-orange-600' },
+        { view: 'SUPPORT', label: 'Support & Snapshot', iconKind: 'support' as AdminIconKind, color: 'from-red-600 to-red-800' },
+        { view: 'PRINTING', label: 'Test Print', iconKind: 'printing' as AdminIconKind, color: 'from-slate-500 to-slate-700' },
     ];
     return (
         <div>
@@ -119,7 +143,7 @@ const AdminMenu: React.FC<{ setView: (view: AdminView) => void; }> = ({ setView 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                  {menuItems.map(item => (
                     <button key={item.view} onClick={() => setView(item.view as AdminView)} className={`p-6 rounded-lg shadow-lg text-white font-bold text-left flex flex-col justify-between h-40 transition-all transform hover:-translate-y-1 bg-gradient-to-br ${item.color}`}>
-                        <span className="text-5xl">{item.icon}</span>
+                        <AdminMenuGraphic kind={item.iconKind} />
                         <h3 className="text-2xl">{item.label}</h3>
                     </button>
                 ))}
