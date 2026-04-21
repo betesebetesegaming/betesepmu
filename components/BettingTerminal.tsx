@@ -54,12 +54,33 @@ interface BettingTerminalProps {
 
 type View = 'DASHBOARD' | 'PLACE_BET' | 'SCAN_PAY' | 'FINANCE' | 'SALES_REPORT' | 'RAPPORTS' | 'UPDATE_RESULTS' | 'MANUAL_BETS';
 
-const MenuButton: React.FC<{ onClick: () => void, label: string, icon: string, color: string, subtext: string, count?: number }> = ({ onClick, label, icon, color, subtext, count }) => (
+type MenuIconKind = 'horse' | 'money' | 'wallet' | 'history' | 'print' | 'results' | 'manual' | 'chat';
+
+const MenuGraphic: React.FC<{ kind: MenuIconKind }> = ({ kind }) => {
+    const photoMap: Record<MenuIconKind, { src: string; alt: string }> = {
+        horse: { src: 'https://images.unsplash.com/photo-1553284965-83fd3e82fa5a?w=140&h=140&fit=crop&q=80', alt: 'horse race' },
+        money: { src: 'https://images.unsplash.com/photo-1554672408-730436b60dde?w=140&h=140&fit=crop&q=80', alt: 'money payout' },
+        wallet: { src: 'https://images.unsplash.com/photo-1563013544-824ae1b704d3?w=140&h=140&fit=crop&q=80', alt: 'wallet finance' },
+        history: { src: 'https://images.unsplash.com/photo-1551281044-8b25b0b5c8ce?w=140&h=140&fit=crop&q=80', alt: 'history reports' },
+        print: { src: 'https://images.unsplash.com/photo-1515879218367-8466d910aaa4?w=140&h=140&fit=crop&q=80', alt: 'print reports' },
+        results: { src: 'https://images.unsplash.com/photo-1567427017942-4bb5ac2a3b4b?w=140&h=140&fit=crop&q=80', alt: 'results trophy' },
+        manual: { src: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=140&h=140&fit=crop&q=80', alt: 'manual office work' },
+        chat: { src: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=140&h=140&fit=crop&q=80', alt: 'support chat' },
+    };
+
+    return (
+        <div className="w-14 h-14 rounded-2xl overflow-hidden border border-white/40 shadow-lg ring-2 ring-white/25">
+            <img src={photoMap[kind].src} alt={photoMap[kind].alt} className="w-full h-full object-cover" loading="lazy" />
+        </div>
+    );
+};
+
+const MenuButton: React.FC<{ onClick: () => void, label: string, iconKind: MenuIconKind, color: string, subtext: string, count?: number }> = ({ onClick, label, iconKind, color, subtext, count }) => (
     <button 
         onClick={onClick}
         className={`${color} text-white p-4 rounded-2xl shadow-lg flex flex-col items-center justify-center gap-1 transition-all active:scale-95 border-b-4 border-black/20 hover:brightness-110 relative h-32 w-full`}
     >
-        <span className="text-4xl drop-shadow-md">{icon}</span>
+        <MenuGraphic kind={iconKind} />
         <div className="text-center">
             <span className="text-lg font-black uppercase block leading-none">{label}</span>
             <span className="text-[10px] opacity-80 font-bold uppercase tracking-widest">{subtext}</span>
@@ -265,7 +286,7 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                             races={races}
                             tickets={allTickets}
                             effectiveTime={effectiveTime}
-                            onSave={onSaveRaceResult}
+                            canEdit={false}
                         />
                     </div>
                 );
@@ -290,7 +311,7 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                                     onClick={handlePrintDailyReport}
                                     className="px-6 py-3 bg-betese-green text-white font-black rounded-xl shadow-lg hover:brightness-110 active:scale-95 transition-all flex items-center gap-2 border-b-4 border-black/20"
                                 >
-                                    <span className="text-xl">📊</span> PRINT REPORT
+                                    <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M4 20V12M10 20V8M16 20V5M22 20V10"/></svg> PRINT REPORT
                                 </button>
                              </div>
                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
@@ -312,24 +333,24 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                             {lastSavedTicket && (
                                 <div className="bg-yellow-100 border-l-8 border-yellow-500 p-4 rounded-r-2xl flex items-center justify-between animate-fade-in shadow-lg">
                                     <div><p className="text-[11px] font-black text-yellow-800 uppercase">Last Reference:</p><p className="font-mono font-black text-2xl text-gray-900 tracking-tight">#{lastSavedTicket.id}</p></div>
-                                    <button onClick={() => onReprintTicket(lastSavedTicket)} className="px-6 py-4 bg-yellow-500 text-betese-dark font-black rounded-xl shadow hover:bg-yellow-600 active:scale-95 text-sm uppercase flex items-center gap-3 border-2 border-yellow-600"><span className="text-xl">🖨️</span> REPRINT</button>
+                                    <button onClick={() => onReprintTicket(lastSavedTicket)} className="px-6 py-4 bg-yellow-500 text-betese-dark font-black rounded-xl shadow hover:bg-yellow-600 active:scale-95 text-sm uppercase flex items-center gap-3 border-2 border-yellow-600"><svg viewBox="0 0 24 24" fill="none" className="w-5 h-5" stroke="currentColor" strokeWidth="1.8"><rect x="7" y="4" width="10" height="5"/><rect x="5" y="9" width="14" height="8" rx="2"/><rect x="8" y="14" width="8" height="6"/></svg> REPRINT</button>
                                 </div>
                             )}
                             <div className="bg-betese-green/10 border-l-8 border-betese-green p-4 rounded-r-2xl flex items-center justify-between shadow-lg">
                                 <div><p className="text-[11px] font-black text-betese-green uppercase">Shift Gross Total:</p><p className="font-black text-2xl text-gray-900 tracking-tight">GMD {reportSales.toFixed(0)}</p></div>
-                                <button onClick={handlePrintDailyReport} className="px-6 py-4 bg-betese-green text-white font-black rounded-xl shadow hover:brightness-110 active:scale-95 text-sm uppercase flex items-center gap-2 border-b-4 border-black/20"><span className="text-xl">📊</span> PRINT SALES</button>
+                                <button onClick={handlePrintDailyReport} className="px-6 py-4 bg-betese-green text-white font-black rounded-xl shadow hover:brightness-110 active:scale-95 text-sm uppercase flex items-center gap-2 border-b-4 border-black/20"><svg viewBox="0 0 24 24" fill="none" className="w-5 h-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M4 20V12M10 20V8M16 20V5M22 20V10"/></svg> PRINT SALES</button>
                             </div>
                         </div>
 
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 animate-fade-in">
-                            <MenuButton onClick={() => setView('PLACE_BET')} label="Place Bet" subtext="New Ticket" icon="🏇" color="bg-blue-600" />
-                            <MenuButton onClick={() => setView('SCAN_PAY')} label="Scan/Pay" subtext="Payout" icon="💰" color="bg-orange-600" />
-                            <MenuButton onClick={() => setView('FINANCE')} label="Finance" subtext="Wallets" icon="📱" color="bg-indigo-600" count={pendingFinanceCount} />
-                            <MenuButton onClick={() => setView('SALES_REPORT')} label="History" subtext="Sales Log" icon="📑" color="bg-gray-700" />
-                            <MenuButton onClick={() => setView('RAPPORTS')} label="Rapport" subtext="Print Results" icon="🖨️" color="bg-cyan-600" />
-                            <MenuButton onClick={() => setView('UPDATE_RESULTS')} label="Results" subtext="Enter Winners" icon="🏆" color="bg-red-600" />
-                            <MenuButton onClick={() => setView('MANUAL_BETS')} label="Manual" subtext="Office" icon="📝" color="bg-emerald-600" count={pendingManualCount} />
-                            <MenuButton onClick={() => onOpenChat()} label="Chat" subtext="Support" icon="💬" color="bg-purple-600" />
+                            <MenuButton onClick={() => setView('PLACE_BET')} label="Place Bet" subtext="New Ticket" iconKind="horse" color="bg-blue-600" />
+                            <MenuButton onClick={() => setView('SCAN_PAY')} label="Scan/Pay" subtext="Payout" iconKind="money" color="bg-orange-600" />
+                            <MenuButton onClick={() => setView('FINANCE')} label="Finance" subtext="Wallets" iconKind="wallet" color="bg-indigo-600" count={pendingFinanceCount} />
+                            <MenuButton onClick={() => setView('SALES_REPORT')} label="History" subtext="Sales Log" iconKind="history" color="bg-gray-700" />
+                            <MenuButton onClick={() => setView('RAPPORTS')} label="Rapport" subtext="Print Results" iconKind="print" color="bg-cyan-600" />
+                            <MenuButton onClick={() => setView('UPDATE_RESULTS')} label="Results" subtext="View Only" iconKind="results" color="bg-red-600" />
+                            <MenuButton onClick={() => setView('MANUAL_BETS')} label="Manual" subtext="Office" iconKind="manual" color="bg-emerald-600" count={pendingManualCount} />
+                            <MenuButton onClick={() => onOpenChat()} label="Chat" subtext="Support" iconKind="chat" color="bg-purple-600" />
                         </div>
                     </div>
                 );
