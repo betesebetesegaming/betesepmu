@@ -104,7 +104,8 @@ export const dbSaveRaceResult = async (result: RaceResult) => {
 export const dbPlaceBet = async (ticket: Ticket, user: User) => {
     if (!supabase) throw new Error("Supabase not connected");
     const isOnlineCustomer = user.role === 'Customer';
-    if (isOnlineCustomer) {
+    const shouldChargeWallet = isOnlineCustomer && ticket.status !== 'Booked';
+    if (shouldChargeWallet) {
         const { data: userRow, error: walletFetchError } = await supabase
             .from('users')
             .select('wallet_balance')

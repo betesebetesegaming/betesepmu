@@ -7,6 +7,7 @@ import { TicketModal } from './TicketModal';
 import { BET_PRICING } from '../constants';
 import { TicketHistoryPanel } from './TicketHistoryPanel';
 import { WinningTicketModal } from './WinningTicketModal';
+import { BookingCodeModal } from './BookingCodeModal';
 import { WalletPanel } from './WalletPanel';
 import { RaceResultsPanel } from './RaceResultsPanel';
 import { RapportModal } from './RapportModal';
@@ -196,7 +197,12 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
         </button>
       )}
       {/* 100% Logic: Never show print for online customers to prevent fraud */}
-      {lastTicket && <TicketModal ticket={lastTicket} onClose={onCloseTicket} showPrintButton={false} races={races} />}
+      {lastTicket?.status === 'Booked' && lastTicket.bookingCode && (
+        <BookingCodeModal ticket={lastTicket} onClose={onCloseTicket} />
+      )}
+      {lastTicket && lastTicket.status !== 'Booked' && (
+        <TicketModal ticket={lastTicket} onClose={onCloseTicket} showPrintButton={false} races={races} />
+      )}
       {winningTicketToShow && <WinningTicketModal ticket={winningTicketToShow} onClose={() => onMarkWinningTicketAsSeen(winningTicketToShow.id)} />}
       {rapportModalRace && <RapportModal race={rapportModalRace} onClose={() => setRapportModalRace(null)} showPrintButton={false} />}
       <ProgramModal isOpen={isProgramModalOpen} onClose={() => setIsProgramModalOpen(false)} programImages={programImages.filter(i => i.type === 'program')} />
