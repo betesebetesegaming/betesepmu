@@ -197,18 +197,29 @@ export const dbFetchRaces = async (): Promise<Race[]> => {
 
 export const dbFetchLiveTickets = async (user: User): Promise<Ticket[]> => {
     if(!supabase) return [];
-    let activeQuery = supabase.from('tickets').select('*').in('status', ['Active', 'Booked', 'Winning']);
-    let historyQuery = supabase.from('tickets').select('*').in('status', ['Paid', 'Lost', 'Canceled']).order('timestamp', { ascending: false }).limit(100);
+    let allData: any[] = [];
+
     if (user.role === 'Vendor') {
-        activeQuery = activeQuery.eq('vendor_id', user.id);
-        historyQuery = historyQuery.eq('vendor_id', user.id);
-    } else if (user.role === 'Customer') {
-        activeQuery = activeQuery.eq('customer_id', user.id);
-        historyQuery = historyQuery.eq('customer_id', user.id);
+        // Vendors must see all booked tickets so they can retrieve by booking code.
+        const [vendorActiveRes, bookedRes, historyRes] = await Promise.all([
+            supabase.from('tickets').select('*').in('status', ['Active', 'Winning']).eq('vendor_id', user.id),
+            supabase.from('tickets').select('*').eq('status', 'Booked'),
+            supabase.from('tickets').select('*').in('status', ['Paid', 'Lost', 'Canceled']).eq('vendor_id', user.id).order('timestamp', { ascending: false }).limit(100)
+        ]);
+        allData = [...(vendorActiveRes.data || []), ...(bookedRes.data || []), ...(historyRes.data || [])];
+    } else {
+        let activeQuery = supabase.from('tickets').select('*').in('status', ['Active', 'Booked', 'Winning']);
+        let historyQuery = supabase.from('tickets').select('*').in('status', ['Paid', 'Lost', 'Canceled']).order('timestamp', { ascending: false }).limit(100);
+        if (user.role === 'Customer') {
+            activeQuery = activeQuery.eq('customer_id', user.id);
+            historyQuery = historyQuery.eq('customer_id', user.id);
+        }
+        const [activeRes, historyRes] = await Promise.all([activeQuery, historyQuery]);
+        allData = [...(activeRes.data || []), ...(historyRes.data || [])];
     }
-    const [activeRes, historyRes] = await Promise.all([activeQuery, historyQuery]);
-    const allData = [...(activeRes.data || []), ...(historyRes.data || [])];
-    return allData.map((t: any) => ({
+
+    const deduped = Array.from(new Map(allData.map((row) => [row.id, row])).values());
+    return deduped.map((t: any) => ({
         id: t.id, timestamp: new Date(t.timestamp), vendorId: t.vendor_id, vendorName: t.vendor_name,
         status: t.status, customerId: t.customer_id, bookingCode: t.booking_code, selections: t.selections,
         totalCost: t.total_cost, winnings: t.winnings, winningsBreakdown: t.winnings_breakdown,

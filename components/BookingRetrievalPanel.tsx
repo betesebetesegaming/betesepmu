@@ -5,7 +5,7 @@ import { BETTING_CUTOFF_MS } from '../utils';
 
 interface BookingRetrievalPanelProps {
   allTickets: Ticket[];
-    onPayForBooking: (bookingCode: string) => Promise<{ success: boolean; message: string }>;
+        onPayForBooking: (bookingCode: string) => Promise<{ success: boolean; message: string; ticket?: Ticket }>;
   onPrintBookingSlip: (ticket: Ticket) => void;
   races: Race[];
   effectiveTime: Date;
@@ -25,7 +25,8 @@ export const BookingRetrievalPanel: React.FC<BookingRetrievalPanelProps> = ({ al
         setMessage('Please enter a Booking Code.');
         return;
     }
-    const ticket = allTickets.find(t => t.bookingCode?.toUpperCase() === bookingCode.toUpperCase() && t.status === 'Booked');
+    const normalizedCode = bookingCode.trim().toUpperCase();
+    const ticket = allTickets.find(t => t.bookingCode?.toUpperCase() === normalizedCode && t.status === 'Booked');
     if (ticket) {
         setFoundTicket(ticket);
     } else {
@@ -36,11 +37,14 @@ export const BookingRetrievalPanel: React.FC<BookingRetrievalPanelProps> = ({ al
   const handlePay = async () => {
       if (!foundTicket?.bookingCode) return;
       
-      const result = await onPayForBooking(foundTicket.bookingCode);
+      const result = await onPayForBooking(foundTicket.bookingCode.trim().toUpperCase());
       setMessage(result.message);
       setIsSuccess(result.success);
 
       if(result.success) {
+          if (result.ticket) {
+              onPrintBookingSlip(result.ticket);
+          }
           setFoundTicket(null);
           setBookingCode('');
       }
@@ -64,19 +68,26 @@ export const BookingRetrievalPanel: React.FC<BookingRetrievalPanelProps> = ({ al
     <div className="bg-white p-6 rounded-lg shadow-lg border-2 border-transparent hover:border-blue-100 transition-colors">
       <h3 className="text-xl font-bold text-betese-dark mb-4">Retrieve & Pay Booking</h3>
       <div className="space-y-4">
+                <p className="text-xs text-gray-600 font-semibold bg-blue-50 border border-blue-200 rounded-md p-2">
+                    ACTION: Enter the Transaction Code in the box below, then click Find Ticket.
+                </p>
+                <label htmlFor="transaction-code-input" className="block text-sm font-black text-gray-700 uppercase tracking-wide">
+                    Transaction Code (Booking Code)
+                </label>
         <div className="flex gap-2">
             <input
+                        id="transaction-code-input"
             type="text"
             value={bookingCode}
             onChange={(e) => setBookingCode(e.target.value)}
-            placeholder="Enter Booking Code"
+                        placeholder="Enter Transaction Code"
             className="flex-grow p-3 border-2 border-gray-300 rounded-lg uppercase font-bold text-lg tracking-widest focus:border-betese-green focus:ring-0"
             />
             <button
                 onClick={handleFindBooking}
                 className="px-6 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 shadow-md"
             >
-                Find
+                                Find Ticket
             </button>
         </div>
 

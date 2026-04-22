@@ -431,16 +431,22 @@ const AppContent: React.FC = () => {
     } catch (e: any) { alert(`Transaction Failed: ${e.message}`); }
   };
 
-  const payForBooking = async (code: string) => {
-      const ticket = (placedTickets || []).find(t => t.bookingCode === code && t.status === 'Booked');
+  const payForBooking = async (code: string): Promise<{ success: boolean; message: string; ticket?: Ticket }> => {
+      const normalizedCode = (code || '').trim().toUpperCase();
+      const ticket = (placedTickets || []).find(t => t.bookingCode?.toUpperCase() === normalizedCode && t.status === 'Booked');
       if (!ticket || !currentUser) return { success: false, message: 'Not found' };
 
       if (supabase) {
           try {
-              const success = await dbPayForBooking(code, currentUser.id, currentUser.name, effectiveTime);
+              const success = await dbPayForBooking(normalizedCode, currentUser.id, currentUser.name, effectiveTime);
               if (!success) return { success: false, message: 'Booking not found or already processed.' };
-              loadLiveSystemData(currentUser);
-              return { success: true, message: 'Booking activated successfully.' };
+              const nextTickets = await dbFetchLiveTickets(currentUser);
+              setPlacedTickets(nextTickets);
+              const activatedTicket = (nextTickets || []).find(
+                t => t.bookingCode?.toUpperCase() === normalizedCode && t.status === 'Active'
+              );
+              if (activatedTicket) setLastTicket(activatedTicket);
+              return { success: true, message: 'Booking activated successfully.', ticket: activatedTicket };
           } catch (e: any) {
               return { success: false, message: e.message || 'Failed to activate booking.' };
           }
@@ -449,7 +455,7 @@ const AppContent: React.FC = () => {
       const updated = { ...ticket, status: 'Active' as const, vendorId: currentUser.id, vendorName: currentUser.name };
       setPlacedTickets(prev => (prev || []).map(t => t.id === ticket.id ? updated : t));
       setLastTicket(updated);
-      return { success: true, message: 'Paid' };
+      return { success: true, message: 'Paid', ticket: updated };
   };
 
   const processWithdrawal = async (code: string) => {
