@@ -32,7 +32,9 @@ const RaceForm: React.FC<{
     onCancel: () => void;
     effectiveTime: Date;
 }> = ({ editingRace, onSave, onCancel, effectiveTime }) => {
+    const [raceCode, setRaceCode] = useState('');
     const [name, setName] = useState('');
+    const [venue, setVenue] = useState('');
     const [horseCount, setHorseCount] = useState(16);
     const [startDate, setStartDate] = useState(formatDateForInput(effectiveTime));
     const [endDate, setEndDate] = useState(formatDateForInput(effectiveTime));
@@ -43,7 +45,9 @@ const RaceForm: React.FC<{
     // FIX: Removed effectiveTime from dependencies to prevent form reset on every clock tick
     useEffect(() => {
         if (editingRace) {
+            setRaceCode(editingRace.raceCode || '');
             setName(editingRace.name);
+            setVenue(editingRace.venue || '');
             setHorseCount(editingRace.horseCount);
             setDisabledBetTypes(editingRace.disabledBetTypes || []);
             setStartDate(formatDateForInput(editingRace.startDate));
@@ -52,7 +56,9 @@ const RaceForm: React.FC<{
             setJackpot(editingRace.jackpot || '');
         } else {
             // Reset to default values for a new race
+            setRaceCode('');
             setName('');
+            setVenue('');
             setHorseCount(16);
             setStartDate(formatDateForInput(effectiveTime));
             setEndDate(formatDateForInput(effectiveTime));
@@ -87,7 +93,9 @@ const RaceForm: React.FC<{
         }
         
         onSave({
+            raceCode: raceCode.trim() || undefined,
             name,
+            venue: venue.trim() || undefined,
             horseCount,
             startDate: finalStartDate,
             endDate: finalEndDate,
@@ -110,9 +118,17 @@ const RaceForm: React.FC<{
                  {editingRace ? `Editing Race: ${editingRace.name}` : 'Setup New Race'}
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Race Code</label>
+                    <input type="text" placeholder="e.g., R1 / MAIN" value={raceCode} onChange={e => setRaceCode(e.target.value.toUpperCase())} className="p-2 border rounded w-full" />
+                </div>
                 <div className="lg:col-span-4">
                     <label className="block text-sm font-medium text-gray-700 mb-1">Race Name</label>
                     <input type="text" placeholder="e.g., Main Race, R1" value={name} onChange={e => setName(e.target.value)} className="p-2 border rounded w-full" required />
+                </div>
+                <div className="lg:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Place / Venue</label>
+                    <input type="text" placeholder="e.g., ParisLongchamp" value={venue} onChange={e => setVenue(e.target.value)} className="p-2 border rounded w-full" />
                 </div>
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
@@ -226,7 +242,9 @@ export const RaceManagement: React.FC<RaceManagementProps> = ({ races, onAddRace
                 <table className="min-w-full bg-white">
                     <thead className="bg-gray-100">
                         <tr>
+                            <th className="text-left py-2 px-3">Code</th>
                             <th className="text-left py-2 px-3">Name</th>
+                            <th className="text-left py-2 px-3">Place</th>
                             <th className="text-left py-2 px-3">Start Date</th>
                             <th className="text-left py-2 px-3">End Date & Time</th>
                             <th className="text-left py-2 px-3">Jackpot</th>
@@ -238,7 +256,9 @@ export const RaceManagement: React.FC<RaceManagementProps> = ({ races, onAddRace
                     <tbody>
                         {upcomingRaces.map(race => (
                              <tr key={race.id} className="border-b">
+                            <td className="py-2 px-3 font-mono text-xs">{race.raceCode || '-'}</td>
                                 <td className="py-2 px-3 font-semibold">{race.name}</td>
+                            <td className="py-2 px-3">{race.venue || '-'}</td>
                                 <td className="py-2 px-3">{formatDate(race.startDate)}</td>
                                 <td className="py-2 px-3">{formatDateTime(race.endDate)}</td>
                                 <td className="py-2 px-3 text-yellow-700 font-bold">{race.jackpot ? race.jackpot.toLocaleString() : '-'}</td>
@@ -254,7 +274,7 @@ export const RaceManagement: React.FC<RaceManagementProps> = ({ races, onAddRace
                             </tr>
                         ))}
                         {upcomingRaces.length === 0 && (
-                             <tr><td colSpan={7} className="text-center py-4 text-gray-500">No upcoming races found.</td></tr>
+                                <tr><td colSpan={9} className="text-center py-4 text-gray-500">No upcoming races found.</td></tr>
                         )}
                     </tbody>
                 </table>

@@ -112,7 +112,9 @@ create index if not exists idx_users_phone on users (phone);
 
 create table if not exists races (
   id text primary key,
+  race_code text,
   name text not null,
+  venue text,
   start_date timestamptz not null,
   end_date timestamptz not null,
   horse_count int not null check (horse_count > 0),
@@ -123,6 +125,9 @@ create table if not exists races (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table races add column if not exists race_code text;
+alter table races add column if not exists venue text;
 
 create index if not exists idx_races_end_date on races (end_date desc);
 

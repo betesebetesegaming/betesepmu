@@ -36,6 +36,20 @@ interface RacePerformance {
     totalPayout: number;
 }
 
+interface RaceBoardRow {
+    raceId: string;
+    raceCode: string;
+    raceName: string;
+    venue: string;
+    scheduledTime: Date;
+    isFinished: boolean;
+    ticketsCount: number;
+    betsPlaced: number;
+    take: number;
+    winningSales: number;
+    totalPayout: number;
+}
+
 interface CombinationLedgerRow {
     ticketId: string;
     raceId: string;
@@ -50,6 +64,7 @@ interface CombinationLedgerRow {
 export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets, races }) => {
     
     const raceNameMap = useMemo(() => new Map(races.map(r => [r.id, r.name])), [races]);
+    const raceMap = useMemo(() => new Map(races.map(r => [r.id, r])), [races]);
 
     const analyticsData = useMemo(() => {
         // Overall stats
@@ -138,14 +153,49 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
             });
         }).sort((a, b) => b.ticketId.localeCompare(a.ticketId));
 
+        const raceBoardRows: RaceBoardRow[] = Object.entries(byRace)
+            .map(([raceId, stats], index) => {
+                const race = raceMap.get(raceId);
+                const raceCode = race?.raceCode || `R${index + 1}`;
+                const raceName = race?.name || raceId;
+                const venue = race?.venue || 'N/A';
+                const scheduledTime = race?.endDate || new Date(0);
+                return {
+                    raceId,
+                    raceCode,
+                    raceName,
+                    venue,
+                    scheduledTime,
+                    isFinished: Boolean(race?.result),
+                    ticketsCount: stats.ticketsCount,
+                    betsPlaced: stats.betsPlaced,
+                    take: stats.totalStake,
+                    winningSales: stats.winningSales,
+                    totalPayout: stats.totalPayout,
+                };
+            })
+            .sort((a, b) => a.scheduledTime.getTime() - b.scheduledTime.getTime());
+
         return {
             overall: { ticketsSold, totalStake, totalPayout, netProfit },
             byBetType,
             byRace,
+            raceBoardRows,
             combinationLedger,
         };
 
-    }, [tickets, raceNameMap]);
+    }, [tickets, raceNameMap, raceMap]);
+
+    const formatRaceTime = (date: Date) => {
+        if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '-';
+        return date.toLocaleString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true,
+        });
+    };
 
     return (
         <div className="space-y-6">
@@ -193,6 +243,53 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
                                     </tr>
                                 );
                             })}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-lg shadow-lg">
+                <h3 className="text-xl font-bold text-betese-dark mb-4">PMU Race Board (Time, Place, Take)</h3>
+                <p className="text-sm text-gray-600 mb-4">Each race is shown with race code, scheduled time, place, race name, and take so back-office can track race-by-race performance.</p>
+                <div className="overflow-x-auto">
+                    <table className="min-w-full bg-white text-sm">
+                        <thead className="bg-gray-100">
+                            <tr>
+                                <th className="text-left font-semibold py-2 px-3">Race</th>
+                                <th className="text-left font-semibold py-2 px-3">Time</th>
+                                <th className="text-left font-semibold py-2 px-3">Place</th>
+                                <th className="text-left font-semibold py-2 px-3">Race Name</th>
+                                <th className="text-right font-semibold py-2 px-3">Tickets</th>
+                                <th className="text-right font-semibold py-2 px-3">Bets</th>
+                                <th className="text-right font-semibold py-2 px-3">Take</th>
+                                <th className="text-right font-semibold py-2 px-3">Winning Sales</th>
+                                <th className="text-right font-semibold py-2 px-3">Payout</th>
+                                <th className="text-left font-semibold py-2 px-3">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                            {analyticsData.raceBoardRows.length > 0 ? analyticsData.raceBoardRows.map((row) => (
+                                <tr key={row.raceId}>
+                                    <td className="py-2 px-3 font-mono text-xs font-semibold">{row.raceCode}</td>
+                                    <td className="py-2 px-3 whitespace-nowrap">{formatRaceTime(row.scheduledTime)}</td>
+                                    <td className="py-2 px-3">{row.venue}</td>
+                                    <td className="py-2 px-3 font-semibold">{row.raceName}</td>
+                                    <td className="py-2 px-3 text-right font-mono">{row.ticketsCount}</td>
+                                    <td className="py-2 px-3 text-right font-mono">{row.betsPlaced}</td>
+                                    <td className="py-2 px-3 text-right font-mono font-semibold">{row.take.toFixed(2)}</td>
+                                    <td className="py-2 px-3 text-right font-mono">{row.winningSales.toFixed(2)}</td>
+                                    <td className="py-2 px-3 text-right font-mono">{row.totalPayout.toFixed(2)}</td>
+                                    <td className="py-2 px-3">
+                                        <span className={`px-2 py-1 rounded text-xs font-semibold ${row.isFinished ? 'bg-gray-200 text-gray-800' : 'bg-green-100 text-green-800'}`}>
+                                            {row.isFinished ? 'Finished' : 'Open'}
+                                        </span>
+                                    </td>
+                                </tr>
+                            )) : (
+                                <tr>
+                                    <td colSpan={10} className="py-4 px-3 text-center text-gray-500">No race activity found.</td>
+                                </tr>
+                            )}
                         </tbody>
                     </table>
                 </div>

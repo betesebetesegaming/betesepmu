@@ -54,7 +54,9 @@ export const dbSaveRace = async (race: Race) => {
     if (!supabase) throw new Error("Database not connected");
     const { error } = await supabase.from('races').insert({
         id: race.id,
+        race_code: race.raceCode || null,
         name: race.name,
+        venue: race.venue || null,
         start_date: race.startDate.toISOString(),
         end_date: race.endDate.toISOString(),
         horse_count: race.horseCount,
@@ -67,7 +69,9 @@ export const dbSaveRace = async (race: Race) => {
 export const dbUpdateRace = async (race: Race) => {
     if (!supabase) throw new Error("Database not connected");
     const { error } = await supabase.from('races').update({
+        race_code: race.raceCode || null,
         name: race.name,
+        venue: race.venue || null,
         start_date: race.startDate.toISOString(),
         end_date: race.endDate.toISOString(),
         horse_count: race.horseCount,
@@ -305,7 +309,12 @@ export const dbFetchRaces = async (): Promise<Race[]> => {
     const { data, error } = await supabase.from('races').select('*').gte('end_date', oneWeekAgo.toISOString());
     if(error) return [];
     return data.map((r: any) => ({
-        id: r.id, name: r.name, startDate: new Date(r.start_date), endDate: new Date(r.end_date),
+        id: r.id,
+        raceCode: r.race_code || undefined,
+        name: r.name,
+        venue: r.venue || undefined,
+        startDate: new Date(r.start_date),
+        endDate: new Date(r.end_date),
         horseCount: r.horse_count, nonRunners: r.non_runners || [], result: r.result,
         disabledBetTypes: r.disabled_bet_types || [], jackpot: r.jackpot
     }));

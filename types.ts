@@ -54,7 +54,9 @@ export interface RaceResult {
 
 export interface Race {
   id: string;
+  raceCode?: string;
   name: string;
+  venue?: string;
   startDate: Date;
   endDate: Date;
   horseCount: number;
