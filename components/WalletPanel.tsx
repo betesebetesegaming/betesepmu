@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { User, WithdrawalRequest, DepositRequest } from '../types';
+import { User, WithdrawalRequest, DepositRequest, Ticket } from '../types';
 import { useLanguage } from '../LanguageContext';
 
 interface WalletPanelProps {
@@ -10,6 +10,7 @@ interface WalletPanelProps {
   onWalletFlash: () => void;
   onDepositRequest: (amount: number, method: 'Wave' | 'AfriMoney', transactionId: string) => void;
   depositRequests: DepositRequest[];
+    tickets: Ticket[];
   onCancelWithdrawal?: (requestId: string) => void; // New Prop
 }
 
@@ -24,7 +25,7 @@ const getStatusChipStyle = (status: string) => {
     }
 }
 
-export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequest, withdrawalRequests, onWalletFlash, onDepositRequest, depositRequests, onCancelWithdrawal }) => {
+export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequest, withdrawalRequests, onWalletFlash, onDepositRequest, depositRequests, tickets, onCancelWithdrawal }) => {
   const [activeTab, setActiveTab] = useState<'deposit' | 'withdraw'>('deposit');
   
   // Deposit Form State
@@ -38,6 +39,14 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
   const [withdrawAmount, setWithdrawAmount] = useState<number | ''>('');
   const [withdrawError, setWithdrawError] = useState('');
   const { t } = useLanguage();
+
+    const actualBalance = Number(user.walletBalance || 0);
+    const pendingWinningMoney = (tickets || [])
+        .filter((ticket) => ticket.status === 'Winning')
+        .reduce((sum, ticket) => sum + Number(ticket.winnings || 0), 0);
+    const paidWinningMoney = (tickets || [])
+        .filter((ticket) => ticket.status === 'Paid')
+        .reduce((sum, ticket) => sum + Number(ticket.winnings || 0), 0);
 
   const handleDepositSubmit = (e: React.FormEvent) => {
       e.preventDefault();
@@ -91,17 +100,28 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
     <div className="bg-white p-6 rounded-lg shadow-lg">
       <h3 className="text-xl font-bold text-betese-dark mb-4">{t('tab_wallet')}</h3>
       
-      <div className="mb-6 p-4 bg-green-50 rounded-lg border border-green-200 space-y-2">
-        <div>
-            <p className="text-sm text-gray-600">{t('available_balance')}</p>
-            <p className="text-3xl font-bold text-betese-green">{user.walletBalance?.toFixed(2) ?? '0.00'} GMD</p>
-        </div>
-        {(user.bonusBalance ?? 0) > 0 && (
-            <div className="pt-2 border-t border-green-200">
-                <p className="text-sm text-yellow-800">{t('bonus_money')}</p>
-                <p className="text-2xl font-bold text-yellow-700">{user.bonusBalance?.toFixed(2)} GMD</p>
-            </div>
-        )}
+            <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                    <p className="text-xs uppercase font-bold text-gray-600">Actual Money</p>
+                    <p className="text-2xl font-black text-betese-green">{actualBalance.toFixed(2)} GMD</p>
+                    <p className="text-xs text-gray-500 mt-1">Available for betting and withdrawal</p>
+                </div>
+                <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                    <p className="text-xs uppercase font-bold text-gray-600">Winning Money (Pending)</p>
+                    <p className="text-2xl font-black text-blue-700">{pendingWinningMoney.toFixed(2)} GMD</p>
+                    <p className="text-xs text-gray-500 mt-1">Winning tickets not yet paid out</p>
+                </div>
+                <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
+                    <p className="text-xs uppercase font-bold text-gray-600">Winning Paid</p>
+                    <p className="text-2xl font-black text-purple-700">{paidWinningMoney.toFixed(2)} GMD</p>
+                    <p className="text-xs text-gray-500 mt-1">Total winnings already credited/paid</p>
+                </div>
+                {(user.bonusBalance ?? 0) > 0 && (
+                    <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200 md:col-span-3">
+                        <p className="text-sm text-yellow-800">{t('bonus_money')}</p>
+                        <p className="text-2xl font-bold text-yellow-700">{user.bonusBalance?.toFixed(2)} GMD</p>
+                    </div>
+                )}
       </div>
 
       {/* Tabs */}

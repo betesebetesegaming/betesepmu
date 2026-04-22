@@ -293,6 +293,12 @@ const AppContent: React.FC = () => {
     try {
         if (supabase) { 
             await dbPlaceBet(newTicket, currentUser); 
+            setPlacedTickets(prev => {
+                const exists = (prev || []).some(t => t.id === newTicket.id);
+                return exists ? prev : [...(prev || []), newTicket];
+            });
+            const updatedTickets = await dbFetchLiveTickets(currentUser);
+            setPlacedTickets(updatedTickets);
         } else { 
             // LOCAL MOCK WALLET DEDUCTION
             if (currentUser.role === 'Customer') {
@@ -304,6 +310,7 @@ const AppContent: React.FC = () => {
         }
         setLastTicket(newTicket);
         setBetSlip({ selections: [], totalCost: 0 });
+        alert("BET PLACED SUCCESSFULLY: Ticket has been added to your history.");
     } catch (e: any) { alert(`Transaction Failed: ${e.message}`); }
   };
 
@@ -323,11 +330,18 @@ const AppContent: React.FC = () => {
       
       if (supabase) {
           await dbPlaceBet(newTicket, currentUser);
+          setPlacedTickets(prev => {
+              const exists = (prev || []).some(t => t.id === newTicket.id);
+              return exists ? prev : [...(prev || []), newTicket];
+          });
+          const updatedTickets = await dbFetchLiveTickets(currentUser);
+          setPlacedTickets(updatedTickets);
       } else {
           setPlacedTickets(prev => [...prev, newTicket]);
       }
       setLastTicket(newTicket);
       setBetSlip({ selections: [], totalCost: 0 });
+      alert("BOOKING CREATED SUCCESSFULLY: Ticket has been added to your history.");
   };
 
   const handleDeposit = (customerId: string, amount: number, method: string = 'Cash', transactionId?: string) => {

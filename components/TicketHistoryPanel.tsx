@@ -119,6 +119,20 @@ const TicketItem: React.FC<{ ticket: Ticket; isCancellable: boolean; onCancel: (
 export const TicketHistoryPanel: React.FC<TicketHistoryPanelProps> = ({ tickets, onCancelTicket, races, effectiveTime }) => {
     const [filter, setFilter] = useState<TicketFilter>('all');
 
+    const historySummary = useMemo(() => {
+        const activeCount = tickets.filter((ticket) => {
+            const status = getEffectiveTicketStatus(ticket, effectiveTime);
+            return status === 'Active' || status === 'Booked';
+        }).length;
+        const winningCount = tickets.filter((ticket) => {
+            const status = getEffectiveTicketStatus(ticket, effectiveTime);
+            return status === 'Winning' || status === 'Paid';
+        }).length;
+        const totalStake = tickets.reduce((sum, ticket) => sum + Number(ticket.totalCost || 0), 0);
+        const totalWinnings = tickets.reduce((sum, ticket) => sum + Number(ticket.winnings || 0), 0);
+        return { activeCount, winningCount, totalStake, totalWinnings };
+    }, [tickets, effectiveTime]);
+
     const filteredTickets = useMemo(() => {
         const sorted = [...tickets].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
         if (filter === 'all') {
@@ -173,6 +187,28 @@ export const TicketHistoryPanel: React.FC<TicketHistoryPanelProps> = ({ tickets,
     return (
         <div className="bg-white p-6 rounded-lg shadow-lg">
             <h3 className="text-xl font-bold text-betese-dark mb-4">Betting History</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
+                <div className="p-3 rounded-lg border bg-gray-50">
+                    <p className="text-[10px] uppercase font-bold text-gray-500">Tickets</p>
+                    <p className="text-lg font-black text-betese-dark">{tickets.length}</p>
+                </div>
+                <div className="p-3 rounded-lg border bg-green-50">
+                    <p className="text-[10px] uppercase font-bold text-gray-500">Active</p>
+                    <p className="text-lg font-black text-green-700">{historySummary.activeCount}</p>
+                </div>
+                <div className="p-3 rounded-lg border bg-blue-50">
+                    <p className="text-[10px] uppercase font-bold text-gray-500">Winning/Paid</p>
+                    <p className="text-lg font-black text-blue-700">{historySummary.winningCount}</p>
+                </div>
+                <div className="p-3 rounded-lg border bg-purple-50">
+                    <p className="text-[10px] uppercase font-bold text-gray-500">Total Winnings</p>
+                    <p className="text-lg font-black text-purple-700">{historySummary.totalWinnings.toFixed(2)} GMD</p>
+                </div>
+            </div>
+            <div className="mb-4 p-3 rounded-lg border bg-slate-50 text-sm flex justify-between">
+                <span className="font-semibold text-gray-700">Total Stake: <span className="font-black text-betese-dark">{historySummary.totalStake.toFixed(2)} GMD</span></span>
+                <span className="font-semibold text-gray-700">Net: <span className="font-black text-betese-dark">{(historySummary.totalWinnings - historySummary.totalStake).toFixed(2)} GMD</span></span>
+            </div>
             <div className="flex flex-wrap justify-center gap-2 mb-4 border-b pb-4">
                 <FilterButton label="All" type="all" count={getCount('all')} />
                 <FilterButton label="Won" type="won" count={getCount('won')} />
