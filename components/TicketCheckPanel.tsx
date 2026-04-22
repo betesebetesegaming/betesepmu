@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Ticket } from '../types';
 
 interface TicketCheckPanelProps {
@@ -13,23 +13,50 @@ export const TicketCheckPanel: React.FC<TicketCheckPanelProps> = ({ allTickets, 
   const [ticketId, setTicketId] = useState('');
   const [foundTicket, setFoundTicket] = useState<Ticket | null>(null);
   const [message, setMessage] = useState('');
+  const [scanMode, setScanMode] = useState(true);
+
+  const lookupTicket = (rawRef: string): Ticket | null => {
+    const normalized = (rawRef || '').replace(/[\r\n]/g, '').trim();
+    if (!normalized) return null;
+    const upper = normalized.toUpperCase();
+    return allTickets.find((t) => t.id === normalized || t.bookingCode?.toUpperCase() === upper) || null;
+  };
 
   const handleCheckTicket = () => {
     setMessage('');
     setFoundTicket(null);
-    const normalized = (ticketId || '').trim();
+    const normalized = (ticketId || '').replace(/[\r\n]/g, '').trim();
     if (!normalized) {
       setMessage('Please enter Ticket Serial Number.');
         return;
     }
-    const upper = normalized.toUpperCase();
-    const ticket = allTickets.find(t => t.id === normalized || t.bookingCode?.toUpperCase() === upper);
+    const ticket = lookupTicket(normalized);
     if (ticket) {
         setFoundTicket(ticket);
     } else {
       setMessage('Ticket not found in backoffice database.');
     }
   };
+
+  useEffect(() => {
+    if (!scanMode) return;
+    const normalized = (ticketId || '').replace(/[\r\n]/g, '').trim();
+    if (!normalized) return;
+
+    const looksLikeSerial = /^\d{7,}$/.test(normalized);
+    const looksLikeBooking = /^B[A-Z0-9]{4,}$/i.test(normalized);
+    if (!looksLikeSerial && !looksLikeBooking) return;
+
+    const timer = setTimeout(() => {
+      const ticket = lookupTicket(normalized);
+      if (ticket) {
+        setFoundTicket(ticket);
+        setMessage('');
+      }
+    }, 160);
+
+    return () => clearTimeout(timer);
+  }, [ticketId, scanMode, allTickets]);
 
   const handlePayout = () => {
     if (foundTicket) {
@@ -58,14 +85,26 @@ export const TicketCheckPanel: React.FC<TicketCheckPanelProps> = ({ allTickets, 
       <h3 className="text-xl font-black text-gray-800 uppercase mb-4 flex items-center gap-2">
         <svg xmlns="http://www.w3.org/2000/svg" className="w-7 h-7 text-orange-500" viewBox="0 0 24 24" fill="currentColor"><path fillRule="evenodd" d="M10.5 3.75a6.75 6.75 0 100 13.5 6.75 6.75 0 000-13.5zM2.25 10.5a8.25 8.25 0 1114.59 5.28l4.69 4.69a.75.75 0 11-1.06 1.06l-4.69-4.69A8.25 8.25 0 012.25 10.5z" clipRule="evenodd" /></svg> Scan &amp; Payout
       </h3>
-      <p className="text-xs text-gray-600 mb-3">Backoffice Ticket Rescue: use ticket serial number (manual or scanner). You can also paste booking code.</p>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-gray-600">Backoffice Ticket Rescue: use ticket serial number (manual or scanner). You can also paste booking code.</p>
+        <button
+          type="button"
+          onClick={() => setScanMode((prev) => !prev)}
+          className={`px-3 py-1 text-[11px] font-black rounded-lg uppercase ${scanMode ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}
+        >
+          Scan Mode: {scanMode ? 'On' : 'Off'}
+        </button>
+      </div>
       <div className="space-y-4">
         <div className="flex gap-2">
             <input
                 type="text"
                 autoFocus
                 value={ticketId}
-                onChange={(e) => setTicketId(e.target.value)}
+                onChange={(e) => {
+                  const cleaned = (e.target.value || '').replace(/[\r\n]/g, '');
+                  setTicketId(cleaned);
+                }}
                 placeholder="Scan/Type Serial No or Booking Code"
                 className="flex-grow p-4 border-2 border-gray-200 rounded-xl font-black text-lg focus:border-orange-500 transition-colors"
                 onKeyPress={(e) => e.key === 'Enter' && handleCheckTicket()}

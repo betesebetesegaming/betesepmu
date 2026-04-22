@@ -30,7 +30,8 @@ import {
     dbSavePaymentConfig, dbFetchManualBetOrders, dbCreateManualBetOrder,
     dbCancelManualBetOrder, dbMarkManualBetOrderCompleted, dbPayForBooking,
     dbProcessWithdrawalRequest, dbFetchChatThreads, dbFetchChatMessages,
-    dbSendChatMessage, dbMarkThreadAsRead, dbSettleRaceTickets, dbCancelTicket
+    dbSendChatMessage, dbMarkThreadAsRead, dbSettleRaceTickets, dbCancelTicket,
+    dbToggleUserLock, dbAdminResetPassword
 } from './supabaseClient';
 
 const normalizeRole = (role: unknown): Role => {
@@ -640,6 +641,53 @@ const AppContent: React.FC = () => {
     return newUser;
   };
 
+  const handleToggleLock = async (userId: string) => {
+      const targetUser = (users || []).find((user) => user.id === userId);
+      if (!targetUser) {
+          alert('User not found.');
+          return;
+      }
+      if (targetUser.role === 'Admin') {
+          alert('Admin account cannot be locked.');
+          return;
+      }
+
+      const nextLocked = !targetUser.isLocked;
+      try {
+          if (supabase) {
+              await dbToggleUserLock(userId, nextLocked);
+              await loadLiveSystemData(currentUser || undefined);
+          } else {
+              setUsers((prev) => (prev || []).map((user) => user.id === userId ? { ...user, isLocked: nextLocked } : user));
+          }
+      } catch (e: any) {
+          alert('Failed to update lock status: ' + (e.message || e));
+      }
+  };
+
+  const handleAdminResetPassword = (userId: string, newPass: string): { success: boolean; message: string } => {
+      const normalizedPassword = (newPass || '').trim();
+      if (normalizedPassword.length < 6) {
+          return { success: false, message: 'Password must be at least 6 characters.' };
+      }
+
+      const run = async () => {
+          try {
+              if (supabase) {
+                  await dbAdminResetPassword(userId, normalizedPassword);
+                  await loadLiveSystemData(currentUser || undefined);
+              } else {
+                  setUsers((prev) => (prev || []).map((user) => user.id === userId ? { ...user, password: normalizedPassword } : user));
+              }
+          } catch (e: any) {
+              alert('Failed to reset password: ' + (e.message || e));
+          }
+      };
+
+      void run();
+      return { success: true, message: 'Password reset successfully.' };
+  };
+
   const handleTogglePromotionStatus = async (promoId: string) => {
       const current = promotions.find(p => p.id === promoId);
       if (!current) return;
@@ -908,7 +956,7 @@ const AppContent: React.FC = () => {
                     onUpdateNonRunners={() => {}}
                     onSaveRaceResult={handleSaveRaceResult}
                     users={users}
-                    onToggleLock={() => {}}
+                    onToggleLock={handleToggleLock}
                     onLockAllVendors={() => {}}
                     onAddUser={() => {}}
                     onDeposit={handleDeposit}
@@ -924,7 +972,7 @@ const AppContent: React.FC = () => {
                     onMovePromotion={handleMovePromotion}
                     onCreatePromotion={handleCreatePromotion}
                     onDeletePromotion={handleDeletePromotion}
-                    onAdminResetPassword={() => ({ success: true, message: '' })}
+                    onAdminResetPassword={handleAdminResetPassword}
                     effectiveTime={effectiveTime}
                     currentUser={currentUser}
                     onPayoutTicket={payoutTicket}
@@ -942,7 +990,7 @@ const AppContent: React.FC = () => {
                 <SupervisorDashboard
                     tickets={placedTickets}
                     users={users}
-                    onToggleLock={() => {}}
+                    onToggleLock={handleToggleLock}
                     onAddUser={() => {}}
                     onDeposit={handleDeposit}
                     races={races}
@@ -962,7 +1010,7 @@ const AppContent: React.FC = () => {
                     onMovePromotion={handleMovePromotion}
                     onCreatePromotion={handleCreatePromotion}
                     onDeletePromotion={handleDeletePromotion}
-                    onAdminResetPassword={() => ({ success: true, message: '' })}
+                    onAdminResetPassword={handleAdminResetPassword}
                     effectiveTime={effectiveTime}
                     currentUser={currentUser}
                     onPayoutTicket={payoutTicket}

@@ -359,6 +359,26 @@ export const dbAddUser = async (user: User) => {
     if (error) throw error;
 };
 
+export const dbToggleUserLock = async (userId: string, isLocked: boolean) => {
+    if (!supabase) throw new Error("Database not connected");
+    const { error } = await supabase
+        .from('users')
+        .update({ is_locked: isLocked })
+        .eq('id', userId)
+        .neq('role', 'Admin');
+    if (error) throw error;
+};
+
+export const dbAdminResetPassword = async (userId: string, newPassword: string) => {
+    if (!supabase) throw new Error("Database not connected");
+    const { error } = await supabase
+        .from('users')
+        .update({ password: newPassword })
+        .eq('id', userId)
+        .neq('role', 'Admin');
+    if (error) throw error;
+};
+
 /**
  * FINANCE OPERATIONS
  */
