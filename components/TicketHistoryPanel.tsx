@@ -74,8 +74,9 @@ const TicketItem: React.FC<{ ticket: Ticket; isCancellable: boolean; onCancel: (
                                     <div>
                                         <p className="font-bold">{selection.raceName} - {selection.betType}</p>
                                         <p className="font-mono">
-                                            Your Bet: {selection.xCount > 0 && `${'X '.repeat(selection.xCount)}`}
-                                            {selection.numbers.join(', ')}
+                                            Your Bet: {selection.pattern && selection.pattern.length > 0
+                                                ? selection.pattern.join('-')
+                                                : `${selection.xCount > 0 ? 'X-'.repeat(selection.xCount) : ''}${selection.numbers.join('-')}`}
                                         </p>
                                     </div>
                                     <p className="text-gray-600 font-semibold text-right max-w-[150px]">{resultText}</p>
@@ -93,6 +94,12 @@ const TicketItem: React.FC<{ ticket: Ticket; isCancellable: boolean; onCancel: (
                                             <span className="font-bold">{breakdown.winType}</span>
                                             <span className="font-bold">{breakdown.totalPayout?.toFixed(2)} GMD</span>
                                         </div>
+                                        {breakdown.payoutPerCombination !== undefined && (
+                                            <p className="text-gray-700">Payout per combo: {breakdown.payoutPerCombination.toFixed(2)} GMD</p>
+                                        )}
+                                        {breakdown.source && (
+                                            <p className="text-gray-700">Source: {breakdown.source}</p>
+                                        )}
                                         {breakdown.winningCombinationList?.map((combo, i) => (
                                             <p key={i} className="text-gray-700">
                                                 - Combo: <span className="font-mono">{combo.join(', ')}</span>

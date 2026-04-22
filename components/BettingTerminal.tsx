@@ -12,7 +12,6 @@ import { BetSlipPanel } from './BetSlipPanel';
 import { HorseSelector } from './HorseSelector';
 import { TicketCheckPanel } from './TicketCheckPanel';
 import { TicketDetailsTable } from './TicketDetailsTable';
-import { PendingManualBetsPanel } from './PendingManualBetsPanel';
 import { RapportPrintPanel } from './RapportPrintPanel';
 import RaceTimerButton from './RaceTimerButton';
 import { BET_PRICING } from '../constants';
@@ -52,9 +51,9 @@ interface BettingTerminalProps {
   onSaveRaceResult: (result: RaceResult) => void; 
 }
 
-type View = 'DASHBOARD' | 'PLACE_BET' | 'SCAN_PAY' | 'FINANCE' | 'SALES_REPORT' | 'RAPPORTS' | 'UPDATE_RESULTS' | 'MANUAL_BETS';
+type View = 'DASHBOARD' | 'PLACE_BET' | 'SCAN_PAY' | 'FINANCE' | 'SALES_REPORT' | 'RAPPORTS' | 'UPDATE_RESULTS';
 
-type MenuIconKind = 'horse' | 'money' | 'wallet' | 'history' | 'print' | 'results' | 'manual' | 'chat';
+type MenuIconKind = 'horse' | 'money' | 'wallet' | 'history' | 'print' | 'results' | 'chat';
 
 const MenuGraphic: React.FC<{ kind: MenuIconKind }> = ({ kind }) => {
     const photoMap: Record<MenuIconKind, { src: string; alt: string }> = {
@@ -64,7 +63,6 @@ const MenuGraphic: React.FC<{ kind: MenuIconKind }> = ({ kind }) => {
         history: { src: 'https://images.unsplash.com/photo-1551281044-8b25b0b5c8ce?w=140&h=140&fit=crop&q=80', alt: 'history reports' },
         print: { src: 'https://images.unsplash.com/photo-1515879218367-8466d910aaa4?w=140&h=140&fit=crop&q=80', alt: 'print reports' },
         results: { src: 'https://images.unsplash.com/photo-1567427017942-4bb5ac2a3b4b?w=140&h=140&fit=crop&q=80', alt: 'results trophy' },
-        manual: { src: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=140&h=140&fit=crop&q=80', alt: 'manual office work' },
         chat: { src: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=140&h=140&fit=crop&q=80', alt: 'support chat' },
     };
 
@@ -199,9 +197,6 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
         triggerPrint('printable-daily-sales-summary');
     };
 
-    const pendingManualCount = (manualBetOrders || [])
-        .filter(o => o && o.assignedVendorId === (currentUser?.id) && o.status === 'Pending').length;
-    
     const pendingFinanceCount = ((depositRequests || []).filter(r => r && r.status === 'Pending').length) + 
                                ((withdrawalRequests || []).filter(r => r && r.status === 'Pending').length);
 
@@ -269,7 +264,7 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
             case 'SCAN_PAY':
                 return (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fade-in">
-                        <TicketCheckPanel allTickets={allTickets} onPayoutTicket={onPayoutTicket} />
+                        <TicketCheckPanel allTickets={allTickets} onPayoutTicket={onPayoutTicket} onCancelTicket={props.onCancelTicket} onReprintTicket={onReprintTicket} />
                         <BookingRetrievalPanel allTickets={allTickets} onPayForBooking={onPayForBooking} onPrintBookingSlip={onReprintTicket} races={races} effectiveTime={effectiveTime} />
                     </div>
                 );
@@ -297,17 +292,6 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                             tickets={allTickets}
                             effectiveTime={effectiveTime}
                             canEdit={false}
-                        />
-                    </div>
-                );
-            case 'MANUAL_BETS':
-                return (
-                    <div className="animate-fade-in">
-                        <PendingManualBetsPanel
-                            manualBetOrders={manualBetOrders}
-                            currentUser={currentUser}
-                            races={races}
-                            onProcessManualBet={onProcessManualBet}
                         />
                     </div>
                 );
@@ -359,7 +343,6 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                             <MenuButton onClick={() => setView('SALES_REPORT')} label="History" subtext="Sales Log" iconKind="history" color="bg-gray-700" />
                             <MenuButton onClick={() => setView('RAPPORTS')} label="Rapport" subtext="Print Results" iconKind="print" color="bg-cyan-600" />
                             <MenuButton onClick={() => setView('UPDATE_RESULTS')} label="Results" subtext="View Only" iconKind="results" color="bg-red-600" />
-                            <MenuButton onClick={() => setView('MANUAL_BETS')} label="Manual" subtext="Office" iconKind="manual" color="bg-emerald-600" count={pendingManualCount} />
                             <MenuButton onClick={() => onOpenChat()} label="Chat" subtext="Support" iconKind="chat" color="bg-purple-600" />
                         </div>
                     </div>

@@ -23,13 +23,28 @@ interface BetTypePerformance {
     betsPlaced: number;
     totalStake: number;
     winningBets: number;
+    winningSales: number;
     totalPayout: number;
 }
 
 interface RacePerformance {
     betsPlaced: number;
+    ticketsCount: number;
     totalStake: number;
+    winningBets: number;
+    winningSales: number;
     totalPayout: number;
+}
+
+interface CombinationLedgerRow {
+    ticketId: string;
+    raceId: string;
+    raceName: string;
+    betType: string;
+    combination: string;
+    stake: number;
+    status: Ticket['status'];
+    payout: number;
 }
 
 export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets, races }) => {
@@ -45,7 +60,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
 
         // Per-bet-type stats
         const initialBetTypeStats = Object.values(BetTypeOption).reduce((acc, betType) => {
-            acc[betType] = { betsPlaced: 0, totalStake: 0, winningBets: 0, totalPayout: 0 };
+            acc[betType] = { betsPlaced: 0, totalStake: 0, winningBets: 0, winningSales: 0, totalPayout: 0 };
             return acc;
         }, {} as Record<BetTypeOption, BetTypePerformance>);
 
@@ -58,9 +73,12 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
                 
                 if (ticket.status === 'Winning' || ticket.status === 'Paid') {
                     stats[betType].winningBets++;
+                    stats[betType].winningSales += selection.cost * selection.multiplier;
                     
-                    if (ticket.totalCost > 0) {
-                         // Proportional payout attribution based on selection stake weight
+                    const matchedBreakdown = ticket.winningsBreakdown?.find((row) => row.selectionIndex === ticket.selections.indexOf(selection) && row.status === 'Win');
+                    if (matchedBreakdown?.totalPayout) {
+                        stats[betType].totalPayout += matchedBreakdown.totalPayout;
+                    } else if (ticket.totalCost > 0) {
                         stats[betType].totalPayout += ((selection.cost * selection.multiplier) / ticket.totalCost) * (ticket.winnings ?? 0);
                     }
                 }
@@ -69,17 +87,25 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
         }, initialBetTypeStats);
         
         // Per-race stats
+        const raceTicketSet = new Map<string, Set<string>>();
         const byRace = tickets.reduce((stats, ticket) => {
              for (const selection of ticket.selections) {
                 const raceId = selection.raceId;
                 if (!stats[raceId]) {
-                    stats[raceId] = { betsPlaced: 0, totalStake: 0, totalPayout: 0 };
+                    stats[raceId] = { betsPlaced: 0, ticketsCount: 0, totalStake: 0, winningBets: 0, winningSales: 0, totalPayout: 0 };
+                    raceTicketSet.set(raceId, new Set<string>());
                 }
                 stats[raceId].betsPlaced++;
                 stats[raceId].totalStake += selection.cost * selection.multiplier;
+                raceTicketSet.get(raceId)?.add(ticket.id);
                 
-                 if (ticket.status === 'Winning' || ticket.status === 'Paid') {
-                    if (ticket.totalCost > 0) {
+                if (ticket.status === 'Winning' || ticket.status === 'Paid') {
+                    stats[raceId].winningBets++;
+                    stats[raceId].winningSales += selection.cost * selection.multiplier;
+                    const matchedBreakdown = ticket.winningsBreakdown?.find((row) => row.selectionIndex === ticket.selections.indexOf(selection) && row.status === 'Win');
+                    if (matchedBreakdown?.totalPayout) {
+                        stats[raceId].totalPayout += matchedBreakdown.totalPayout;
+                    } else if (ticket.totalCost > 0) {
                         stats[raceId].totalPayout += ((selection.cost * selection.multiplier) / ticket.totalCost) * (ticket.winnings ?? 0);
                     }
                 }
@@ -87,13 +113,39 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
             return stats;
         }, {} as Record<string, RacePerformance>);
 
+        Object.entries(byRace).forEach(([raceId, stats]) => {
+            stats.ticketsCount = raceTicketSet.get(raceId)?.size || 0;
+        });
+
+        const combinationLedger: CombinationLedgerRow[] = tickets.flatMap((ticket) => {
+            return ticket.selections.map((selection, index) => {
+                const matchedBreakdown = ticket.winningsBreakdown?.find((row) => row.selectionIndex === index && row.status === 'Win');
+                const fallbackPayout = ticket.totalCost > 0
+                    ? ((selection.cost * selection.multiplier) / ticket.totalCost) * (ticket.winnings ?? 0)
+                    : 0;
+                return {
+                    ticketId: ticket.id,
+                    raceId: selection.raceId,
+                    raceName: raceNameMap.get(selection.raceId) || selection.raceName || selection.raceId,
+                    betType: selection.betType,
+                    combination: selection.pattern && selection.pattern.length > 0
+                        ? selection.pattern.join('-')
+                        : `${selection.xCount > 0 ? 'X-'.repeat(selection.xCount) : ''}${selection.numbers.join('-')}`,
+                    stake: selection.cost * selection.multiplier,
+                    status: ticket.status,
+                    payout: matchedBreakdown?.totalPayout || fallbackPayout
+                };
+            });
+        }).sort((a, b) => b.ticketId.localeCompare(a.ticketId));
+
         return {
             overall: { ticketsSold, totalStake, totalPayout, netProfit },
             byBetType,
             byRace,
+            combinationLedger,
         };
 
-    }, [tickets]);
+    }, [tickets, raceNameMap]);
 
     return (
         <div className="space-y-6">
@@ -114,6 +166,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
                                 <th className="text-right font-semibold py-2 px-3">Bets Placed</th>
                                 <th className="text-right font-semibold py-2 px-3">Total Stake</th>
                                 <th className="text-right font-semibold py-2 px-3">Winning Bets</th>
+                                <th className="text-right font-semibold py-2 px-3">Winning Sales</th>
                                 <th className="text-right font-semibold py-2 px-3">Total Payout</th>
                                 <th className="text-right font-semibold py-2 px-3">Win Rate</th>
                                 <th className="text-right font-semibold py-2 px-3">Net Profit</th>
@@ -122,7 +175,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
                         <tbody className="divide-y divide-gray-200">
                             {Object.entries(analyticsData.byBetType).map(([betType, stats]) => {
                                 // FIX: Cast stats to the correct type to allow property access.
-                                const { betsPlaced, totalStake, winningBets, totalPayout } = stats as BetTypePerformance;
+                                const { betsPlaced, totalStake, winningBets, winningSales, totalPayout } = stats as BetTypePerformance;
                                 const netProfit = totalStake - totalPayout;
                                 const winRate = betsPlaced > 0 ? (winningBets / betsPlaced) * 100 : 0;
                                 return (
@@ -131,6 +184,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
                                         <td className="py-2 px-3 text-right font-mono">{betsPlaced}</td>
                                         <td className="py-2 px-3 text-right font-mono">{totalStake.toFixed(2)}</td>
                                         <td className="py-2 px-3 text-right font-mono">{winningBets}</td>
+                                        <td className="py-2 px-3 text-right font-mono">{winningSales.toFixed(2)}</td>
                                         <td className="py-2 px-3 text-right font-mono">{totalPayout.toFixed(2)}</td>
                                         <td className="py-2 px-3 text-right font-mono">{winRate.toFixed(1)}%</td>
                                         <td className={`py-2 px-3 text-right font-mono font-bold ${netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
@@ -151,8 +205,11 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
                         <thead className="bg-gray-100">
                             <tr>
                                 <th className="text-left font-semibold py-2 px-3">Race</th>
+                                <th className="text-right font-semibold py-2 px-3">Tickets</th>
                                 <th className="text-right font-semibold py-2 px-3">Bets Placed</th>
                                 <th className="text-right font-semibold py-2 px-3">Total Stake</th>
+                                <th className="text-right font-semibold py-2 px-3">Winning Bets</th>
+                                <th className="text-right font-semibold py-2 px-3">Winning Sales</th>
                                 <th className="text-right font-semibold py-2 px-3">Total Payout</th>
                                 <th className="text-right font-semibold py-2 px-3">Net Profit</th>
                             </tr>
@@ -160,13 +217,16 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
                          <tbody className="divide-y divide-gray-200">
                             {Object.entries(analyticsData.byRace).map(([raceId, stats]) => {
                                 // FIX: Cast stats to the correct type to allow property access.
-                                const { betsPlaced, totalStake, totalPayout } = stats as RacePerformance;
+                                const { ticketsCount, betsPlaced, totalStake, winningBets, winningSales, totalPayout } = stats as RacePerformance;
                                 const netProfit = totalStake - totalPayout;
                                 return (
                                     <tr key={raceId}>
                                         <td className="py-2 px-3 font-semibold">{raceNameMap.get(raceId) || raceId}</td>
+                                        <td className="py-2 px-3 text-right font-mono">{ticketsCount}</td>
                                         <td className="py-2 px-3 text-right font-mono">{betsPlaced}</td>
                                         <td className="py-2 px-3 text-right font-mono">{totalStake.toFixed(2)}</td>
+                                        <td className="py-2 px-3 text-right font-mono">{winningBets}</td>
+                                        <td className="py-2 px-3 text-right font-mono">{winningSales.toFixed(2)}</td>
                                         <td className="py-2 px-3 text-right font-mono">{totalPayout.toFixed(2)}</td>
                                         <td className={`py-2 px-3 text-right font-mono font-bold ${netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                             {netProfit.toFixed(2)}
@@ -175,6 +235,43 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
                                 )
                             })}
                          </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-lg shadow-lg">
+                <h3 className="text-xl font-bold text-betese-dark mb-4">Ticket Combination Ledger</h3>
+                <p className="text-sm text-gray-600 mb-4">This table shows ticket number and exact combination for each selection so winning combinations can be verified per race.</p>
+                <div className="overflow-x-auto">
+                    <table className="min-w-full bg-white text-sm">
+                        <thead className="bg-gray-100">
+                            <tr>
+                                <th className="text-left font-semibold py-2 px-3">Ticket</th>
+                                <th className="text-left font-semibold py-2 px-3">Race</th>
+                                <th className="text-left font-semibold py-2 px-3">Bet Type</th>
+                                <th className="text-left font-semibold py-2 px-3">Combination</th>
+                                <th className="text-right font-semibold py-2 px-3">Stake</th>
+                                <th className="text-left font-semibold py-2 px-3">Status</th>
+                                <th className="text-right font-semibold py-2 px-3">Payout</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                            {analyticsData.combinationLedger.length > 0 ? analyticsData.combinationLedger.map((row, idx) => (
+                                <tr key={`${row.ticketId}-${row.raceId}-${idx}`}>
+                                    <td className="py-2 px-3 font-mono">{row.ticketId}</td>
+                                    <td className="py-2 px-3">{row.raceName}</td>
+                                    <td className="py-2 px-3">{row.betType}</td>
+                                    <td className="py-2 px-3 font-mono">{row.combination}</td>
+                                    <td className="py-2 px-3 text-right font-mono">{row.stake.toFixed(2)}</td>
+                                    <td className="py-2 px-3">{row.status}</td>
+                                    <td className="py-2 px-3 text-right font-mono">{row.payout.toFixed(2)}</td>
+                                </tr>
+                            )) : (
+                                <tr>
+                                    <td colSpan={7} className="py-4 px-3 text-center text-gray-500">No ticket combinations found.</td>
+                                </tr>
+                            )}
+                        </tbody>
                     </table>
                 </div>
             </div>

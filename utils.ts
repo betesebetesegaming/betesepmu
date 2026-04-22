@@ -156,39 +156,226 @@ export function calculateWinSummary(race: Race, winningNumbers: number[], ticket
 }
 
 export function calculateTicketWinnings(ticket: Ticket, allRaces: Race[]): { totalWinnings: number; breakdown: WinningsBreakdown[] } {
+    const combinations = (numbers: number[], size: number): number[][] => {
+        if (size <= 0 || numbers.length < size) return [];
+        if (size === 1) return numbers.map((n) => [n]);
+        const output: number[][] = [];
+        const walk = (start: number, current: number[]) => {
+            if (current.length === size) {
+                output.push([...current]);
+                return;
+            }
+            for (let i = start; i < numbers.length; i += 1) {
+                current.push(numbers[i]);
+                walk(i + 1, current);
+                current.pop();
+            }
+        };
+        walk(0, []);
+        return output;
+    };
+
+    const setsMatch = (a: number[], b: number[]) => a.length === b.length && a.every((value) => b.includes(value));
+    const intersectionCount = (a: number[], b: number[]) => a.filter((value) => b.includes(value)).length;
+    const sourceList = (race: Race) => {
+        const result = race.result;
+        if (!result) return [] as Array<{ source: 'Primary' | 'Bracket 1' | 'Bracket 2'; winningNumbers: number[]; payouts: Payouts }>;
+        const sources: Array<{ source: 'Primary' | 'Bracket 1' | 'Bracket 2'; winningNumbers: number[]; payouts: Payouts }> = [];
+        if (result.winningNumbers?.length) sources.push({ source: 'Primary', winningNumbers: result.winningNumbers, payouts: result.payouts || {} });
+        if (result.bracketWinningNumbers?.length) sources.push({ source: 'Bracket 1', winningNumbers: result.bracketWinningNumbers, payouts: result.bracketPayouts || {} });
+        if (result.bracket2WinningNumbers?.length) sources.push({ source: 'Bracket 2', winningNumbers: result.bracket2WinningNumbers, payouts: result.bracket2Payouts || {} });
+        return sources;
+    };
+
+    const matchesOrderedPattern = (pattern: string[] | undefined, target: number[]) => {
+        if (!pattern || pattern.length !== target.length) return false;
+        return pattern.every((slot, index) => slot === 'X' || Number(slot) === target[index]);
+    };
+
+    const coversTargetWithWildcards = (selected: number[], wildcardCount: number, target: number[]) => {
+        const matched = selected.filter((num) => target.includes(num)).length;
+        return matched + wildcardCount >= target.length;
+    };
+
     let grandTotalWinnings = 0;
     const finalBreakdown: WinningsBreakdown[] = [];
+
     ticket.selections.forEach((sel, index) => {
-        const race = allRaces.find(r => r.id === sel.raceId);
+        const race = allRaces.find((r) => r.id === sel.raceId);
         if (!race?.result) {
             finalBreakdown.push({ selectionIndex: index, status: 'Loss' });
             return;
         }
 
-        const first = race.result.winningNumbers[0];
-        const second = race.result.winningNumbers[1];
-        let isWin = false;
-        let payout = 0;
+        let selectionTotal = 0;
+        const winningCombinationList: number[][] = [];
+        let winType: string | undefined;
+        let payoutPerCombination = 0;
+        let source: 'Primary' | 'Bracket 1' | 'Bracket 2' | undefined;
 
-        if (sel.betType === BetTypeOption.SimpleGagnant) {
-            isWin = sel.numbers[0] === first;
-            payout = (race.result.payouts as any).simpleGagnant || 0;
-        } else if (sel.betType === BetTypeOption.CoupleGagnant) {
-            isWin = first !== undefined && second !== undefined && sel.numbers.includes(first) && sel.numbers.includes(second);
-            payout = (race.result.payouts as any).ordreGagnant || (race.result.payouts as any).desordreGagnant || 0;
-        } else {
-            // Preserve legacy fallback for other bet types until full rules are implemented.
-            isWin = sel.numbers.includes(first);
-            payout = (race.result.payouts as any).simpleGagnant || 0;
+        for (const resultSource of sourceList(race)) {
+            const positions = resultSource.winningNumbers;
+            const payouts = resultSource.payouts || {};
+            const top2 = positions.slice(0, 2);
+            const top3 = positions.slice(0, 3);
+            const top4 = positions.slice(0, 4);
+            const top5 = positions.slice(0, 5);
+            let matchedCombos: number[][] = [];
+            let unitPayout = 0;
+            let matchedType: string | undefined;
+
+            switch (sel.betType) {
+                case BetTypeOption.SimpleGagnant:
+                    if (sel.numbers.includes(positions[0])) {
+                        matchedCombos = [[positions[0]]];
+                        unitPayout = Number(payouts.simpleGagnant || 0);
+                        matchedType = 'Simple Gagnant';
+                    }
+                    break;
+                case BetTypeOption.SimplePlace: {
+                    const placeHits: Array<{ combo: number[]; payout: number; label: string }> = [];
+                    if (sel.numbers.includes(top3[0]) && Number(payouts.simplePlaceA || 0) > 0) placeHits.push({ combo: [top3[0]], payout: Number(payouts.simplePlaceA), label: 'Simple Placé A' });
+                    if (sel.numbers.includes(top3[1]) && Number(payouts.simplePlaceB || 0) > 0) placeHits.push({ combo: [top3[1]], payout: Number(payouts.simplePlaceB), label: 'Simple Placé B' });
+                    if (sel.numbers.includes(top3[2]) && Number(payouts.simplePlaceC || 0) > 0) placeHits.push({ combo: [top3[2]], payout: Number(payouts.simplePlaceC), label: 'Simple Placé C' });
+                    if (placeHits.length > 0) {
+                        matchedCombos = placeHits.map((item) => item.combo);
+                        unitPayout = placeHits.reduce((sum, item) => sum + item.payout, 0);
+                        matchedType = 'Simple Placé';
+                    }
+                    break;
+                }
+                case BetTypeOption.CoupleGagnant:
+                    if (coversTargetWithWildcards(sel.numbers, sel.xCount || 0, top2)) {
+                        matchedCombos = [top2];
+                        unitPayout = Number(payouts.ordreGagnant ?? payouts.desordreGagnant ?? 0);
+                        matchedType = 'Couplé Gagnant';
+                    }
+                    break;
+                case BetTypeOption.CouplePlace: {
+                    const pairPayouts: Array<{ combo: number[]; payout: number; label: string }> = [
+                        { combo: [top3[0], top3[1]], payout: Number(payouts.coupleA || 0), label: 'Couplé Placé A' },
+                        { combo: [top3[0], top3[2]], payout: Number(payouts.coupleB || 0), label: 'Couplé Placé B' },
+                        { combo: [top3[1], top3[2]], payout: Number(payouts.coupleC || 0), label: 'Couplé Placé C' }
+                    ].filter((item) => item.combo.every((value) => Number.isFinite(value)));
+                    const hits = pairPayouts.filter((item) => coversTargetWithWildcards(sel.numbers, sel.xCount || 0, item.combo) && item.payout > 0);
+                    if (hits.length > 0) {
+                        matchedCombos = hits.map((item) => item.combo);
+                        unitPayout = hits.reduce((sum, item) => sum + item.payout, 0);
+                        matchedType = 'Couplé Placé';
+                    }
+                    break;
+                }
+                case BetTypeOption.Tierce:
+                    if (matchesOrderedPattern(sel.pattern, top3) || coversTargetWithWildcards(sel.numbers, sel.xCount || 0, top3)) {
+                        matchedCombos = [top3];
+                        unitPayout = matchesOrderedPattern(sel.pattern, top3)
+                            ? Number(payouts.tierceOrdre ?? payouts.tierceDesordre ?? 0)
+                            : Number(payouts.tierceDesordre ?? payouts.tierceOrdre ?? 0);
+                        matchedType = matchesOrderedPattern(sel.pattern, top3) ? 'Tiercé Ordre' : 'Tiercé Désordre';
+                    }
+                    break;
+                case BetTypeOption.Quarte: {
+                    const orderHit = matchesOrderedPattern(sel.pattern, top4) || setsMatch(sel.numbers.slice(0, 4), top4);
+                    const disorderHit = coversTargetWithWildcards(sel.numbers, sel.xCount || 0, top4);
+                    const bonusHit = intersectionCount(sel.numbers, top4) + (sel.xCount || 0) >= 3;
+                    if (orderHit && Number(payouts.quarteOrdre || 0) > 0) {
+                        matchedCombos = [top4];
+                        unitPayout = Number(payouts.quarteOrdre || 0);
+                        matchedType = 'Quarté+ Ordre';
+                    } else if (disorderHit && Number(payouts.quarteDesordre || 0) > 0) {
+                        matchedCombos = [top4];
+                        unitPayout = Number(payouts.quarteDesordre || 0);
+                        matchedType = 'Quarté+ Désordre';
+                    } else if (bonusHit && Number(payouts.quarteBonus3 || 0) > 0) {
+                        matchedCombos = combinations(top4.filter((value) => sel.numbers.includes(value)), 3).slice(0, 1);
+                        unitPayout = Number(payouts.quarteBonus3 || 0);
+                        matchedType = 'Quarté+ Bonus 3';
+                    }
+                    break;
+                }
+                case BetTypeOption.Quinte: {
+                    const orderHit = matchesOrderedPattern(sel.pattern, top5) || setsMatch(sel.numbers.slice(0, 5), top5);
+                    const disorderHit = coversTargetWithWildcards(sel.numbers, sel.xCount || 0, top5);
+                    const hits = intersectionCount(sel.numbers, top5) + (sel.xCount || 0);
+                    if (orderHit && Number(payouts.quinteOrdre || 0) > 0) {
+                        matchedCombos = [top5];
+                        unitPayout = Number(payouts.quinteOrdre || 0);
+                        matchedType = 'Quinté+ Ordre';
+                    } else if (disorderHit && Number(payouts.quinteDesordre || 0) > 0) {
+                        matchedCombos = [top5];
+                        unitPayout = Number(payouts.quinteDesordre || 0);
+                        matchedType = 'Quinté+ Désordre';
+                    } else if (hits >= 4 && Number(payouts.quinteBonus4 || 0) > 0) {
+                        matchedCombos = combinations(top5.filter((value) => sel.numbers.includes(value)), 4).slice(0, 1);
+                        unitPayout = Number(payouts.quinteBonus4 || 0);
+                        matchedType = 'Quinté+ Bonus 4';
+                    } else if (hits >= 3 && Number(payouts.quinteBonus3 || 0) > 0) {
+                        matchedCombos = combinations(top5.filter((value) => sel.numbers.includes(value)), 3).slice(0, 1);
+                        unitPayout = Number(payouts.quinteBonus3 || 0);
+                        matchedType = 'Quinté+ Bonus 3';
+                    }
+                    break;
+                }
+                case BetTypeOption.Multi4:
+                    if (coversTargetWithWildcards(sel.numbers, sel.xCount || 0, top4)) {
+                        matchedCombos = [top4];
+                        unitPayout = Number(payouts.multi4 || 0);
+                        matchedType = 'Multi 4';
+                    }
+                    break;
+                case BetTypeOption.Multi5:
+                    if (coversTargetWithWildcards(sel.numbers, sel.xCount || 0, top5)) {
+                        matchedCombos = [top5];
+                        unitPayout = Number(payouts.multi5 || 0);
+                        matchedType = 'Multi 5';
+                    }
+                    break;
+                case BetTypeOption.Multi6: {
+                    const top6 = positions.slice(0, 6);
+                    if (coversTargetWithWildcards(sel.numbers, sel.xCount || 0, top6)) {
+                        matchedCombos = [top6];
+                        unitPayout = Number(payouts.multi6 || 0);
+                        matchedType = 'Multi 6';
+                    }
+                    break;
+                }
+                case BetTypeOption.Multi7: {
+                    const top7 = positions.slice(0, 7);
+                    if (coversTargetWithWildcards(sel.numbers, sel.xCount || 0, top7)) {
+                        matchedCombos = [top7];
+                        unitPayout = Number(payouts.multi7 || 0);
+                        matchedType = 'Multi 7';
+                    }
+                    break;
+                }
+            }
+
+            if (matchedCombos.length > 0 && unitPayout > 0) {
+                const totalForSource = unitPayout * sel.cost * sel.multiplier;
+                selectionTotal += totalForSource;
+                winningCombinationList.push(...matchedCombos);
+                payoutPerCombination = unitPayout;
+                winType = matchedType;
+                source = resultSource.source;
+            }
         }
 
-        if (isWin) {
-            const winAmt = sel.cost * payout * sel.multiplier;
-            grandTotalWinnings += winAmt;
-            finalBreakdown.push({ selectionIndex: index, status: 'Win', totalPayout: winAmt, winType: sel.betType });
+        if (selectionTotal > 0) {
+            grandTotalWinnings += selectionTotal;
+            finalBreakdown.push({
+                selectionIndex: index,
+                status: 'Win',
+                totalPayout: selectionTotal,
+                winType,
+                winningCombinations: winningCombinationList.length,
+                winningCombinationList,
+                payoutPerCombination,
+                source
+            });
         } else {
             finalBreakdown.push({ selectionIndex: index, status: 'Loss' });
         }
     });
+
     return { totalWinnings: grandTotalWinnings, breakdown: finalBreakdown };
 }

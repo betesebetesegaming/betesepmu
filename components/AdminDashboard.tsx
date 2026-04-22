@@ -17,7 +17,6 @@ import { getEffectiveTicketStatus } from '../utils';
 import { RecentResultsPanel } from './RecentResultsPanel';
 import { IntegrationSettingsPanel } from './IntegrationSettingsPanel';
 import { SupportPanel } from './SupportPanel';
-import { ManualBetCreationPanel } from './ManualBetCreationPanel';
 import { TicketCheckPanel } from './TicketCheckPanel';
 import { BookingRetrievalPanel } from './BookingRetrievalPanel';
 import { AutomaticRaffleDrawerPanel } from './AutomaticRaffleDrawerPanel';
@@ -38,7 +37,7 @@ export const TicketToolsView: React.FC<{
     return (
         <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <TicketCheckPanel allTickets={allTickets} onPayoutTicket={onPayoutTicket} />
+                <TicketCheckPanel allTickets={allTickets} onPayoutTicket={onPayoutTicket} onCancelTicket={onCancelTicket} onReprintTicket={onReprintTicket} />
                 <BookingRetrievalPanel 
                     allTickets={allTickets} 
                     onPayForBooking={async () => ({ success: false, message: 'Payout only. Use Terminal for booking payment.' })}
@@ -128,7 +127,6 @@ const AdminMenuGraphic: React.FC<{ kind: AdminIconKind }> = ({ kind }) => {
 const AdminMenu: React.FC<{ setView: (view: AdminView) => void; }> = ({ setView }) => {
     const menuItems = [
         { view: 'ANALYTICS', label: 'Analytics Dashboard', iconKind: 'analytics' as AdminIconKind, color: 'from-green-500 to-green-700' },
-        { view: 'MANUAL_BETS', label: 'Assign Manual Bets', iconKind: 'manual' as AdminIconKind, color: 'from-indigo-500 to-indigo-700' },
         { view: 'RAFFLE_DRAW', label: 'Automatic Raffle Draw', iconKind: 'raffle' as AdminIconKind, color: 'from-amber-500 to-orange-700' },
         { view: 'PROGRAM', label: 'Program & Ads', iconKind: 'program' as AdminIconKind, color: 'from-blue-500 to-blue-700' },
         { view: 'USERS', label: 'User Accounts', iconKind: 'users' as AdminIconKind, color: 'from-purple-500 to-purple-700' },
@@ -173,7 +171,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
     const renderCurrentView = () => {
         switch (view) {
             case 'ANALYTICS': return <div className="space-y-6"><AnalyticsDashboard tickets={allTickets} races={races} /><PromotionManagementPanel promotions={promotions} onToggleStatus={onTogglePromotionStatus} onUpdatePromotion={onUpdatePromotion} onMovePromotion={onMovePromotion} onCreatePromotion={onCreatePromotion} onDeletePromotion={onDeletePromotion} /></div>;
-            case 'MANUAL_BETS': return <ManualBetCreationPanel races={races} users={users} manualBetOrders={manualBetOrders} onCreateManualBet={onCreateManualBet} onCancelManualBet={onCancelManualBet} effectiveTime={effectiveTime} />;
             case 'RAFFLE_DRAW': return <AutomaticRaffleDrawerPanel users={users} tickets={allTickets} effectiveTime={effectiveTime} />;
             case 'PROGRAM': return <div className="space-y-6"><ProgramManagementPanel programImages={programImages} onUpload={onAddProgramImage} onDelete={onDeleteProgramImage} /><CombinationSearch allTickets={allTickets} races={races} onCancelTicket={onCancelTicket} effectiveTime={effectiveTime} /></div>;
             case 'USERS': return <div className="flex flex-col md:flex-row gap-6"><RoleFilter selectedRole={selectedRole} onSelectRole={setSelectedRole} /><div className="flex-1 space-y-6"><UserAccountManagement users={selectedRole === 'All' ? users : users.filter(u => u.role === selectedRole)} onToggleLock={onToggleLock} onAddUser={onAddUser} onAdminResetPassword={onAdminResetPassword} creatableRoles={['Supervisor', 'Vendor', 'Customer']} /><CustomerDepositPanel customers={users.filter(u => u.role === 'Customer')} onDeposit={onDeposit} depositLogs={depositLogs} depositRequests={depositRequests} onApproveDepositRequest={props.onApproveDepositRequest} onRejectDepositRequest={props.onRejectDepositRequest} currentUserRole={currentUser.role} /></div></div>;

@@ -30,7 +30,7 @@ import {
     dbSavePaymentConfig, dbFetchManualBetOrders, dbCreateManualBetOrder,
     dbCancelManualBetOrder, dbMarkManualBetOrderCompleted, dbPayForBooking,
     dbProcessWithdrawalRequest, dbFetchChatThreads, dbFetchChatMessages,
-    dbSendChatMessage, dbMarkThreadAsRead
+    dbSendChatMessage, dbMarkThreadAsRead, dbSettleRaceTickets, dbCancelTicket
 } from './supabaseClient';
 
 const normalizeRole = (role: unknown): Role => {
@@ -91,7 +91,15 @@ const AppContent: React.FC = () => {
           ]);
           
           if (fetchedUsers && fetchedUsers.length > 0) {
-              setUsers(fetchedUsers.map(u => ({ ...u, role: normalizeRole(u.role) })));
+              const normalizedUsers = fetchedUsers.map(u => ({ ...u, role: normalizeRole(u.role) }));
+              setUsers(normalizedUsers);
+              const targetUser = user || currentUser;
+              if (targetUser) {
+                  const freshCurrentUser = normalizedUsers.find((item) => item.id === targetUser.id);
+                  if (freshCurrentUser) {
+                      setCurrentUser(freshCurrentUser);
+                  }
+              }
           }
           if(fetchedRaces) setRaces(fetchedRaces);
           
@@ -150,7 +158,18 @@ const AppContent: React.FC = () => {
   useEffect(() => {
       if (!supabase || !currentUser) return;
       const userSub = supabase.channel('public:users').on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'users', filter: `id=eq.${currentUser.id}` }, async (payload) => {
-          setCurrentUser(prev => prev ? { ...prev, ...payload.new, role: normalizeRole((payload.new as any)?.role) } : null);
+          setCurrentUser(prev => prev ? {
+              ...prev,
+              name: (payload.new as any)?.name ?? prev.name,
+              role: normalizeRole((payload.new as any)?.role),
+              isLocked: Boolean((payload.new as any)?.is_locked),
+              phone: (payload.new as any)?.phone ?? prev.phone,
+              password: (payload.new as any)?.password ?? prev.password,
+              walletBalance: Number((payload.new as any)?.wallet_balance ?? prev.walletBalance ?? 0),
+              bonusBalance: Number((payload.new as any)?.bonus_balance ?? prev.bonusBalance ?? 0),
+              createdById: (payload.new as any)?.created_by_id ?? prev.createdById,
+              createdByName: (payload.new as any)?.created_by_name ?? prev.createdByName
+          } : null);
           const updatedUsers = await dbFetchUsers();
           setUsers((updatedUsers || []).map(u => ({ ...u, role: normalizeRole(u.role) })));
       }).subscribe();
@@ -199,7 +218,11 @@ const AppContent: React.FC = () => {
           return;
       }
       try {
-          if (supabase) { await dbSaveRaceResult(result); }
+          if (supabase) {
+              await dbSaveRaceResult(result);
+              await dbSettleRaceTickets(result, races);
+              await loadLiveSystemData(currentUser);
+          }
           else { setRaces(prev => (prev || []).map(r => r.id === result.raceId ? { ...r, result } : r)); }
           alert("Result saved successfully.");
       } catch (e: any) { alert("Failed to save result: " + e.message); }
@@ -456,6 +479,75 @@ const AppContent: React.FC = () => {
       setPlacedTickets(prev => (prev || []).map(t => t.id === ticket.id ? updated : t));
       setLastTicket(updated);
       return { success: true, message: 'Paid', ticket: updated };
+  };
+
+  const cancelTicket = async (ticketRef: string) => {
+      if (!currentUser) return;
+      const normalizedRef = (ticketRef || '').trim();
+      if (!normalizedRef) {
+          alert('Ticket serial number is required.');
+          return;
+      }
+
+      const targetTicket = (placedTickets || []).find((ticket) =>
+          ticket.id === normalizedRef || ticket.bookingCode?.toUpperCase() === normalizedRef.toUpperCase()
+      );
+
+      if (!targetTicket) {
+          alert('Ticket not found. Check serial number and try again.');
+          return;
+      }
+
+      if (!['Active', 'Booked'].includes(targetTicket.status)) {
+          alert(`Ticket cannot be canceled while status is ${targetTicket.status}.`);
+          return;
+      }
+
+      if (currentUser.role === 'Customer' && targetTicket.customerId !== currentUser.id) {
+          alert('You can only cancel your own ticket.');
+          return;
+      }
+
+      if (targetTicket.status === 'Active') {
+          const hasRaceStarted = targetTicket.selections.some((selection) => {
+              const race = (races || []).find((item) => item.id === selection.raceId);
+              return race ? effectiveTime >= race.startDate : false;
+          });
+          if (hasRaceStarted) {
+              alert('Cannot cancel ticket after race start.');
+              return;
+          }
+      }
+
+      if (!confirm(`Cancel ticket #${targetTicket.id}?`)) return;
+
+      try {
+          if (supabase) {
+              const result = await dbCancelTicket(targetTicket.id, currentUser.id, currentUser.name, effectiveTime);
+              if (!result.success) {
+                  alert(result.message || 'Cancel failed.');
+                  return;
+              }
+              await loadLiveSystemData(currentUser);
+              if (result.refundedAmount > 0) {
+                  alert(`Ticket canceled and ${result.refundedAmount.toFixed(2)} refunded to customer wallet.`);
+              }
+              return;
+          }
+
+          setPlacedTickets((prev) => (prev || []).map((ticket) => {
+              if (ticket.id !== targetTicket.id) return ticket;
+              return {
+                  ...ticket,
+                  status: 'Canceled',
+                  canceledAt: effectiveTime,
+                  canceledById: currentUser.id,
+                  canceledByName: currentUser.name
+              };
+          }));
+      } catch (e: any) {
+          alert('Cancel failed: ' + (e.message || e));
+      }
   };
 
   const processWithdrawal = async (code: string) => {
@@ -783,7 +875,7 @@ const AppContent: React.FC = () => {
             onUpdateSelectionMultiplier={(index, m) => setBetSlip(prev => { const s = [...prev.selections]; if(s[index]) s[index].multiplier = Math.max(1, m); return { selections: s, totalCost: s.reduce((sum, x) => sum + (x.cost * x.multiplier), 0) }; })}
             placedTickets={placedTickets}
             allTickets={placedTickets}
-            onCancelTicket={() => {}}
+            onCancelTicket={cancelTicket}
             customers={(users || []).filter(u => u.role === 'Customer')}
             onDeposit={handleDeposit}
             onPayForBooking={payForBooking}
@@ -822,7 +914,7 @@ const AppContent: React.FC = () => {
                     onDeposit={handleDeposit}
                     depositLogs={depositLogs}
                     allTickets={placedTickets}
-                    onCancelTicket={() => {}}
+                    onCancelTicket={cancelTicket}
                     programImages={programImages}
                     onAddProgramImage={handleAddProgramImage}
                     onDeleteProgramImage={handleDeleteProgramImage}
@@ -860,7 +952,7 @@ const AppContent: React.FC = () => {
                     onUpdateRace={handleUpdateRace}
                     onDeleteRace={handleDeleteRace}
                     allTickets={placedTickets}
-                    onCancelTicket={() => {}}
+                    onCancelTicket={cancelTicket}
                     programImages={programImages}
                     onAddProgramImage={handleAddProgramImage}
                     onDeleteProgramImage={handleDeleteProgramImage}
@@ -898,7 +990,7 @@ const AppContent: React.FC = () => {
                 onRemoveSelection={(idx) => setBetSlip(prev => { const s = prev.selections.filter((_, i) => i !== idx); return { selections: s, totalCost: s.reduce((sum, x) => sum + (x.cost * x.multiplier), 0) }; })}
                 onUpdateSelectionMultiplier={(idx, m) => setBetSlip(prev => { const s = [...prev.selections]; if(s[idx]) s[idx].multiplier = Math.max(1, m); return { selections: s, totalCost: s.reduce((sum, x) => sum + (x.cost * x.multiplier), 0) }; })}
                 placedTickets={placedTickets}
-                onCancelTicket={() => {}}
+                onCancelTicket={cancelTicket}
                 seenWinningTickets={seenWinningTickets}
                 onMarkWinningTicketAsSeen={(id) => setSeenWinningTickets(prev => new Set(prev).add(id))}
                 onWithdrawalRequest={handleWithdrawalRequest}

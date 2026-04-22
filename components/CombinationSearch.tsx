@@ -65,11 +65,11 @@ export const CombinationSearch: React.FC<CombinationSearchProps> = ({ allTickets
         <table className="min-w-full bg-white text-sm">
           <thead className="bg-gray-200">
             <tr>
-              <th className="text-left py-2 px-3">Ticket ID</th>
+              <th className="text-left py-2 px-3">Ticket Serial</th>
               <th className="text-left py-2 px-3">Time Played</th>
               <th className="text-left py-2 px-3">Vendor</th>
-              <th className="text-left py-2 px-3">Combination (Order)</th>
-              <th className="text-left py-2 px-3">Combination (Disorder)</th>
+              <th className="text-left py-2 px-3">Exact Bet Combination</th>
+              <th className="text-left py-2 px-3">Sorted Combination</th>
               <th className="text-right py-2 px-3">Stake</th>
               <th className="text-center py-2 px-3">Action</th>
             </tr>
@@ -82,12 +82,12 @@ export const CombinationSearch: React.FC<CombinationSearchProps> = ({ allTickets
                   <td className="py-2 px-3 whitespace-nowrap">{ticket.timestamp.toLocaleString()}</td>
                   <td className="py-2 px-3">{ticket.vendorName}</td>
                   <td className="py-2 px-3 font-mono font-bold">
-                      {selection.xCount > 0 && `${'X '.repeat(selection.xCount)}`}
-                      {selection.numbers.join(', ')}
+                      {selection.pattern && selection.pattern.length > 0
+                      ? selection.pattern.join('-')
+                      : `${selection.xCount > 0 ? 'X-'.repeat(selection.xCount) : ''}${selection.numbers.join('-')}`}
                   </td>
                   <td className="py-2 px-3 font-mono">
-                      {selection.xCount > 0 && `${'X '.repeat(selection.xCount)}`}
-                      {[...selection.numbers].sort((a, b) => a - b).join(', ')}
+                      {[...selection.numbers].sort((a, b) => a - b).join('-')}
                   </td>
                   <td className="py-2 px-3 text-right font-semibold">
                       {(selection.cost * selection.multiplier).toFixed(2)} GMD

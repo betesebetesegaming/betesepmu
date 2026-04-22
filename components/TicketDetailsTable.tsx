@@ -34,7 +34,14 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ title, t
 
     // Ticket ID search overrides other filters
     if (searchTerm.trim() !== '') {
-        return sortedTickets.filter(t => t.id.includes(searchTerm.trim()));
+      const term = searchTerm.trim().toLowerCase();
+      return sortedTickets.filter(t => {
+        const combinationText = t.selections
+          .map(sel => [sel.betType, sel.raceName, sel.pattern?.join('-') || sel.numbers.join('-'), sel.numbers.join(','), String(sel.xCount || 0)].join(' '))
+          .join(' ')
+          .toLowerCase();
+        return t.id.toLowerCase().includes(term) || combinationText.includes(term);
+      });
     }
 
     if (filterStatus !== 'All') {
@@ -47,6 +54,29 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ title, t
 
     return sortedTickets;
   }, [tickets, filterStatus, filterRaceId, searchTerm]);
+
+  const summaryRows = useMemo(() => {
+    const summary = new Map<string, { betType: string; betCount: number; totalStake: number; winningBets: number; totalPayout: number }>();
+    filteredTickets.forEach(ticket => {
+      ticket.selections.forEach((selection, index) => {
+        const key = selection.betType;
+        const existing = summary.get(key) || { betType: key, betCount: 0, totalStake: 0, winningBets: 0, totalPayout: 0 };
+        const stake = selection.cost * selection.multiplier;
+        const breakdown = ticket.winningsBreakdown?.find(item => item.selectionIndex === index && item.status === 'Win');
+        existing.betCount += 1;
+        existing.totalStake += stake;
+        if (breakdown) {
+          existing.winningBets += 1;
+          existing.totalPayout += Number(breakdown.totalPayout || 0);
+        }
+        summary.set(key, existing);
+      });
+    });
+    return Array.from(summary.values()).map(row => ({
+      ...row,
+      netProfit: row.totalStake - row.totalPayout
+    }));
+  }, [filteredTickets]);
 
   const getTicketCount = (status: FilterStatus) => {
       if (status === 'All') return tickets.length;
@@ -79,11 +109,11 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ title, t
       {/* Search and Filter Section */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 p-4 border rounded-lg bg-gray-50">
         <div>
-            <label htmlFor="ticket-search" className="block text-sm font-medium text-gray-700">Search by Ticket ID</label>
+            <label htmlFor="ticket-search" className="block text-sm font-medium text-gray-700">Search by Ticket ID or Combination</label>
             <input 
                 id="ticket-search"
                 type="text" 
-                placeholder="Type Ticket ID..."
+              placeholder="Type ticket, horse numbers, pattern or bet type..."
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
                 className="mt-1 p-2 border rounded w-full bg-white"
@@ -106,6 +136,36 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ title, t
           <FilterButton status="Active" label="Active" />
           <FilterButton status="Canceled" label="Canceled" />
           <FilterButton status="Booked" label="Booked" />
+      </div>
+      <div className="overflow-x-auto mb-4">
+        <table className="min-w-full bg-white text-sm border rounded-lg overflow-hidden">
+          <thead className="bg-green-50">
+            <tr>
+              <th className="text-left py-2 px-3">Bet Type</th>
+              <th className="text-right py-2 px-3">Bet Placed</th>
+              <th className="text-right py-2 px-3">Total Stake</th>
+              <th className="text-right py-2 px-3">Winning Bet</th>
+              <th className="text-right py-2 px-3">Total Payout</th>
+              <th className="text-right py-2 px-3">Net Profit</th>
+            </tr>
+          </thead>
+          <tbody>
+            {summaryRows.length > 0 ? summaryRows.map((row) => (
+              <tr key={row.betType} className="border-b">
+                <td className="py-2 px-3 font-semibold">{row.betType}</td>
+                <td className="py-2 px-3 text-right">{row.betCount}</td>
+                <td className="py-2 px-3 text-right">{row.totalStake.toFixed(2)} GMD</td>
+                <td className="py-2 px-3 text-right">{row.winningBets}</td>
+                <td className="py-2 px-3 text-right text-blue-700 font-semibold">{row.totalPayout.toFixed(2)} GMD</td>
+                <td className="py-2 px-3 text-right font-semibold">{row.netProfit.toFixed(2)} GMD</td>
+              </tr>
+            )) : (
+              <tr>
+                <td colSpan={6} className="py-3 px-3 text-center text-gray-500">No bet summary available for the current filter.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
       <div className="overflow-x-auto">
         <table className="min-w-full bg-white text-sm">
@@ -135,8 +195,10 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ title, t
                            <div>
                                 <span className="font-semibold">{sel.raceName} - {sel.betType}</span>
                                 <div className="text-xs text-gray-700 font-mono">
-                                  {sel.xCount > 0 && `${'X '.repeat(sel.xCount)}`}
-                                  {sel.numbers.join(', ')}
+                                  Ticket: {ticket.id}
+                                </div>
+                                <div className="text-xs text-gray-700 font-mono">
+                                  Combo: {sel.pattern && sel.pattern.length > 0 ? sel.pattern.join('-') : `${sel.xCount > 0 ? 'X-'.repeat(sel.xCount) : ''}${sel.numbers.join('-')}`}
                                 </div>
                            </div>
                            <div className="text-right ml-2">
@@ -144,6 +206,11 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ title, t
                                <div className="font-bold text-xs whitespace-nowrap">
                                 {(sel.cost * sel.multiplier).toFixed(2)} GMD
                                </div>
+                               {ticket.winningsBreakdown?.find(item => item.selectionIndex === i && item.status === 'Win') && (
+                                <div className="text-[11px] text-blue-700 font-semibold whitespace-nowrap">
+                                  Win: {(ticket.winningsBreakdown?.find(item => item.selectionIndex === i)?.totalPayout || 0).toFixed(2)}
+                                </div>
+                               )}
                            </div>
                         </div>
                       </div>

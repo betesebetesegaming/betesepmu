@@ -14,6 +14,7 @@ import {
     BetSelection,
     WithdrawalRequest
 } from './types';
+import { calculateTicketWinnings } from './utils';
 
 // Safely retrieve environment variables
 const getEnvVar = (key: string): string | undefined => {
@@ -95,6 +96,121 @@ export const dbSaveRaceResult = async (result: RaceResult) => {
         result: result // This matches the JSONB structure
     }).eq('id', result.raceId);
     if (error) throw error;
+};
+
+const mapDbTicketRow = (t: any): Ticket => ({
+    id: t.id,
+    timestamp: new Date(t.timestamp),
+    vendorId: t.vendor_id || '',
+    vendorName: t.vendor_name,
+    status: t.status,
+    customerId: t.customer_id,
+    bookingCode: t.booking_code,
+    selections: Array.isArray(t.selections) ? t.selections : [],
+    totalCost: Number(t.total_cost || 0),
+    winnings: Number(t.winnings || 0) || undefined,
+    winningsBreakdown: t.winnings_breakdown || undefined,
+    paidAt: t.paid_at ? new Date(t.paid_at) : undefined,
+    paidById: t.paid_by_id || undefined,
+    paidByName: t.paid_by_name || undefined,
+    canceledAt: t.canceled_at ? new Date(t.canceled_at) : undefined,
+    canceledById: t.canceled_by_id || undefined,
+    canceledByName: t.canceled_by_name || undefined
+});
+
+export const dbSettleRaceTickets = async (result: RaceResult, allRaces: Race[]) => {
+    if (!supabase) throw new Error("Database not connected");
+
+    const updatedRaces = allRaces.map((race) => (race.id === result.raceId ? { ...race, result } : race));
+    const { data: ticketRows, error: ticketError } = await supabase
+        .from('tickets')
+        .select('*')
+        .in('status', ['Active', 'Winning', 'Paid']);
+
+    if (ticketError) throw ticketError;
+
+    const relevantTickets = (ticketRows || [])
+        .map(mapDbTicketRow)
+        .filter((ticket) => ticket.selections.some((selection) => selection.raceId === result.raceId));
+
+    const customerIds = Array.from(new Set(relevantTickets.map((ticket) => ticket.customerId).filter(Boolean))) as string[];
+    const balanceMap = new Map<string, number>();
+
+    if (customerIds.length > 0) {
+        const { data: userRows, error: userError } = await supabase
+            .from('users')
+            .select('id,wallet_balance')
+            .in('id', customerIds);
+        if (userError) throw userError;
+        (userRows || []).forEach((row: any) => balanceMap.set(row.id, Number(row.wallet_balance || 0)));
+    }
+
+    for (const ticket of relevantTickets) {
+        const evaluation = calculateTicketWinnings(ticket, updatedRaces);
+        const allSelectionsResolved = ticket.selections.every((selection) => {
+            const race = updatedRaces.find((item) => item.id === selection.raceId);
+            return Boolean(race?.result);
+        });
+
+        const nextWinnings = Number(evaluation.totalWinnings.toFixed(2));
+        const previousWinnings = Number(ticket.winnings || 0);
+        const isOnlineCustomer = Boolean(ticket.customerId);
+
+        let nextStatus = ticket.status;
+        let paidAt = ticket.paidAt;
+        let paidById = ticket.paidById;
+        let paidByName = ticket.paidByName;
+
+        if (allSelectionsResolved) {
+            if (nextWinnings > 0) {
+                if (isOnlineCustomer) {
+                    nextStatus = 'Paid';
+                    paidAt = paidAt || new Date();
+                    paidById = paidById || 'SYSTEM';
+                    paidByName = paidByName || 'System Auto Credit';
+                } else {
+                    nextStatus = 'Winning';
+                }
+            } else {
+                nextStatus = 'Lost';
+                paidAt = undefined;
+                paidById = undefined;
+                paidByName = undefined;
+            }
+        }
+
+        if (isOnlineCustomer) {
+            const previousCredited = ticket.status === 'Paid' ? previousWinnings : 0;
+            const nextCredited = nextStatus === 'Paid' ? nextWinnings : 0;
+            const delta = Number((nextCredited - previousCredited).toFixed(2));
+            if (delta !== 0 && ticket.customerId) {
+                const currentBalance = Number(balanceMap.get(ticket.customerId) || 0);
+                balanceMap.set(ticket.customerId, Number((currentBalance + delta).toFixed(2)));
+            }
+        }
+
+        const { error: updateError } = await supabase
+            .from('tickets')
+            .update({
+                status: nextStatus,
+                winnings: nextWinnings || null,
+                winnings_breakdown: evaluation.breakdown,
+                paid_at: paidAt ? paidAt.toISOString() : null,
+                paid_by_id: paidById || null,
+                paid_by_name: paidByName || null
+            })
+            .eq('id', ticket.id);
+
+        if (updateError) throw updateError;
+    }
+
+    for (const [customerId, walletBalance] of balanceMap.entries()) {
+        const { error: walletError } = await supabase
+            .from('users')
+            .update({ wallet_balance: walletBalance })
+            .eq('id', customerId);
+        if (walletError) throw walletError;
+    }
 };
 
 /**
@@ -219,13 +335,7 @@ export const dbFetchLiveTickets = async (user: User): Promise<Ticket[]> => {
     }
 
     const deduped = Array.from(new Map(allData.map((row) => [row.id, row])).values());
-    return deduped.map((t: any) => ({
-        id: t.id, timestamp: new Date(t.timestamp), vendorId: t.vendor_id, vendorName: t.vendor_name,
-        status: t.status, customerId: t.customer_id, bookingCode: t.booking_code, selections: t.selections,
-        totalCost: t.total_cost, winnings: t.winnings, winningsBreakdown: t.winnings_breakdown,
-        paidAt: t.paid_at ? new Date(t.paid_at) : undefined, paidById: t.paid_by_id, paidByName: t.paid_by_name,
-        canceledAt: t.canceled_at ? new Date(t.canceled_at) : undefined, canceledById: t.canceled_by_id, canceledByName: t.canceled_by_name
-    }));
+    return deduped.map(mapDbTicketRow);
 };
 
 /**
@@ -415,6 +525,79 @@ export const dbPayForBooking = async (
     });
     if (error) throw error;
     return !!data;
+};
+
+export const dbCancelTicket = async (
+    ticketRef: string,
+    canceledById: string,
+    canceledByName: string,
+    canceledAt: Date
+): Promise<{ success: boolean; refundedAmount: number; ticketId?: string; message?: string }> => {
+    if (!supabase) throw new Error("Database not connected");
+
+    const normalizedRef = (ticketRef || '').trim();
+    if (!normalizedRef) return { success: false, refundedAmount: 0, message: 'Ticket reference is required.' };
+
+    let ticketRow: any = null;
+
+    const { data: byId, error: byIdError } = await supabase
+        .from('tickets')
+        .select('*')
+        .eq('id', normalizedRef)
+        .maybeSingle();
+    if (byIdError) throw byIdError;
+    ticketRow = byId;
+
+    if (!ticketRow) {
+        const { data: byCode, error: byCodeError } = await supabase
+            .from('tickets')
+            .select('*')
+            .eq('booking_code', normalizedRef.toUpperCase())
+            .maybeSingle();
+        if (byCodeError) throw byCodeError;
+        ticketRow = byCode;
+    }
+
+    if (!ticketRow) return { success: false, refundedAmount: 0, message: 'Ticket not found.' };
+    if (!['Active', 'Booked'].includes(ticketRow.status)) {
+        return { success: false, refundedAmount: 0, ticketId: ticketRow.id, message: `Ticket cannot be canceled while status is ${ticketRow.status}.` };
+    }
+
+    const refundAmount = ticketRow.status === 'Active' && ticketRow.customer_id ? Number(ticketRow.total_cost || 0) : 0;
+    if (refundAmount > 0 && ticketRow.customer_id) {
+        const { data: userRow, error: userError } = await supabase
+            .from('users')
+            .select('wallet_balance')
+            .eq('id', ticketRow.customer_id)
+            .single();
+        if (userError) throw userError;
+
+        const nextBalance = Number((Number(userRow?.wallet_balance || 0) + refundAmount).toFixed(2));
+        const { error: walletError } = await supabase
+            .from('users')
+            .update({ wallet_balance: nextBalance })
+            .eq('id', ticketRow.customer_id);
+        if (walletError) throw walletError;
+    }
+
+    const { error: cancelError } = await supabase
+        .from('tickets')
+        .update({
+            status: 'Canceled',
+            canceled_at: canceledAt.toISOString(),
+            canceled_by_id: canceledById,
+            canceled_by_name: canceledByName
+        })
+        .eq('id', ticketRow.id)
+        .in('status', ['Active', 'Booked']);
+
+    if (cancelError) throw cancelError;
+
+    return {
+        success: true,
+        refundedAmount: refundAmount,
+        ticketId: ticketRow.id
+    };
 };
 
 /**

@@ -12,12 +12,11 @@ import { PayoutReportView } from './PayoutReportView';
 import { RapportModal } from './RapportModal';
 import { RaceResultsManagement } from './RaceResultsManagement';
 import { RecentResultsPanel } from './RecentResultsPanel';
-import { ManualBetCreationPanel } from './ManualBetCreationPanel';
 import { getEffectiveTicketStatus } from '../utils';
 import { TicketToolsView } from './AdminDashboard';
 
 type FilterRole = Role | 'All';
-type SupervisorView = 'DASHBOARD' | 'USERS' | 'RACES' | 'REPORTS' | 'PROGRAM' | 'TICKET_PAYOUT' | 'MANUAL_BETS';
+type SupervisorView = 'DASHBOARD' | 'USERS' | 'RACES' | 'REPORTS' | 'PROGRAM' | 'TICKET_PAYOUT';
 
 interface SupervisorDashboardProps {
     tickets: Ticket[];
@@ -160,8 +159,6 @@ export const SupervisorDashboard: React.FC<SupervisorDashboardProps> = (props) =
                         />
                     </div>
                 );
-            case 'MANUAL_BETS':
-                return <ManualBetCreationPanel races={races} users={users} manualBetOrders={manualBetOrders} onCreateManualBet={onCreateManualBet} onCancelManualBet={onCancelManualBet} effectiveTime={effectiveTime} />;
             case 'REPORTS':
                 return (
                     <div className="space-y-6">
@@ -225,7 +222,6 @@ export const SupervisorDashboard: React.FC<SupervisorDashboardProps> = (props) =
             <div className="border-b border-gray-200">
                 <nav className="-mb-px flex space-x-6 overflow-x-auto" aria-label="Tabs">
                     <TabButton label="Dashboard" isActive={view === 'DASHBOARD'} onClick={() => setView('DASHBOARD')} />
-                    <TabButton label="Manual Bets" isActive={view === 'MANUAL_BETS'} onClick={() => setView('MANUAL_BETS')} />
                     <TabButton label="User Management" isActive={view === 'USERS'} onClick={() => setView('USERS')} />
                     <TabButton label="Race Management" isActive={view === 'RACES'} onClick={() => setView('RACES')} />
                     <TabButton label="Program & Promotions" isActive={view === 'PROGRAM'} onClick={() => setView('PROGRAM')} />
