@@ -55,6 +55,20 @@ const BET_TYPES: BetType[] = [
   'multi7'
 ];
 
+const BET_TYPE_MAP: Record<string, BetType> = {
+  'Simple Gagnant': 'gagnant',
+  'Simple Placé': 'place',
+  'Couplé Gagnant': 'couple',
+  'Couplé Placé': 'couple',
+  'Tiercé': 'tierce',
+  'Quarté+': 'quarte',
+  'Quinté+': 'quinte',
+  'Multi 4': 'multi4',
+  'Multi 5': 'multi5',
+  'Multi 6': 'multi6',
+  'Multi 7': 'multi7',
+};
+
 const PRESET_75 = 0.75;
 const PRESET_80 = 0.8;
 
@@ -139,7 +153,12 @@ export const ParimutuelPayoutPanel: React.FC<{ races: Race[] }> = ({ races }) =>
 
   const loadSales = async (currentRaceId: string) => {
     if (!supabase || !currentRaceId) return;
-    const { data, error } = await supabase.from('bets').select('bet_type,stake,units').eq('race_id', currentRaceId);
+    // Read directly from tickets.selections JSONB — the bets table is a secondary
+    // sync target (for the Netlify function) and may not yet be populated.
+    const { data, error } = await supabase
+      .from('tickets')
+      .select('id,selections,status')
+      .in('status', ['Active', 'Winning', 'Lost', 'Paid']);
 
     if (error) {
       setMessage(`Sales load warning: ${error.message}`);
@@ -149,13 +168,18 @@ export const ParimutuelPayoutPanel: React.FC<{ races: Race[] }> = ({ races }) =>
     const agg = new Map<BetType, { totalSales: number; ticketCount: number }>();
     BET_TYPES.forEach((type) => agg.set(type, { totalSales: 0, ticketCount: 0 }));
 
-    (data || []).forEach((row: any) => {
-      const betType = row.bet_type as BetType;
-      if (!agg.has(betType)) return;
-      const total = Number(row.stake || 0) * Number(row.units || 1);
-      const item = agg.get(betType)!;
-      item.totalSales += Number.isFinite(total) ? total : 0;
-      item.ticketCount += 1;
+    (data || []).forEach((ticket: any) => {
+      const selections: any[] = Array.isArray(ticket.selections) ? ticket.selections : [];
+      selections
+        .filter((s: any) => s.raceId === currentRaceId)
+        .forEach((sel: any) => {
+          const internalType = BET_TYPE_MAP[sel.betType as string];
+          if (!internalType || !agg.has(internalType)) return;
+          const stake = Number(sel.cost || 0) * Number(sel.multiplier || 1);
+          const item = agg.get(internalType)!;
+          item.totalSales += Number.isFinite(stake) ? stake : 0;
+          item.ticketCount += 1;
+        });
     });
 
     const rows = BET_TYPES.map((betType) => ({
@@ -501,6 +525,19 @@ export const ParimutuelPayoutPanel: React.FC<{ races: Race[] }> = ({ races }) =>
 
       <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
         <h4 className="text-lg font-bold text-gray-900">Total Sales by Bet Type</h4>
+        <div className="mt-2 flex items-center gap-3">
+          {raceId && (
+            <button
+              onClick={() => loadSales(raceId)}
+              className="rounded border border-gray-300 px-3 py-1 text-sm hover:bg-gray-50"
+            >
+              Refresh Sales
+            </button>
+          )}
+          {!raceId && (
+            <p className="text-sm text-gray-500">Select a race above to see sales.</p>
+          )}
+        </div>
         <div className="mt-3 overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead>
@@ -518,6 +555,13 @@ export const ParimutuelPayoutPanel: React.FC<{ races: Race[] }> = ({ races }) =>
                   <td className="px-3 py-2">{formatMoney(row.totalSales)}</td>
                 </tr>
               ))}
+              {salesRows.length > 0 && (
+                <tr className="border-t bg-gray-50 font-semibold">
+                  <td className="px-3 py-2">TOTAL</td>
+                  <td className="px-3 py-2">{salesRows.reduce((s, r) => s + r.ticketCount, 0)}</td>
+                  <td className="px-3 py-2">{formatMoney(salesRows.reduce((s, r) => s + r.totalSales, 0))}</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
