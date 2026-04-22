@@ -1,6 +1,19 @@
 
 import { createClient } from '@supabase/supabase-js';
-import { Ticket, User, Race, DepositLog, RaceResult } from './types';
+import {
+    Ticket,
+    User,
+    Race,
+    RaceResult,
+    Promotion,
+    ChatThread,
+    ChatMessage,
+    PaymentIntegrationConfig,
+    ProgramImage,
+    ManualBetOrder,
+    BetSelection,
+    WithdrawalRequest
+} from './types';
 
 // Safely retrieve environment variables
 const getEnvVar = (key: string): string | undefined => {
@@ -340,7 +353,8 @@ export const dbCreateWithdrawalRequest = async (request: any) => {
     if (!supabase) throw new Error("Database not connected");
     const { error } = await supabase.from('withdrawal_requests').insert({
         id: request.id,
-        user_id: request.userId,
+        user_id: request.customerId,
+        user_name: request.customerName,
         amount: request.amount,
         status: request.status,
         code: request.code,
@@ -354,5 +368,339 @@ export const dbCancelWithdrawal = async (requestId: string) => {
     const { error } = await supabase.from('withdrawal_requests').update({
         status: 'Canceled'
     }).eq('id', requestId);
+    if (error) throw error;
+};
+
+export const dbProcessWithdrawalRequest = async (
+    code: string,
+    processedById: string,
+    processedByName: string,
+    processedAt: Date
+) => {
+    if (!supabase) throw new Error("Database not connected");
+    const { data, error } = await supabase.rpc('process_withdrawal_request_transaction', {
+        p_code: code,
+        p_processed_by_id: processedById,
+        p_processed_by_name: processedByName,
+        p_processed_at: processedAt.toISOString()
+    });
+    if (error) throw error;
+    return !!data;
+};
+
+export const dbPayForBooking = async (
+    bookingCode: string,
+    vendorId: string,
+    vendorName: string,
+    paidAt: Date
+) => {
+    if (!supabase) throw new Error("Database not connected");
+    const { data, error } = await supabase.rpc('pay_for_booking_transaction', {
+        p_booking_code: bookingCode,
+        p_vendor_id: vendorId,
+        p_vendor_name: vendorName,
+        p_paid_at: paidAt.toISOString()
+    });
+    if (error) throw error;
+    return !!data;
+};
+
+/**
+ * PROMOTION MANAGEMENT
+ */
+
+export const dbFetchPromotions = async (): Promise<Promotion[]> => {
+    if (!supabase) return [];
+    const { data, error } = await supabase.from('promotions').select('*').order('sort_order', { ascending: true });
+    if (error) return [];
+    return (data || []).map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        type: p.type,
+        isActive: !!p.is_active,
+        rules: Array.isArray(p.rules) ? p.rules : []
+    }));
+};
+
+export const dbCreatePromotion = async (promo: Promotion, sortOrder: number) => {
+    if (!supabase) throw new Error("Database not connected");
+    const { error } = await supabase.from('promotions').insert({
+        id: promo.id,
+        name: promo.name,
+        type: promo.type,
+        is_active: promo.isActive,
+        rules: promo.rules || [],
+        sort_order: sortOrder
+    });
+    if (error) throw error;
+};
+
+export const dbUpdatePromotion = async (promoId: string, name: string, rules: any[]) => {
+    if (!supabase) throw new Error("Database not connected");
+    const { error } = await supabase.from('promotions').update({ name, rules }).eq('id', promoId);
+    if (error) throw error;
+};
+
+export const dbTogglePromotionStatus = async (promoId: string, nextStatus: boolean) => {
+    if (!supabase) throw new Error("Database not connected");
+    const { error } = await supabase.from('promotions').update({ is_active: nextStatus }).eq('id', promoId);
+    if (error) throw error;
+};
+
+export const dbDeletePromotion = async (promoId: string) => {
+    if (!supabase) throw new Error("Database not connected");
+    const { error } = await supabase.from('promotions').delete().eq('id', promoId);
+    if (error) throw error;
+};
+
+export const dbMovePromotion = async (promoId: string, direction: 'up' | 'down') => {
+    if (!supabase) throw new Error("Database not connected");
+    const { data: rows, error: fetchError } = await supabase
+        .from('promotions')
+        .select('id, sort_order')
+        .order('sort_order', { ascending: true });
+    if (fetchError) throw fetchError;
+
+    const list = (rows || []).map((r: any) => ({ id: r.id as string, sortOrder: Number(r.sort_order) || 0 }));
+    const idx = list.findIndex((x: { id: string; sortOrder: number }) => x.id === promoId);
+    if (idx < 0) return;
+
+    const swapWith = direction === 'up' ? idx - 1 : idx + 1;
+    if (swapWith < 0 || swapWith >= list.length) return;
+
+    const current = list[idx];
+    const target = list[swapWith];
+
+    const { error: e1 } = await supabase.from('promotions').update({ sort_order: target.sortOrder }).eq('id', current.id);
+    if (e1) throw e1;
+    const { error: e2 } = await supabase.from('promotions').update({ sort_order: current.sortOrder }).eq('id', target.id);
+    if (e2) throw e2;
+};
+
+/**
+ * CHAT
+ */
+
+const mapChatThread = (t: any): ChatThread => ({
+    id: t.id,
+    participantIds: Array.isArray(t.participant_ids) ? t.participant_ids : [],
+    name: t.name || undefined,
+    isBroadcast: !!t.is_broadcast,
+    lastMessageTimestamp: t.last_message_timestamp ? new Date(t.last_message_timestamp) : undefined
+});
+
+const mapChatMessage = (m: any): ChatMessage => ({
+    id: m.id,
+    threadId: m.thread_id,
+    senderId: m.sender_id,
+    senderName: m.sender_name,
+    content: m.content,
+    timestamp: new Date(m.timestamp),
+    readByIds: Array.isArray(m.read_by_ids) ? m.read_by_ids : [],
+    contentType: m.content_type || 'text',
+    audioBase64: m.audio_base64 || undefined,
+    audioDuration: m.audio_duration ?? undefined
+});
+
+export const dbFetchChatThreads = async (): Promise<ChatThread[]> => {
+    if (!supabase) return [];
+    const { data, error } = await supabase.from('chat_threads').select('*').order('last_message_timestamp', { ascending: false });
+    if (error) return [];
+    return (data || []).map(mapChatThread);
+};
+
+export const dbFetchChatMessages = async (): Promise<ChatMessage[]> => {
+    if (!supabase) return [];
+    const { data, error } = await supabase
+        .from('chat_messages')
+        .select('*')
+        .order('timestamp', { ascending: true })
+        .limit(2000);
+    if (error) return [];
+    return (data || []).map(mapChatMessage);
+};
+
+export const dbSendChatMessage = async (
+    threadId: string | 'new',
+    sender: User,
+    content: string,
+    recipients: string[],
+    audioData?: { base64: string; duration: number }
+) => {
+    if (!supabase) throw new Error("Database not connected");
+
+    let resolvedThreadId = threadId;
+    if (threadId === 'new') {
+        const nowIso = new Date().toISOString();
+        const normalizedRecipients = recipients.length > 0 ? recipients : ['BACK_OFFICE'];
+        const isBroadcast = normalizedRecipients.includes('ALL_VENDORS');
+        const participantSet = new Set<string>([sender.id, ...normalizedRecipients]);
+        const threadPayload = {
+            id: `th-${Date.now()}-${Math.floor(Math.random() * 9999)}`,
+            participant_ids: Array.from(participantSet),
+            name: isBroadcast ? 'Broadcast to All Vendors' : null,
+            is_broadcast: isBroadcast,
+            last_message_timestamp: nowIso
+        };
+        const { error: threadInsertError } = await supabase.from('chat_threads').insert(threadPayload);
+        if (threadInsertError) throw threadInsertError;
+        resolvedThreadId = threadPayload.id;
+    }
+
+    const now = new Date().toISOString();
+    const payload = {
+        id: `msg-${Date.now()}-${Math.floor(Math.random() * 9999)}`,
+        thread_id: resolvedThreadId,
+        sender_id: sender.id,
+        sender_name: sender.name,
+        content: audioData ? '[Voice message]' : content,
+        timestamp: now,
+        read_by_ids: [sender.id],
+        content_type: audioData ? 'audio' : 'text',
+        audio_base64: audioData?.base64 || null,
+        audio_duration: audioData?.duration ?? null
+    };
+
+    const { error: messageError } = await supabase.from('chat_messages').insert(payload);
+    if (messageError) throw messageError;
+
+    const { error: updateThreadError } = await supabase
+        .from('chat_threads')
+        .update({ last_message_timestamp: now })
+        .eq('id', resolvedThreadId);
+    if (updateThreadError) throw updateThreadError;
+};
+
+export const dbMarkThreadAsRead = async (threadId: string, userId: string) => {
+    if (!supabase) throw new Error("Database not connected");
+    const { error } = await supabase.rpc('mark_message_thread_read', {
+        p_thread_id: threadId,
+        p_user_id: userId
+    });
+    if (error) throw error;
+};
+
+/**
+ * PROGRAM MEDIA
+ */
+
+export const dbFetchProgramImages = async (): Promise<ProgramImage[]> => {
+    if (!supabase) return [];
+    const { data, error } = await supabase.from('program_images').select('*').order('created_at', { ascending: false });
+    if (error) return [];
+    return (data || []).map((row: any) => ({
+        id: row.id,
+        type: row.type,
+        url: row.url,
+        mediaType: row.media_type || 'image'
+    }));
+};
+
+export const dbAddProgramImage = async (image: ProgramImage) => {
+    if (!supabase) throw new Error("Database not connected");
+    const { error } = await supabase.from('program_images').insert({
+        id: image.id,
+        type: image.type,
+        url: image.url,
+        media_type: image.mediaType
+    });
+    if (error) throw error;
+};
+
+export const dbDeleteProgramImage = async (id: string) => {
+    if (!supabase) throw new Error("Database not connected");
+    const { error } = await supabase.from('program_images').delete().eq('id', id);
+    if (error) throw error;
+};
+
+/**
+ * PAYMENT INTEGRATION SETTINGS
+ */
+
+export const dbFetchPaymentConfigs = async (): Promise<PaymentIntegrationConfig[]> => {
+    if (!supabase) return [];
+    const { data, error } = await supabase.from('payment_configs').select('*').order('provider', { ascending: true });
+    if (error) return [];
+    return (data || []).map((row: any) => ({
+        provider: row.provider,
+        isEnabled: !!row.is_enabled,
+        apiKey: row.api_key || '',
+        apiSecret: row.api_secret || '',
+        merchantId: row.merchant_id || '',
+        webhookUrl: row.webhook_url || ''
+    }));
+};
+
+export const dbSavePaymentConfig = async (config: PaymentIntegrationConfig) => {
+    if (!supabase) throw new Error("Database not connected");
+    const { error } = await supabase.from('payment_configs').upsert({
+        provider: config.provider,
+        is_enabled: config.isEnabled,
+        api_key: config.apiKey,
+        api_secret: config.apiSecret,
+        merchant_id: config.merchantId,
+        webhook_url: config.webhookUrl,
+        updated_at: new Date().toISOString()
+    });
+    if (error) throw error;
+};
+
+/**
+ * MANUAL BET ORDERS
+ */
+
+export const dbFetchManualBetOrders = async (): Promise<ManualBetOrder[]> => {
+    if (!supabase) return [];
+    const { data, error } = await supabase
+        .from('manual_bet_orders')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(500);
+    if (error) return [];
+
+    return (data || []).map((row: any) => ({
+        id: row.id,
+        createdAt: new Date(row.created_at),
+        createdById: row.created_by_id,
+        createdByName: row.created_by_name,
+        assignedVendorId: row.assigned_vendor_id,
+        selections: Array.isArray(row.selections) ? row.selections : [],
+        totalCost: Number(row.total_cost) || 0,
+        status: row.status
+    }));
+};
+
+export const dbCreateManualBetOrder = async (order: ManualBetOrder) => {
+    if (!supabase) throw new Error("Database not connected");
+    const { error } = await supabase.from('manual_bet_orders').insert({
+        id: order.id,
+        created_at: order.createdAt.toISOString(),
+        created_by_id: order.createdById,
+        created_by_name: order.createdByName,
+        assigned_vendor_id: order.assignedVendorId,
+        selections: order.selections,
+        total_cost: order.totalCost,
+        status: order.status
+    });
+    if (error) throw error;
+};
+
+export const dbCancelManualBetOrder = async (orderId: string) => {
+    if (!supabase) throw new Error("Database not connected");
+    const { error } = await supabase
+        .from('manual_bet_orders')
+        .update({ status: 'Canceled' })
+        .eq('id', orderId)
+        .eq('status', 'Pending');
+    if (error) throw error;
+};
+
+export const dbMarkManualBetOrderCompleted = async (orderId: string) => {
+    if (!supabase) throw new Error("Database not connected");
+    const { error } = await supabase
+        .from('manual_bet_orders')
+        .update({ status: 'Completed' })
+        .eq('id', orderId)
+        .eq('status', 'Pending');
     if (error) throw error;
 };

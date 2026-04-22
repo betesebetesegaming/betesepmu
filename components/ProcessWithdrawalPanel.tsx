@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { WithdrawalRequest, User } from '../types';
 
 interface ProcessWithdrawalPanelProps {
-  onProcessWithdrawal: (code: string) => boolean;
+  onProcessWithdrawal: (code: string) => Promise<boolean>;
   withdrawalRequests: WithdrawalRequest[];
   customers: User[];
 }
@@ -50,10 +50,10 @@ export const ProcessWithdrawalPanel: React.FC<ProcessWithdrawalPanelProps> = ({ 
     }
   };
 
-  const handleProcess = () => {
+  const handleProcess = async () => {
     if (!foundRequest || !customer) return;
 
-    const success = onProcessWithdrawal(code);
+    const success = await onProcessWithdrawal(code);
     if (success) {
       const updatedBalance = (customer.walletBalance ?? 0) - foundRequest.amount;
       setNewBalance(updatedBalance);

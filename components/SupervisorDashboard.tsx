@@ -34,7 +34,7 @@ interface SupervisorDashboardProps {
     allTickets: Ticket[];
     onCancelTicket: (ticketId: string) => void;
     programImages: ProgramImage[];
-    onAddProgramImage: (imageDataUrl: string, type: 'program' | 'advertisement') => void;
+    onAddProgramImage: (imageDataUrl: string, type: 'program' | 'advertisement', mediaType: 'image' | 'video') => void;
     onDeleteProgramImage: (id: string) => void;
     promotions: Promotion[];
     onTogglePromotionStatus: (promoId: string) => void;

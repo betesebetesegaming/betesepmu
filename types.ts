@@ -103,6 +103,7 @@ export interface Ticket extends BetSlip {
   bookingCode?: string;
   winnings?: number;
   winningsBreakdown?: WinningsBreakdown[];
+  canceledAt?: Date;
   canceledById?: string;
   canceledByName?: string;
 

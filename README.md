@@ -39,6 +39,29 @@ Execute:
 
 `supabase/pmu_schema.sql`
 
+This now creates both:
+
+- PMU payout engine tables (`bets`, `results`, `config`, `payouts`, `jackpot_carry`)
+- Core app tables and transaction functions (`users`, `races`, `tickets`, `deposit_requests`, `withdrawal_requests`, `promotions`, `program_images`, `payment_configs`, `chat_threads`, `chat_messages`, `manual_bet_orders`)
+
+It also installs DB transaction functions used by the app:
+
+- `payout_ticket_transaction`
+- `approve_deposit_transaction`
+- `pay_for_booking_transaction`
+- `process_withdrawal_request_transaction`
+- `mark_message_thread_read`
+
+### 1.1) Required frontend env vars
+
+Create `.env.local` with:
+
+`VITE_SUPABASE_URL=your_supabase_project_url`
+
+`VITE_SUPABASE_ANON_KEY=your_supabase_anon_key`
+
+Without these values, the app will run disconnected from Supabase.
+
 ### 2) Netlify function
 
 Serverless function path:

@@ -41,7 +41,7 @@ export const TicketToolsView: React.FC<{
                 <TicketCheckPanel allTickets={allTickets} onPayoutTicket={onPayoutTicket} />
                 <BookingRetrievalPanel 
                     allTickets={allTickets} 
-                    onPayForBooking={() => ({ success: false, message: 'Payout only. Use Terminal for booking payment.' })}
+                    onPayForBooking={async () => ({ success: false, message: 'Payout only. Use Terminal for booking payment.' })}
                     onPrintBookingSlip={onReprintTicket} 
                     races={races} 
                     effectiveTime={effectiveTime} 
@@ -70,7 +70,7 @@ interface AdminDashboardProps {
     allTickets: Ticket[];
     onCancelTicket: (ticketId: string) => void;
     programImages: ProgramImage[];
-    onAddProgramImage: (imageDataUrl: string, type: 'program' | 'advertisement') => void;
+    onAddProgramImage: (imageDataUrl: string, type: 'program' | 'advertisement', mediaType: 'image' | 'video') => void;
     onDeleteProgramImage: (id: string) => void;
     promotions: Promotion[];
     onTogglePromotionStatus: (promoId: string) => void;

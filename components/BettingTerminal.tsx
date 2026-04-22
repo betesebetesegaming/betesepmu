@@ -33,8 +33,8 @@ interface BettingTerminalProps {
   onCancelTicket: (ticketId: string) => void;
   customers: User[];
   onDeposit: (customerId: string, amount: number, method: 'Cash' | 'Wave' | 'AfriMoney' | 'Correction', transactionId?: string) => { success: boolean; bonusApplied: number | null };
-  onPayForBooking: (bookingCode: string) => { success: boolean; message: string };
-  onProcessWithdrawal: (code: string) => boolean;
+    onPayForBooking: (bookingCode: string) => Promise<{ success: boolean; message: string }>;
+    onProcessWithdrawal: (code: string) => Promise<boolean>;
   depositLogs: DepositLog[];
   onPayoutTicket: (ticketId: string) => void;
   messages: ChatMessage[];

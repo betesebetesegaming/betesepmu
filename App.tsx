@@ -1,7 +1,7 @@
 
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { BetSlip, BetTypeOption, Ticket, BetSelection, User, Role, WithdrawalRequest, Race, RaceResult, DepositLog, ChatMessage, ChatThread, Promotion, PromotionRule, DepositRequest, PaymentIntegrationConfig, ProgramImage, ManualBetOrder } from './types';
-import { BET_PRICING, MOCK_USERS, MOCK_PROMOTIONS, MOCK_CHAT_THREADS, MOCK_CHAT_MESSAGES, MOCK_RACES } from './constants';
+import { BET_PRICING } from './constants';
 import { LoginScreen } from './components/LoginScreen';
 import { BettingTerminal } from './components/BettingTerminal';
 import { Header } from './components/Header';
@@ -23,7 +23,14 @@ import {
     dbUpdateRace, dbDeleteRace, dbUpdateNonRunners, dbSaveRaceResult,
     dbFetchDepositRequests, dbFetchWithdrawalRequests, dbDepositRequest,
     dbApproveDepositRequestExact, dbRejectDepositRequest, dbCancelWithdrawal,
-    dbCreateWithdrawalRequest, dbAddUser
+    dbCreateWithdrawalRequest, dbAddUser, dbFetchPromotions,
+    dbTogglePromotionStatus, dbUpdatePromotion, dbMovePromotion,
+    dbCreatePromotion, dbDeletePromotion, dbFetchProgramImages,
+    dbAddProgramImage, dbDeleteProgramImage, dbFetchPaymentConfigs,
+    dbSavePaymentConfig, dbFetchManualBetOrders, dbCreateManualBetOrder,
+    dbCancelManualBetOrder, dbMarkManualBetOrderCompleted, dbPayForBooking,
+    dbProcessWithdrawalRequest, dbFetchChatThreads, dbFetchChatMessages,
+    dbSendChatMessage, dbMarkThreadAsRead
 } from './supabaseClient';
 
 const normalizeRole = (role: unknown): Role => {
@@ -36,8 +43,8 @@ const normalizeRole = (role: unknown): Role => {
 
 const AppContent: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [users, setUsers] = useState<User[]>(MOCK_USERS || []); 
-  const [races, setRaces] = useState<Race[]>(MOCK_RACES || []); 
+    const [users, setUsers] = useState<User[]>([]);
+    const [races, setRaces] = useState<Race[]>([]);
   const [placedTickets, setPlacedTickets] = useState<Ticket[]>([]); 
   const [systemKey, setSystemKey] = useState(0); 
   
@@ -46,9 +53,9 @@ const AppContent: React.FC = () => {
   const [depositRequests, setDepositRequests] = useState<DepositRequest[]>([]);
   const [manualBetOrders, setManualBetOrders] = useState<ManualBetOrder[]>([]);
   const [programImages, setProgramImages] = useState<ProgramImage[]>([]);
-  const [promotions, setPromotions] = useState<Promotion[]>(MOCK_PROMOTIONS || []);
-  const [threads, setThreads] = useState<ChatThread[]>(MOCK_CHAT_THREADS || []);
-  const [messages, setMessages] = useState<ChatMessage[]>(MOCK_CHAT_MESSAGES || []);
+    const [promotions, setPromotions] = useState<Promotion[]>([]);
+    const [threads, setThreads] = useState<ChatThread[]>([]);
+    const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [seenWinningTickets, setSeenWinningTickets] = useState<Set<string>>(new Set());
   const [paymentConfigs, setPaymentConfigs] = useState<PaymentIntegrationConfig[]>([]);
 
@@ -72,6 +79,15 @@ const AppContent: React.FC = () => {
               dbFetchRaces(),
               dbFetchDepositRequests(),
               dbFetchWithdrawalRequests()
+          ]);
+
+          const [fetchedPromotions, fetchedThreads, fetchedMessages, fetchedProgramImages, fetchedPaymentConfigs, fetchedManualBets] = await Promise.all([
+              dbFetchPromotions(),
+              dbFetchChatThreads(),
+              dbFetchChatMessages(),
+              dbFetchProgramImages(),
+              dbFetchPaymentConfigs(),
+              dbFetchManualBetOrders()
           ]);
           
           if (fetchedUsers && fetchedUsers.length > 0) {
@@ -106,6 +122,13 @@ const AppContent: React.FC = () => {
               processedBy: r.processed_by, 
               processedByName: r.processed_by_name
           })));
+
+          setPromotions(fetchedPromotions || []);
+          setThreads(fetchedThreads || []);
+          setMessages(fetchedMessages || []);
+          setProgramImages(fetchedProgramImages || []);
+          setPaymentConfigs(fetchedPaymentConfigs || []);
+          setManualBetOrders(fetchedManualBets || []);
 
           const targetUser = user || currentUser;
           if(targetUser) {
@@ -274,7 +297,11 @@ const AppContent: React.FC = () => {
           ...betSlip
       };
       
-      setPlacedTickets(prev => [...prev, newTicket]);
+      if (supabase) {
+          await dbPlaceBet(newTicket, currentUser);
+      } else {
+          setPlacedTickets(prev => [...prev, newTicket]);
+      }
       setLastTicket(newTicket);
       setBetSlip({ selections: [], totalCost: 0 });
   };
@@ -377,7 +404,7 @@ const AppContent: React.FC = () => {
       }
   };
 
-  const processManualBet = async (orderId: string) => {
+    const processManualBet = async (orderId: string) => {
     const order = (manualBetOrders || []).find(o => o.id === orderId);
     if (!order || !currentUser) return;
     
@@ -394,23 +421,52 @@ const AppContent: React.FC = () => {
     try {
         if (supabase) { await dbPlaceBet(newTicket, currentUser); } 
         else { setPlacedTickets(prev => [...prev, newTicket]); }
-        setManualBetOrders(prev => (prev || []).map(o => o.id === orderId ? { ...o, status: 'Completed' } : o));
+        if (supabase) {
+            await dbMarkManualBetOrderCompleted(orderId);
+            loadLiveSystemData(currentUser);
+        } else {
+            setManualBetOrders(prev => (prev || []).map(o => o.id === orderId ? { ...o, status: 'Completed' } : o));
+        }
         setLastTicket(newTicket);
     } catch (e: any) { alert(`Transaction Failed: ${e.message}`); }
   };
 
-  const payForBooking = (code: string) => {
+  const payForBooking = async (code: string) => {
       const ticket = (placedTickets || []).find(t => t.bookingCode === code && t.status === 'Booked');
       if (!ticket || !currentUser) return { success: false, message: 'Not found' };
+
+      if (supabase) {
+          try {
+              const success = await dbPayForBooking(code, currentUser.id, currentUser.name, effectiveTime);
+              if (!success) return { success: false, message: 'Booking not found or already processed.' };
+              loadLiveSystemData(currentUser);
+              return { success: true, message: 'Booking activated successfully.' };
+          } catch (e: any) {
+              return { success: false, message: e.message || 'Failed to activate booking.' };
+          }
+      }
+
       const updated = { ...ticket, status: 'Active' as const, vendorId: currentUser.id, vendorName: currentUser.name };
       setPlacedTickets(prev => (prev || []).map(t => t.id === ticket.id ? updated : t));
       setLastTicket(updated);
       return { success: true, message: 'Paid' };
   };
 
-  const processWithdrawal = (code: string) => {
+  const processWithdrawal = async (code: string) => {
       const req = (withdrawalRequests || []).find(r => r.code === code && r.status === 'Pending');
       if (!req || !currentUser) return false;
+
+      if (supabase) {
+          try {
+              const success = await dbProcessWithdrawalRequest(code, currentUser.id, currentUser.name, effectiveTime);
+              if (success) loadLiveSystemData(currentUser);
+              return success;
+          } catch (e) {
+              console.error("Process withdrawal failed", e);
+              return false;
+          }
+      }
+
       const updated = { ...req, status: 'Completed' as const, completedAt: effectiveTime, processedBy: currentUser.id, processedByName: currentUser.name };
       setWithdrawalRequests(prev => (prev || []).map(r => r.id === req.id ? updated : r));
       return true;
@@ -486,6 +542,211 @@ const AppContent: React.FC = () => {
     return newUser;
   };
 
+  const handleTogglePromotionStatus = async (promoId: string) => {
+      const current = promotions.find(p => p.id === promoId);
+      if (!current) return;
+      const next = !current.isActive;
+      if (supabase) {
+          try {
+              await dbTogglePromotionStatus(promoId, next);
+          } catch (e: any) {
+              alert("Failed to update promotion status: " + e.message);
+              return;
+          }
+      }
+      setPromotions(prev => prev.map(p => p.id === promoId ? { ...p, isActive: next } : p));
+  };
+
+  const handleUpdatePromotion = async (promoId: string, newName: string, newRules: PromotionRule[]) => {
+      if (supabase) {
+          try {
+              await dbUpdatePromotion(promoId, newName, newRules);
+          } catch (e: any) {
+              alert("Failed to update promotion: " + e.message);
+              return;
+          }
+      }
+      setPromotions(prev => prev.map(p => p.id === promoId ? { ...p, name: newName, rules: newRules } : p));
+  };
+
+  const handleMovePromotion = async (id: string, direction: 'up' | 'down') => {
+      if (supabase) {
+          try {
+              await dbMovePromotion(id, direction);
+              const refreshed = await dbFetchPromotions();
+              setPromotions(refreshed);
+              return;
+          } catch (e: any) {
+              alert("Failed to reorder promotion: " + e.message);
+              return;
+          }
+      }
+
+      setPromotions(prev => {
+          const idx = prev.findIndex(p => p.id === id);
+          if (idx < 0) return prev;
+          const nextIndex = direction === 'up' ? idx - 1 : idx + 1;
+          if (nextIndex < 0 || nextIndex >= prev.length) return prev;
+          const copy = [...prev];
+          [copy[idx], copy[nextIndex]] = [copy[nextIndex], copy[idx]];
+          return copy;
+      });
+  };
+
+  const handleCreatePromotion = async (name: string, type: 'first-deposit' | 'weekly' | 'special') => {
+      const promo: Promotion = {
+          id: `promo-${Date.now()}`,
+          name,
+          type,
+          isActive: true,
+          rules: []
+      };
+
+      if (supabase) {
+          try {
+              await dbCreatePromotion(promo, promotions.length + 1);
+          } catch (e: any) {
+              alert("Failed to create promotion: " + e.message);
+              return;
+          }
+      }
+      setPromotions(prev => [...prev, promo]);
+  };
+
+  const handleDeletePromotion = async (id: string) => {
+      if (supabase) {
+          try {
+              await dbDeletePromotion(id);
+          } catch (e: any) {
+              alert("Failed to delete promotion: " + e.message);
+              return;
+          }
+      }
+      setPromotions(prev => prev.filter(p => p.id !== id));
+  };
+
+  const handleAddProgramImage = async (url: string, type: 'program' | 'advertisement', mediaType: 'image' | 'video') => {
+      const image: ProgramImage = {
+          id: `media-${Date.now()}`,
+          type,
+          url,
+          mediaType
+      };
+
+      if (supabase) {
+          try {
+              await dbAddProgramImage(image);
+          } catch (e: any) {
+              alert("Failed to upload media: " + e.message);
+              return;
+          }
+      }
+      setProgramImages(prev => [image, ...prev]);
+  };
+
+  const handleDeleteProgramImage = async (id: string) => {
+      if (supabase) {
+          try {
+              await dbDeleteProgramImage(id);
+          } catch (e: any) {
+              alert("Failed to delete media: " + e.message);
+              return;
+          }
+      }
+      setProgramImages(prev => prev.filter(img => img.id !== id));
+  };
+
+  const handleSavePaymentConfig = async (config: PaymentIntegrationConfig) => {
+      if (supabase) {
+          try {
+              await dbSavePaymentConfig(config);
+          } catch (e: any) {
+              alert("Failed to save payment settings: " + e.message);
+              return;
+          }
+      }
+      setPaymentConfigs(prev => {
+          const idx = prev.findIndex(c => c.provider === config.provider);
+          if (idx < 0) return [...prev, config];
+          const copy = [...prev];
+          copy[idx] = config;
+          return copy;
+      });
+  };
+
+  const handleCreateManualBet = async (selectionData: Omit<BetSelection, 'cost' | 'raceName'>, multiplier: number, totalCost: number, assignedVendorId: string) => {
+      if (!currentUser) return;
+      const race = races.find(r => r.id === selectionData.raceId);
+      const selection: BetSelection = {
+          ...selectionData,
+          raceName: race?.name || selectionData.raceId,
+          multiplier,
+          cost: totalCost / Math.max(1, multiplier)
+      };
+      const order: ManualBetOrder = {
+          id: `mbo-${Date.now()}`,
+          createdAt: effectiveTime,
+          createdById: currentUser.id,
+          createdByName: currentUser.name,
+          assignedVendorId,
+          selections: [selection],
+          totalCost,
+          status: 'Pending'
+      };
+
+      if (supabase) {
+          try {
+              await dbCreateManualBetOrder(order);
+          } catch (e: any) {
+              alert("Failed to create manual bet: " + e.message);
+              return;
+          }
+      }
+      setManualBetOrders(prev => [order, ...prev]);
+  };
+
+  const handleCancelManualBet = async (orderId: string) => {
+      if (supabase) {
+          try {
+              await dbCancelManualBetOrder(orderId);
+          } catch (e: any) {
+              alert("Failed to cancel manual bet: " + e.message);
+              return;
+          }
+      }
+      setManualBetOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'Canceled' } : o));
+  };
+
+  const handleSendMessage = async (threadId: string | 'new', content: string, recipients: string[], audioData?: { base64: string; duration: number }) => {
+      if (!currentUser) return;
+      try {
+          if (supabase) {
+              await dbSendChatMessage(threadId, currentUser, content, recipients, audioData);
+              const [nextThreads, nextMessages] = await Promise.all([dbFetchChatThreads(), dbFetchChatMessages()]);
+              setThreads(nextThreads);
+              setMessages(nextMessages);
+          }
+      } catch (e: any) {
+          alert("Failed to send message: " + e.message);
+      }
+  };
+
+  const handleMarkThreadAsRead = async (threadId: string) => {
+      if (!currentUser || !threadId) return;
+      if (supabase) {
+          try {
+              await dbMarkThreadAsRead(threadId, currentUser.id);
+          } catch (e) {
+              console.error("Failed to mark messages as read", e);
+          }
+      }
+      setMessages(prev => prev.map(m => {
+          if (m.threadId !== threadId) return m;
+          if (m.readByIds.includes(currentUser.id)) return m;
+          return { ...m, readByIds: [...m.readByIds, currentUser.id] };
+      }));
+  };
+
   if (!currentUser) return <LoginScreen onLogin={handleLogin} users={users} onSignUp={addUser as any} />;
 
   return (
@@ -557,14 +818,14 @@ const AppContent: React.FC = () => {
                     allTickets={placedTickets}
                     onCancelTicket={() => {}}
                     programImages={programImages}
-                    onAddProgramImage={() => {}}
-                    onDeleteProgramImage={() => {}}
+                    onAddProgramImage={handleAddProgramImage}
+                    onDeleteProgramImage={handleDeleteProgramImage}
                     promotions={promotions}
-                    onTogglePromotionStatus={() => {}}
-                    onUpdatePromotion={() => {}}
-                    onMovePromotion={() => {}}
-                    onCreatePromotion={() => {}}
-                    onDeletePromotion={() => {}}
+                    onTogglePromotionStatus={handleTogglePromotionStatus}
+                    onUpdatePromotion={handleUpdatePromotion}
+                    onMovePromotion={handleMovePromotion}
+                    onCreatePromotion={handleCreatePromotion}
+                    onDeletePromotion={handleDeletePromotion}
                     onAdminResetPassword={() => ({ success: true, message: '' })}
                     effectiveTime={effectiveTime}
                     currentUser={currentUser}
@@ -574,10 +835,10 @@ const AppContent: React.FC = () => {
                     onApproveDepositRequest={handleApproveDepositRequest}
                     onRejectDepositRequest={handleRejectDepositRequest}
                     paymentConfigs={paymentConfigs}
-                    onSavePaymentConfig={() => {}}
+                    onSavePaymentConfig={handleSavePaymentConfig}
                     manualBetOrders={manualBetOrders}
-                    onCreateManualBet={() => {}}
-                    onCancelManualBet={() => {}}
+                    onCreateManualBet={handleCreateManualBet}
+                    onCancelManualBet={handleCancelManualBet}
                 />
             ) : (
                 <SupervisorDashboard
@@ -595,14 +856,14 @@ const AppContent: React.FC = () => {
                     allTickets={placedTickets}
                     onCancelTicket={() => {}}
                     programImages={programImages}
-                    onAddProgramImage={() => {}}
-                    onDeleteProgramImage={() => {}}
+                    onAddProgramImage={handleAddProgramImage}
+                    onDeleteProgramImage={handleDeleteProgramImage}
                     promotions={promotions}
-                    onTogglePromotionStatus={() => {}}
-                    onUpdatePromotion={() => {}}
-                    onMovePromotion={() => {}}
-                    onCreatePromotion={() => {}}
-                    onDeletePromotion={() => {}}
+                    onTogglePromotionStatus={handleTogglePromotionStatus}
+                    onUpdatePromotion={handleUpdatePromotion}
+                    onMovePromotion={handleMovePromotion}
+                    onCreatePromotion={handleCreatePromotion}
+                    onDeletePromotion={handleDeletePromotion}
                     onAdminResetPassword={() => ({ success: true, message: '' })}
                     effectiveTime={effectiveTime}
                     currentUser={currentUser}
@@ -612,8 +873,8 @@ const AppContent: React.FC = () => {
                     onApproveDepositRequest={handleApproveDepositRequest}
                     onRejectDepositRequest={handleRejectDepositRequest}
                     manualBetOrders={manualBetOrders}
-                    onCreateManualBet={() => {}}
-                    onCancelManualBet={() => {}}
+                    onCreateManualBet={handleCreateManualBet}
+                    onCancelManualBet={handleCancelManualBet}
                 />
             )
         )}
@@ -649,7 +910,7 @@ const AppContent: React.FC = () => {
       </main>
       {paidTicketModal && <TicketModal ticket={paidTicketModal} onClose={() => setPaidTicketModal(null)} showPrintButton={true} races={races} />}
       {ticketToReprint && <TicketModal ticket={ticketToReprint} onClose={() => setTicketToReprint(null)} showPrintButton={true} races={races} />}
-      <ChatPanel isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} currentUser={currentUser} users={users} threads={threads} messages={messages} onSendMessage={() => {}} onMarkAsRead={() => {}} />
+            <ChatPanel isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} currentUser={currentUser} users={users} threads={threads} messages={messages} onSendMessage={handleSendMessage} onMarkAsRead={handleMarkThreadAsRead} />
     </ErrorBoundary>
   );
 };

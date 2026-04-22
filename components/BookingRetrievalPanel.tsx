@@ -5,7 +5,7 @@ import { BETTING_CUTOFF_MS } from '../utils';
 
 interface BookingRetrievalPanelProps {
   allTickets: Ticket[];
-  onPayForBooking: (bookingCode: string) => { success: boolean; message: string };
+    onPayForBooking: (bookingCode: string) => Promise<{ success: boolean; message: string }>;
   onPrintBookingSlip: (ticket: Ticket) => void;
   races: Race[];
   effectiveTime: Date;
@@ -33,10 +33,10 @@ export const BookingRetrievalPanel: React.FC<BookingRetrievalPanelProps> = ({ al
     }
   };
 
-  const handlePay = () => {
+  const handlePay = async () => {
       if (!foundTicket?.bookingCode) return;
       
-      const result = onPayForBooking(foundTicket.bookingCode);
+      const result = await onPayForBooking(foundTicket.bookingCode);
       setMessage(result.message);
       setIsSuccess(result.success);
 
