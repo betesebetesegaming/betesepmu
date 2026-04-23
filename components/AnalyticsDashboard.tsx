@@ -392,26 +392,76 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
                         </thead>
                         <tbody className="divide-y divide-gray-200">
                             {groupedCombinationLedger.length > 0 ? groupedCombinationLedger.map((group) => (
-                                group.rows.map((row, rowIndex) => (
-                                    <tr key={`${group.ticketId}-${row.raceId}-${rowIndex}`}>
-                                        {rowIndex === 0 && (
-                                            <td rowSpan={group.rows.length} className="py-2 px-3 font-mono font-bold align-top bg-gray-50 border-r border-gray-200">
-                                                <div>{group.ticketId}</div>
-                                                <div className="text-[10px] text-gray-700 font-semibold mt-0.5">{group.actorName}</div>
-                                                <div className="text-[10px] text-gray-500 font-normal">{group.stampTime}</div>
-                                                <div className="text-[10px] text-gray-500 font-normal mt-0.5">
-                                                    {group.rows.length} bet{group.rows.length > 1 ? 's' : ''}
+                                <tr key={group.ticketId}>
+                                    <td className="py-2 px-3 font-mono font-bold align-top bg-gray-50 border-r border-gray-200">
+                                        <div>{group.ticketId}</div>
+                                        <div className="text-[10px] text-gray-700 font-semibold mt-0.5">{group.actorName}</div>
+                                        <div className="text-[10px] text-gray-500 font-normal">{group.stampTime}</div>
+                                        <div className="text-[10px] text-gray-500 font-normal mt-0.5">
+                                            {group.rows.length} bet{group.rows.length > 1 ? 's' : ''}
+                                        </div>
+                                    </td>
+
+                                    <td className="py-2 px-3 align-top">
+                                        <div className="space-y-1">
+                                            {group.rows.map((row, i) => (
+                                                <div key={i} className="text-xs">
+                                                    {row.raceName}
                                                 </div>
-                                            </td>
-                                        )}
-                                        <td className="py-2 px-3">{row.raceName}</td>
-                                        <td className="py-2 px-3">{row.betType}</td>
-                                        <td className="py-2 px-3 font-mono">{row.combination}</td>
-                                        <td className="py-2 px-3 text-right font-mono">{row.stake.toFixed(2)}</td>
-                                        <td className="py-2 px-3">{row.status}</td>
-                                        <td className="py-2 px-3 text-right font-mono">{row.payout.toFixed(2)}</td>
-                                    </tr>
-                                ))
+                                            ))}
+                                        </div>
+                                    </td>
+
+                                    <td className="py-2 px-3 align-top">
+                                        <div className="space-y-1">
+                                            {group.rows.map((row, i) => (
+                                                <div key={i} className="text-xs">
+                                                    {row.betType}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </td>
+
+                                    <td className="py-2 px-3 font-mono align-top">
+                                        <div className="space-y-1">
+                                            {group.rows.map((row, i) => (
+                                                <div key={i} className="text-xs border border-gray-200 px-2 py-1 rounded bg-gray-50">
+                                                    {row.combination}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </td>
+
+                                    <td className="py-2 px-3 text-right font-mono align-top">
+                                        <div className="space-y-1">
+                                            {group.rows.map((row, i) => (
+                                                <div key={i} className="text-xs">
+                                                    {row.stake.toFixed(2)}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </td>
+
+                                    <td className="py-2 px-3 align-top">
+                                        <div className="space-y-1">
+                                            {group.rows.map((row, i) => (
+                                                <div key={i} className="text-xs">
+                                                    {row.status}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </td>
+
+                                    <td className="py-2 px-3 text-right font-mono align-top">
+                                        <div className="space-y-1">
+                                            {group.rows.map((row, i) => (
+                                                <div key={i} className="text-xs">
+                                                    {row.payout.toFixed(2)}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </td>
+                                </tr>
                             )) : (
                                 <tr>
                                     <td colSpan={7} className="py-4 px-3 text-center text-gray-500">No ticket combinations found for current filters.</td>
