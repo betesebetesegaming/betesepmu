@@ -43,7 +43,14 @@ type FilterStatus = Ticket['status'] | 'All';
 export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets, races, onCancelTicket }) => {
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('All');
   const [filterAgent, setFilterAgent] = useState<string>('All');
-  const [filterDate, setFilterDate] = useState<string>('');
+  // Pre-fill today's date so the date box shows current date like the screenshot
+  const [filterDate, setFilterDate] = useState<string>(() => {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  });
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [ticketToView, setTicketToView] = useState<Ticket | null>(null);
   const [ledgerTicket, setLedgerTicket] = useState<Ticket | null>(null);
@@ -79,14 +86,6 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
     return result;
   }, [tickets, filterStatus, filterAgent, filterDate, searchTerm]);
 
-  // Default today's date display for the date input placeholder
-  const todayFormatted = (() => {
-    const now = new Date();
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const dd = String(now.getDate()).padStart(2, '0');
-    return `${mm}/${dd}/${now.getFullYear()}`;
-  })();
-
   return (
     <>
       {ticketToView && <TicketModal ticket={ticketToView} onClose={() => setTicketToView(null)} showPrintButton={true} races={races} />}
@@ -114,7 +113,6 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
             type="date"
             value={filterDate}
             onChange={e => setFilterDate(e.target.value)}
-            placeholder={todayFormatted}
             className="flex-1 min-w-[140px] px-3 py-1.5 rounded-full border-2 border-white/60 bg-white/90 text-sm text-gray-800 focus:outline-none focus:border-white"
           />
 
@@ -166,13 +164,13 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                   return (
                     <tr
                       key={ticket.id}
-                      className={`border-b border-gray-200 align-top ${rowIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'} hover:bg-blue-50/30`}
+                      className="border-b border-gray-200 bg-white hover:bg-gray-50"
                     >
                       {/* Ticket number — clickable for ledger */}
-                      <td className="py-3 px-4 align-middle">
+                      <td className="py-2 px-4 align-top pt-3">
                         <button
                           onClick={() => setLedgerTicket(ticket)}
-                          className="text-xs font-mono font-semibold text-gray-800 hover:text-blue-700 hover:underline text-left leading-snug"
+                          className="text-xs font-mono text-gray-800 hover:text-blue-700 hover:underline text-left leading-snug"
                           title="View combination ledger"
                         >
                           {ticket.id}
@@ -180,22 +178,22 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                       </td>
 
                       {/* Race number */}
-                      <td className="py-3 px-4 align-middle text-xs font-semibold text-gray-700 whitespace-nowrap">
+                      <td className="py-2 px-4 align-top pt-3 text-xs font-semibold text-gray-700 whitespace-nowrap">
                         {raceLabels.map((label, i) => <div key={i}>{label}</div>)}
                       </td>
 
                       {/* Bet time */}
-                      <td className="py-3 px-4 align-middle text-xs text-gray-600 whitespace-nowrap">
+                      <td className="py-2 px-4 align-top pt-3 text-xs text-gray-600 whitespace-nowrap">
                         {formatDate(ticket.timestamp)}
                       </td>
 
                       {/* Bet combinations — always shown inline, one per row */}
-                      <td className="py-2 px-4 align-middle">
-                        <div className="space-y-0.5">
+                      <td className="py-1.5 px-4 align-top">
+                        <div className="space-y-px">
                           {ticket.selections.map((sel, i) => (
                             <div
                               key={i}
-                              className="text-xs text-gray-800 border border-gray-200 rounded px-2 py-1 bg-white leading-snug"
+                              className="text-xs text-gray-800 border border-gray-300 px-3 py-1.5 bg-white leading-snug"
                             >
                               {sel.betType} - {formatBetNumbers(sel)} - {sel.multiplier} ticket(s) {(sel.cost * sel.multiplier).toFixed(0)} GMD
                             </div>
@@ -204,21 +202,21 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                       </td>
 
                       {/* Result */}
-                      <td className="py-3 px-4 align-middle text-xs font-semibold whitespace-nowrap">
+                      <td className="py-2 px-4 align-top pt-3 text-xs font-semibold whitespace-nowrap">
                         {hasWinnings ? (
                           <span className="text-blue-700">{ticket.winnings!.toFixed(2)} GMD</span>
                         ) : (
-                          <span className="text-gray-400">-</span>
+                          <span className="text-gray-400"></span>
                         )}
                       </td>
 
                       {/* Status */}
-                      <td className={`py-3 px-4 align-middle text-xs font-bold whitespace-nowrap ${getStatusColor(ticket.status)}`}>
+                      <td className={`py-2 px-4 align-top pt-3 text-xs font-semibold whitespace-nowrap ${getStatusColor(ticket.status)}`}>
                         {ticket.status}
                       </td>
 
                       {/* Options */}
-                      <td className="py-3 px-4 align-middle">
+                      <td className="py-2 px-4 align-top pt-3">
                         <div className="flex flex-col gap-1 items-start">
                           {/* Print/view icon button */}
                           <button
