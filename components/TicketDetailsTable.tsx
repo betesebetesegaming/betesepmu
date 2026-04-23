@@ -79,8 +79,8 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
 
     if (ticketRaces.length === 0) return ticket.status;
 
-    const hasRaceStarted = ticketRaces.some(r => now >= r.startDate);
-    if (!hasRaceStarted) return 'Active';
+    const allRacesEnded = ticketRaces.every(r => now >= r.endDate);
+    if (!allRacesEnded) return 'Active';
 
     const anyWin = ticket.winningsBreakdown?.some(b => b.status === 'Win') || (ticket.winnings || 0) > 0;
     if (anyWin) return 'Winning';
