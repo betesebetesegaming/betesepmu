@@ -46,6 +46,20 @@ export const checkBackendConnection = async () => {
     } catch (e) { return false; }
 };
 
+const isMissingRaceMetadataColumnError = (error: any): boolean => {
+    if (!error) return false;
+    const code = String(error.code || '');
+    const message = String(error.message || '').toLowerCase();
+    const details = String(error.details || '').toLowerCase();
+    const hint = String(error.hint || '').toLowerCase();
+    const combined = `${message} ${details} ${hint}`;
+
+    const mentionsColumn = combined.includes('race_code') || combined.includes('venue');
+    const mentionsSchemaCache = combined.includes('schema cache');
+
+    return code === 'PGRST204' || (mentionsColumn && mentionsSchemaCache) || mentionsColumn;
+};
+
 /**
  * RACE MANAGEMENT OPERATIONS
  */
@@ -67,8 +81,7 @@ export const dbSaveRace = async (race: Race) => {
     const { error } = await supabase.from('races').insert(payloadWithMetadata);
     if (!error) return;
 
-    const message = (error as any)?.message || '';
-    const missingMetadataColumn = message.includes("'race_code'") || message.includes("'venue'");
+    const missingMetadataColumn = isMissingRaceMetadataColumnError(error);
     if (!missingMetadataColumn) throw error;
 
     const { error: fallbackError } = await supabase.from('races').insert({
@@ -98,8 +111,7 @@ export const dbUpdateRace = async (race: Race) => {
     const { error } = await supabase.from('races').update(payloadWithMetadata).eq('id', race.id);
     if (!error) return;
 
-    const message = (error as any)?.message || '';
-    const missingMetadataColumn = message.includes("'race_code'") || message.includes("'venue'");
+    const missingMetadataColumn = isMissingRaceMetadataColumnError(error);
     if (!missingMetadataColumn) throw error;
 
     const { error: fallbackError } = await supabase.from('races').update({
