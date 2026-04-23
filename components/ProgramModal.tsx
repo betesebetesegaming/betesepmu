@@ -27,7 +27,7 @@ const BeteseAd: React.FC = () => (
 );
 
 
-const ActualProgram = React.forwardRef<HTMLDivElement, { imageSrc: string | null, mediaType: 'image' | 'video', zoom: number, position: { x: number, y: number } }>(({ imageSrc, mediaType, zoom, position }, ref) => {
+const ActualProgram = React.forwardRef<HTMLDivElement, { imageSrc: string | null, mediaType: 'image' | 'video', zoom: number, position: { x: number, y: number }, sharpMode: boolean }>(({ imageSrc, mediaType, zoom, position, sharpMode }, ref) => {
     const style = {
         transform: `scale(${zoom}) translate(${position.x}px, ${position.y}px)`,
         transition: 'transform 0.2s ease-out',
@@ -40,7 +40,12 @@ const ActualProgram = React.forwardRef<HTMLDivElement, { imageSrc: string | null
                 {mediaType === 'video' ? (
                     <video src={imageSrc} className="max-w-full max-h-full h-auto object-contain" controls playsInline />
                 ) : (
-                    <img src={imageSrc} alt="Daily Program" className="max-w-full max-h-full h-auto object-contain" />
+                    <img
+                        src={imageSrc}
+                        alt="Daily Program"
+                        className={`max-w-full max-h-full h-auto object-contain ${sharpMode ? 'contrast-110 saturate-105' : ''}`}
+                        style={sharpMode ? { imageRendering: '-webkit-optimize-contrast' } : undefined}
+                    />
                 )}
             </div>
         )
@@ -191,6 +196,7 @@ export const ProgramModal: React.FC<ProgramModalProps> = ({ isOpen, onClose, pro
     const QUICK_MAGNIFY_ZOOM = 2.5;
     const [activeIndex, setActiveIndex] = useState(0);
     const [isFullscreen, setIsFullscreen] = useState(false);
+    const [sharpMode, setSharpMode] = useState(true);
 
     // Zoom and Pan state
     const [zoom, setZoom] = useState(1);
@@ -429,7 +435,7 @@ export const ProgramModal: React.FC<ProgramModalProps> = ({ isOpen, onClose, pro
                     onTouchMove={handleTouchMove}
                     onTouchEnd={handleTouchEnd}
                 >
-                    <ActualProgram ref={programRef} imageSrc={currentImage?.url ?? null} mediaType={currentImage?.mediaType || 'image'} zoom={zoom} position={position} />
+                    <ActualProgram ref={programRef} imageSrc={currentImage?.url ?? null} mediaType={currentImage?.mediaType || 'image'} zoom={zoom} position={position} sharpMode={sharpMode} />
 
                     {/* Zoom badge */}
                     {zoom !== 1 && (
@@ -494,6 +500,16 @@ export const ProgramModal: React.FC<ProgramModalProps> = ({ isOpen, onClose, pro
 
                     {/* Action buttons */}
                     <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setSharpMode(v => !v)}
+                            disabled={!hasImages || currentImage?.mediaType === 'video'}
+                            className={`flex items-center gap-2 px-4 py-2 font-bold rounded-xl shadow-sm disabled:bg-gray-300 transition-colors text-sm ${sharpMode ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'}`}
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.55-2.26a1 1 0 011.45.9v6.72a1 1 0 01-1.45.9L15 14m-8 4h6a2 2 0 002-2V8a2 2 0 00-2-2H7a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                            {sharpMode ? 'Sharp ON' : 'Sharp OFF'}
+                        </button>
                         <button
                             onClick={handleDownload}
                             disabled={!hasImages}

@@ -9,8 +9,11 @@ interface ProgramManagementPanelProps {
 }
 
 export const ProgramManagementPanel: React.FC<ProgramManagementPanelProps> = ({ programImages, onUpload, onDelete }) => {
+    const MIN_IMAGE_WIDTH = 1600;
+    const MIN_IMAGE_HEIGHT = 2000;
     const [preview, setPreview] = useState<string | null>(null);
     const [file, setFile] = useState<File | null>(null);
+    const [qualityWarning, setQualityWarning] = useState<string | null>(null);
     const [uploadType, setUploadType] = useState<'program' | 'advertisement'>('program');
     const [isUploading, setIsUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -18,7 +21,20 @@ export const ProgramManagementPanel: React.FC<ProgramManagementPanelProps> = ({ 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const selectedFile = event.target.files?.[0];
         if (selectedFile) {
+            setQualityWarning(null);
             setFile(selectedFile);
+            if (selectedFile.type.startsWith('image/')) {
+                const tempUrl = URL.createObjectURL(selectedFile);
+                const img = new Image();
+                img.onload = () => {
+                    if (img.naturalWidth < MIN_IMAGE_WIDTH || img.naturalHeight < MIN_IMAGE_HEIGHT) {
+                        setQualityWarning(`Low resolution (${img.naturalWidth}x${img.naturalHeight}). For sharp reading, use at least ${MIN_IMAGE_WIDTH}x${MIN_IMAGE_HEIGHT}.`);
+                    }
+                    URL.revokeObjectURL(tempUrl);
+                };
+                img.onerror = () => URL.revokeObjectURL(tempUrl);
+                img.src = tempUrl;
+            }
             const reader = new FileReader();
             reader.onloadend = () => {
                 setPreview(reader.result as string);
@@ -35,6 +51,7 @@ export const ProgramManagementPanel: React.FC<ProgramManagementPanelProps> = ({ 
             await onUpload(file, uploadType, mediaType);
             setPreview(null);
             setFile(null);
+            setQualityWarning(null);
             if (fileInputRef.current) fileInputRef.current.value = '';
         } finally {
             setIsUploading(false);
@@ -65,6 +82,7 @@ export const ProgramManagementPanel: React.FC<ProgramManagementPanelProps> = ({ 
                             {preview ? 'Change File' : 'Choose Image / Video'}
                         </button>
                         {file && <p className="text-sm text-center mt-2 text-gray-600">Selected: {file.name}</p>}
+                        {qualityWarning && <p className="text-xs text-amber-700 font-semibold mt-2">{qualityWarning}</p>}
                     </div>
                     <div className="w-full md:w-1/3 p-2 border rounded-lg bg-gray-50 min-h-[100px] flex items-center justify-center">
                         {preview ? (
