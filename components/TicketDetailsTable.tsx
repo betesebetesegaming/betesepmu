@@ -11,7 +11,7 @@ interface TicketDetailsTableProps {
   onCancelTicket?: (ticketId: string) => void;
 }
 
-type DisplayStatus = Ticket['status'] | 'Pending Result';
+type DisplayStatus = Ticket['status'];
 
 const getStatusColor = (status: DisplayStatus) => {
   switch (status) {
@@ -21,7 +21,6 @@ const getStatusColor = (status: DisplayStatus) => {
     case 'Canceled': return 'text-gray-400';
     case 'Active':   return 'text-gray-900';
     case 'Booked':   return 'text-yellow-700';
-    case 'Pending Result': return 'text-amber-700';
     default:         return 'text-gray-700';
   }
 };
@@ -38,7 +37,15 @@ const formatDate = (d: Date): string => {
   const yyyy = d.getFullYear();
   const hh = String(d.getHours()).padStart(2, '0');
   const min = String(d.getMinutes()).padStart(2, '0');
-  return `${mm}/${dd}/${yyyy} at ${hh}:${min}`;
+  const ss = String(d.getSeconds()).padStart(2, '0');
+  return `${mm}/${dd}/${yyyy} at ${hh}:${min}:${ss}`;
+};
+
+const formatBetLabel = (betType: string): string => {
+  return betType
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
 };
 
 type FilterStatus = Ticket['status'] | 'All';
@@ -77,11 +84,7 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
 
     const anyWin = ticket.winningsBreakdown?.some(b => b.status === 'Win') || (ticket.winnings || 0) > 0;
     if (anyWin) return 'Winning';
-
-    const allRacesHaveResult = ticketRaces.every(r => Boolean(r.result));
-    if (allRacesHaveResult) return 'Lost';
-
-    return 'Pending Result';
+    return 'Lost';
   };
 
   const matchesStatusFilter = (ticket: Ticket): boolean => {
@@ -183,20 +186,19 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm border-collapse">
             <thead>
-              <tr className="bg-gray-100 border-b-2 border-gray-300">
-                <th className="text-center py-3 px-4 font-bold text-gray-700 whitespace-nowrap border-r border-gray-200">Ticket number</th>
-                <th className="text-center py-3 px-4 font-bold text-gray-700 whitespace-nowrap border-r border-gray-200">Race number</th>
-                <th className="text-center py-3 px-4 font-bold text-gray-700 whitespace-nowrap border-r border-gray-200">Bet time</th>
-                <th className="text-center py-3 px-4 font-bold text-gray-700 border-r border-gray-200">Bet</th>
-                <th className="text-center py-3 px-4 font-bold text-gray-700 whitespace-nowrap border-r border-gray-200">Result</th>
-                <th className="text-center py-3 px-4 font-bold text-gray-700 whitespace-nowrap border-r border-gray-200">Status</th>
-                <th className="text-center py-3 px-4 font-bold text-gray-700 whitespace-nowrap">Options</th>
+              <tr className="bg-gradient-to-b from-green-100 to-green-50 border-b border-gray-300">
+                <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Ticket number</th>
+                <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Race number</th>
+                <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Bet time</th>
+                <th className="text-center py-1.5 px-3 font-semibold text-gray-700 border-r border-gray-300">Bet</th>
+                <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Result</th>
+                <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Status</th>
+                <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap">Options</th>
               </tr>
             </thead>
             <tbody>
               {filteredTickets.length > 0 ? (
                 filteredTickets.map((ticket, rowIdx) => {
-                  const raceLabels = Array.from(new Set(ticket.selections.map(sel => sel.raceName || sel.raceId)));
                   const hasWinnings = ticket.winnings !== undefined && ticket.winnings > 0;
                   const displayStatus = getDisplayStatus(ticket);
                   const raceInfo = Array.from(new Set(ticket.selections.map(sel => sel.raceId))).map((raceId) => {
@@ -210,7 +212,7 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                   return (
                     <tr
                       key={ticket.id}
-                      className="border-b border-gray-300 bg-white hover:bg-gray-50"
+                      className={`${rowIdx % 2 === 0 ? 'bg-white' : 'bg-gray-100/70'} border-b border-gray-300 hover:bg-gray-50`}
                     >
                       {/* Ticket number — clickable for ledger */}
                       <td className="py-3 px-4 align-top border-r border-gray-200">
@@ -221,7 +223,7 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                         >
                           {ticket.id}
                         </button>
-                        <div className="text-[11px] text-gray-500 mt-1">{ticket.vendorName || 'Unknown Vendor'}</div>
+                        <div className="text-[11px] text-gray-500 mt-1">{ticket.vendorName || '-'}</div>
                       </td>
 
                       {/* Race number */}
@@ -246,10 +248,9 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                           {ticket.selections.map((sel, i) => (
                             <div
                               key={i}
-                              className="text-xs text-gray-800 border border-gray-300 px-3 py-1.5 bg-white leading-snug w-full"
+                              className="text-xs text-gray-700 border border-gray-300 px-2 py-1 bg-white leading-snug w-full"
                             >
-                              <div className="font-semibold">Ticket: {ticket.id}</div>
-                              <div>{sel.betType} - Pattern: {formatBetNumbers(sel)} - {sel.multiplier} ticket(s) {(sel.cost * sel.multiplier).toFixed(0)} GMD</div>
+                              {formatBetLabel(sel.betType)} - {formatBetNumbers(sel)} - {sel.multiplier} ticket(s) {(sel.cost * sel.multiplier).toFixed(0)} GMD
                             </div>
                           ))}
                         </div>
@@ -281,18 +282,6 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                               <path fillRule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v5a2 2 0 002 2h1v1a1 1 0 001 1h8a1 1 0 001-1v-1h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a1 1 0 00-1-1H6a1 1 0 00-1 1zm2 0h6v3H7V4zm-1 9H5V9h10v4h-1v-1a1 1 0 00-1-1H7a1 1 0 00-1 1v1zm2 2v-2h4v2H8z" clipRule="evenodd" />
                             </svg>
                           </button>
-
-                          {onCancelTicket && (ticket.status === 'Active' || ticket.status === 'Booked') && (
-                            <button
-                              onClick={() => onCancelTicket(ticket.id)}
-                              title="Cancel ticket"
-                              className="p-1 rounded border border-red-400 bg-red-50 hover:bg-red-100 text-red-600 transition-colors"
-                            >
-                              <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                              </svg>
-                            </button>
-                          )}
                           </div>
 
                           {ticket.status === 'Canceled' && (
