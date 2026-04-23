@@ -865,7 +865,20 @@ const normalizeProgramMediaType = (rawMediaType: unknown): ProgramImage['mediaTy
 
 export const dbFetchProgramImages = async (): Promise<ProgramImage[]> => {
     if (!supabase) return [];
-    const { data, error } = await supabase.from('program_images').select('*').order('created_at', { ascending: false });
+    let data: any[] | null = null;
+    let error: any = null;
+
+    const orderedRes = await supabase.from('program_images').select('*').order('created_at', { ascending: false });
+    data = orderedRes.data as any[] | null;
+    error = orderedRes.error;
+
+    // Backward compatibility: some older schemas do not have created_at.
+    if (error && String(error.message || '').toLowerCase().includes('created_at')) {
+        const fallbackRes = await supabase.from('program_images').select('*');
+        data = fallbackRes.data as any[] | null;
+        error = fallbackRes.error;
+    }
+
     if (error) return [];
     return (data || []).map((row: any) => ({
         id: row.id,
