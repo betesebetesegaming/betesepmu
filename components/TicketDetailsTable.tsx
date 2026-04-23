@@ -7,21 +7,36 @@ import { TicketCombinationLedger } from './TicketCombinationLedger';
 interface TicketDetailsTableProps {
   title: string;
   tickets: Ticket[];
-  races: Race[]; // Added races for filtering
+  races: Race[];
   onCancelTicket?: (ticketId: string) => void;
 }
 
 const getStatusColor = (status: Ticket['status']) => {
-    switch (status) {
-        case 'Winning': return 'text-blue-600';
-        case 'Paid': return 'text-purple-600';
-        case 'Lost': return 'text-red-600';
-        case 'Canceled': return 'text-gray-500';
-        case 'Active': return 'text-green-600';
-        case 'Booked': return 'text-yellow-800';
-        default: return 'text-black';
-    }
-}
+  switch (status) {
+    case 'Winning':  return 'text-blue-600';
+    case 'Paid':     return 'text-purple-600';
+    case 'Lost':     return 'text-red-600';
+    case 'Canceled': return 'text-gray-400';
+    case 'Active':   return 'text-green-700';
+    case 'Booked':   return 'text-yellow-700';
+    default:         return 'text-gray-700';
+  }
+};
+
+const formatBetNumbers = (sel: Ticket['selections'][number]): string => {
+  if (sel.pattern && sel.pattern.length > 0) return sel.pattern.join(' ');
+  const prefix = sel.xCount > 0 ? Array(sel.xCount).fill('X').join(' ') + ' ' : '';
+  return prefix + sel.numbers.join(' ');
+};
+
+const formatDate = (d: Date): string => {
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  const hh = String(d.getHours()).padStart(2, '0');
+  const min = String(d.getMinutes()).padStart(2, '0');
+  return `${mm}/${dd}/${yyyy} at ${hh}:${min}`;
+};
 
 type FilterStatus = Ticket['status'] | 'All';
 
@@ -33,162 +48,223 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
   const [ticketToView, setTicketToView] = useState<Ticket | null>(null);
   const [ledgerTicket, setLedgerTicket] = useState<Ticket | null>(null);
 
-  const agentOptions = useMemo(() => {
-    return Array.from(new Set(tickets.map(t => t.vendorName).filter(Boolean))).sort((a, b) => a.localeCompare(b));
-  }, [tickets]);
+  const agentOptions = useMemo(() =>
+    Array.from(new Set(tickets.map(t => t.vendorName).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
+  [tickets]);
 
   const filteredTickets = useMemo(() => {
-    let sortedTickets = [...tickets].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+    let result = [...tickets].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
 
-    if (searchTerm.trim() !== '') {
+    if (searchTerm.trim()) {
       const term = searchTerm.trim().toLowerCase();
-      sortedTickets = sortedTickets.filter(t => {
-        const combinationText = t.selections
-          .map(sel => [sel.betType, sel.raceName, sel.pattern?.join('-') || sel.numbers.join('-'), sel.numbers.join(','), String(sel.xCount || 0)].join(' '))
-          .join(' ')
-          .toLowerCase();
-        return t.id.toLowerCase().includes(term) || combinationText.includes(term);
+      result = result.filter(t =>
+        t.id.toLowerCase().includes(term) ||
+        t.selections.some(sel =>
+          sel.betType.toLowerCase().includes(term) ||
+          sel.raceName.toLowerCase().includes(term) ||
+          sel.numbers.join(' ').includes(term)
+        )
+      );
+    }
+    if (filterStatus !== 'All') result = result.filter(t => t.status === filterStatus);
+    if (filterAgent !== 'All') result = result.filter(t => (t.vendorName || '').toLowerCase() === filterAgent.toLowerCase());
+    if (filterDate) {
+      result = result.filter(t => {
+        const yyyy = t.timestamp.getFullYear();
+        const mm = String(t.timestamp.getMonth() + 1).padStart(2, '0');
+        const dd = String(t.timestamp.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}` === filterDate;
       });
     }
-
-    if (filterStatus !== 'All') {
-        sortedTickets = sortedTickets.filter(t => t.status === filterStatus);
-    }
-
-    if (filterAgent !== 'All') {
-        sortedTickets = sortedTickets.filter(t => (t.vendorName || '').toLowerCase() === filterAgent.toLowerCase());
-    }
-
-    if (filterDate) {
-        sortedTickets = sortedTickets.filter(t => {
-            const yyyy = t.timestamp.getFullYear();
-            const mm = String(t.timestamp.getMonth() + 1).padStart(2, '0');
-            const dd = String(t.timestamp.getDate()).padStart(2, '0');
-            return `${yyyy}-${mm}-${dd}` === filterDate;
-        });
-    }
-
-    return sortedTickets;
+    return result;
   }, [tickets, filterStatus, filterAgent, filterDate, searchTerm]);
 
+  // Default today's date display for the date input placeholder
+  const todayFormatted = (() => {
+    const now = new Date();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    return `${mm}/${dd}/${now.getFullYear()}`;
+  })();
 
   return (
     <>
-    {ticketToView && <TicketModal ticket={ticketToView} onClose={() => setTicketToView(null)} showPrintButton={true} races={races} />}
-    {ledgerTicket && <TicketCombinationLedger ticket={ledgerTicket} onClose={() => setLedgerTicket(null)} />}
-    <div className="bg-white p-6 rounded-lg shadow-lg">
-      <h2 className="text-3xl font-black text-betese-dark mb-4 uppercase">TICKET</h2>
-      
-      <div className="mb-4 text-sm font-semibold text-gray-700">Tickets list({filteredTickets.length})</div>
+      {ticketToView && <TicketModal ticket={ticketToView} onClose={() => setTicketToView(null)} showPrintButton={true} races={races} />}
+      {ledgerTicket && <TicketCombinationLedger ticket={ledgerTicket} onClose={() => setLedgerTicket(null)} />}
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4 p-3 border rounded-lg bg-green-50">
-        <select value={filterAgent} onChange={e => setFilterAgent(e.target.value)} className="p-2 border rounded bg-white text-sm font-semibold">
-          <option value="All">Filter by agent</option>
-          {agentOptions.map(agent => <option key={agent} value={agent}>{agent}</option>)}
-        </select>
+      <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+        {/* Header bar */}
+        <div className="bg-betese-green px-5 py-3 flex flex-wrap items-center gap-3">
+          <h2 className="text-xl font-black text-white whitespace-nowrap mr-2">
+            Tickets list({filteredTickets.length})
+          </h2>
 
-        <input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)} className="p-2 border rounded bg-white text-sm" />
+          {/* Filter by agent */}
+          <select
+            value={filterAgent}
+            onChange={e => setFilterAgent(e.target.value)}
+            className="flex-1 min-w-[140px] px-3 py-1.5 rounded-full border-2 border-white/60 bg-white/90 text-sm font-semibold text-gray-800 focus:outline-none focus:border-white"
+          >
+            <option value="All">Filter by agent</option>
+            {agentOptions.map(a => <option key={a} value={a}>{a}</option>)}
+          </select>
 
-        <input
-          type="text"
-          placeholder="Ticket number"
-          value={searchTerm}
-          onChange={e => setSearchTerm(e.target.value)}
-          className="p-2 border rounded bg-white text-sm"
-        />
+          {/* Date filter */}
+          <input
+            type="date"
+            value={filterDate}
+            onChange={e => setFilterDate(e.target.value)}
+            placeholder={todayFormatted}
+            className="flex-1 min-w-[140px] px-3 py-1.5 rounded-full border-2 border-white/60 bg-white/90 text-sm text-gray-800 focus:outline-none focus:border-white"
+          />
 
-        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as FilterStatus)} className="p-2 border rounded bg-white text-sm font-semibold">
-          <option value="All">Filter by status</option>
-          <option value="Active">Active</option>
-          <option value="Winning">Winning</option>
-          <option value="Paid">Paid</option>
-          <option value="Lost">Lost</option>
-          <option value="Canceled">Canceled</option>
-          <option value="Booked">Booked</option>
-        </select>
-      </div>
+          {/* Ticket number search */}
+          <input
+            type="text"
+            placeholder="Ticket number"
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            className="flex-1 min-w-[130px] px-3 py-1.5 rounded-full border-2 border-white/60 bg-white/90 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:border-white"
+          />
 
-      <div className="overflow-x-auto">
-        <table className="min-w-full bg-white text-sm">
-          <thead className="bg-gray-200">
-            <tr>
-              <th className="text-left py-2 px-3">Ticket Number</th>
-              <th className="text-left py-2 px-3">Race Number</th>
-              <th className="text-left py-2 px-3">Bet Time</th>
-              <th className="text-left py-2 px-3">Bet-Combinations</th>
-              <th className="text-left py-2 px-3">Result</th>
-              <th className="text-left py-2 px-3">Status</th>
-              <th className="text-left py-2 px-3">Cancel Options</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredTickets.length > 0 ? (
-              filteredTickets.map(ticket => (
-                <tr key={ticket.id} className="border-b hover:bg-gray-50">
-                  <td className="py-2 px-3 text-xs font-mono">
-                    <button
-                      onClick={() => setLedgerTicket(ticket)}
-                      className="text-blue-700 font-mono font-semibold hover:underline hover:text-blue-900 text-left"
-                      title="View combination ledger"
+          {/* Status filter */}
+          <select
+            value={filterStatus}
+            onChange={e => setFilterStatus(e.target.value as FilterStatus)}
+            className="flex-1 min-w-[140px] px-3 py-1.5 rounded-full border-2 border-white/60 bg-white/90 text-sm font-semibold text-gray-800 focus:outline-none focus:border-white"
+          >
+            <option value="All">Filter by status</option>
+            <option value="Active">Active</option>
+            <option value="Winning">Winning</option>
+            <option value="Paid">Paid</option>
+            <option value="Lost">Lost</option>
+            <option value="Canceled">Canceled</option>
+            <option value="Booked">Booked</option>
+          </select>
+        </div>
+
+        {/* Table */}
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm border-collapse">
+            <thead>
+              <tr className="bg-gray-100 border-b border-gray-300">
+                <th className="text-left py-2.5 px-4 font-bold text-gray-600 whitespace-nowrap">Ticket number</th>
+                <th className="text-left py-2.5 px-4 font-bold text-gray-600 whitespace-nowrap">Race number</th>
+                <th className="text-left py-2.5 px-4 font-bold text-gray-600 whitespace-nowrap">Bet time</th>
+                <th className="text-left py-2.5 px-4 font-bold text-gray-600">Bet</th>
+                <th className="text-left py-2.5 px-4 font-bold text-gray-600">Result</th>
+                <th className="text-left py-2.5 px-4 font-bold text-gray-600">Status</th>
+                <th className="text-left py-2.5 px-4 font-bold text-gray-600">Options</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredTickets.length > 0 ? (
+                filteredTickets.map((ticket, rowIdx) => {
+                  const raceLabels = Array.from(new Set(ticket.selections.map(sel => sel.raceName || sel.raceId)));
+                  const hasWinnings = ticket.winnings !== undefined && ticket.winnings > 0;
+
+                  return (
+                    <tr
+                      key={ticket.id}
+                      className={`border-b border-gray-200 align-top ${rowIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'} hover:bg-blue-50/30`}
                     >
-                      {ticket.id}
-                    </button>
-                  </td>
-                  <td className="py-2 px-3 text-xs">
-                    <div className="space-y-1">
-                      {Array.from(new Set(ticket.selections.map(sel => sel.raceName || sel.raceId))).map((raceLabel, idx) => (
-                        <div key={idx} className="font-semibold">{raceLabel}</div>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="py-2 px-3 whitespace-nowrap">{ticket.timestamp.toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}</td>
-                  <td className="py-2 px-3">
-                    <details>
-                      <summary className="cursor-pointer text-xs font-semibold text-blue-700">Show selections ({ticket.selections.length})</summary>
-                      <div className="mt-2 space-y-1">
-                        {ticket.selections.map((sel, i) => (
-                          <div key={i} className="text-xs border rounded px-2 py-1 bg-gray-50">
-                            <div className="font-semibold">{sel.betType}</div>
-                            <div className="font-mono">{sel.pattern && sel.pattern.length > 0 ? sel.pattern.join('-') : `${sel.xCount > 0 ? 'X-'.repeat(sel.xCount) : ''}${sel.numbers.join('-')}`}</div>
-                            <div className="text-gray-600">Stake: {(sel.cost * sel.multiplier).toFixed(2)} GMD</div>
-                          </div>
-                        ))}
-                      </div>
-                    </details>
-                  </td>
-                  <td className="py-2 px-3 font-semibold text-blue-700">{ticket.winnings !== undefined && ticket.winnings > 0 ? `${ticket.winnings.toFixed(2)} GMD` : '-'}</td>
-                  <td className={`py-2 px-3 font-bold ${getStatusColor(ticket.status)}`}>{ticket.status}</td>
-                   <td className="py-2 px-3 text-xs">
-                    <div className="flex flex-col gap-1 items-start">
-                        <button onClick={() => setTicketToView(ticket)} className="px-2 py-1 bg-blue-500 text-white font-semibold rounded hover:bg-blue-600 text-xs">
-                            View
+                      {/* Ticket number — clickable for ledger */}
+                      <td className="py-3 px-4 align-middle">
+                        <button
+                          onClick={() => setLedgerTicket(ticket)}
+                          className="text-xs font-mono font-semibold text-gray-800 hover:text-blue-700 hover:underline text-left leading-snug"
+                          title="View combination ledger"
+                        >
+                          {ticket.id}
                         </button>
-                        {onCancelTicket && (ticket.status === 'Active' || ticket.status === 'Booked') && (
-                          <button onClick={() => onCancelTicket(ticket.id)} className="px-2 py-1 bg-red-600 text-white font-semibold rounded hover:bg-red-700 text-xs">
-                            Cancel
+                      </td>
+
+                      {/* Race number */}
+                      <td className="py-3 px-4 align-middle text-xs font-semibold text-gray-700 whitespace-nowrap">
+                        {raceLabels.map((label, i) => <div key={i}>{label}</div>)}
+                      </td>
+
+                      {/* Bet time */}
+                      <td className="py-3 px-4 align-middle text-xs text-gray-600 whitespace-nowrap">
+                        {formatDate(ticket.timestamp)}
+                      </td>
+
+                      {/* Bet combinations — always shown inline, one per row */}
+                      <td className="py-2 px-4 align-middle">
+                        <div className="space-y-0.5">
+                          {ticket.selections.map((sel, i) => (
+                            <div
+                              key={i}
+                              className="text-xs text-gray-800 border border-gray-200 rounded px-2 py-1 bg-white leading-snug"
+                            >
+                              {sel.betType} - {formatBetNumbers(sel)} - {sel.multiplier} ticket(s) {(sel.cost * sel.multiplier).toFixed(0)} GMD
+                            </div>
+                          ))}
+                        </div>
+                      </td>
+
+                      {/* Result */}
+                      <td className="py-3 px-4 align-middle text-xs font-semibold whitespace-nowrap">
+                        {hasWinnings ? (
+                          <span className="text-blue-700">{ticket.winnings!.toFixed(2)} GMD</span>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </td>
+
+                      {/* Status */}
+                      <td className={`py-3 px-4 align-middle text-xs font-bold whitespace-nowrap ${getStatusColor(ticket.status)}`}>
+                        {ticket.status}
+                      </td>
+
+                      {/* Options */}
+                      <td className="py-3 px-4 align-middle">
+                        <div className="flex flex-col gap-1 items-start">
+                          {/* Print/view icon button */}
+                          <button
+                            onClick={() => setTicketToView(ticket)}
+                            title="View / Print"
+                            className="p-1.5 rounded border border-gray-300 bg-white hover:bg-gray-100 text-gray-600 hover:text-gray-900 transition-colors"
+                          >
+                            <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                              <path fillRule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v5a2 2 0 002 2h1v1a1 1 0 001 1h8a1 1 0 001-1v-1h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a1 1 0 00-1-1H6a1 1 0 00-1 1zm2 0h6v3H7V4zm-1 9H5V9h10v4h-1v-1a1 1 0 00-1-1H7a1 1 0 00-1 1v1zm2 2v-2h4v2H8z" clipRule="evenodd" />
+                            </svg>
                           </button>
-                        )}
-                        {ticket.status === 'Canceled' && ticket.canceledByName && (
-                          <span>By: {ticket.canceledByName}</span>
-                        )}
-                         {ticket.status === 'Paid' && ticket.paidByName && (
-                          <span>By: {ticket.paidByName}</span>
-                        )}
-                    </div>
+
+                          {onCancelTicket && (ticket.status === 'Active' || ticket.status === 'Booked') && (
+                            <button
+                              onClick={() => onCancelTicket(ticket.id)}
+                              title="Cancel ticket"
+                              className="p-1.5 rounded border border-red-300 bg-white hover:bg-red-50 text-red-600 transition-colors"
+                            >
+                              <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                              </svg>
+                            </button>
+                          )}
+
+                          {ticket.status === 'Canceled' && ticket.canceledByName && (
+                            <span className="text-[10px] text-gray-400">By: {ticket.canceledByName}</span>
+                          )}
+                          {ticket.status === 'Paid' && ticket.paidByName && (
+                            <span className="text-[10px] text-gray-400">By: {ticket.paidByName}</span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan={7} className="py-8 px-4 text-center text-gray-400 text-sm">
+                    No tickets match the current filter.
                   </td>
                 </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={7} className="py-4 px-3 text-center text-gray-500">
-                  No tickets match the current filter.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
     </>
   );
 };
