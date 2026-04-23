@@ -852,15 +852,26 @@ export const dbMarkThreadAsRead = async (threadId: string, userId: string) => {
  * PROGRAM MEDIA
  */
 
+const normalizeProgramType = (rawType: unknown): ProgramImage['type'] => {
+    const value = String(rawType || '').trim().toLowerCase();
+    if (value === 'program' || value.includes('prog')) return 'program';
+    return 'advertisement';
+};
+
+const normalizeProgramMediaType = (rawMediaType: unknown): ProgramImage['mediaType'] => {
+    const value = String(rawMediaType || '').trim().toLowerCase();
+    return value === 'video' ? 'video' : 'image';
+};
+
 export const dbFetchProgramImages = async (): Promise<ProgramImage[]> => {
     if (!supabase) return [];
     const { data, error } = await supabase.from('program_images').select('*').order('created_at', { ascending: false });
     if (error) return [];
     return (data || []).map((row: any) => ({
         id: row.id,
-        type: row.type,
+        type: normalizeProgramType(row.type),
         url: row.url,
-        mediaType: row.media_type || 'image'
+        mediaType: normalizeProgramMediaType(row.media_type)
     }));
 };
 
@@ -868,9 +879,9 @@ export const dbAddProgramImage = async (image: ProgramImage) => {
     if (!supabase) throw new Error("Database not connected");
     const { error } = await supabase.from('program_images').insert({
         id: image.id,
-        type: image.type,
+        type: normalizeProgramType(image.type),
         url: image.url,
-        media_type: image.mediaType
+        media_type: normalizeProgramMediaType(image.mediaType)
     });
     if (error) throw error;
 };

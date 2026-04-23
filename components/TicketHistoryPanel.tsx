@@ -40,6 +40,9 @@ const TicketItem: React.FC<{ ticket: Ticket; isCancellable: boolean; onCancel: (
                     {ticket.winnings !== undefined && ticket.winnings > 0 && (
                         <p className="text-sm font-bold text-blue-600">Won: {ticket.winnings.toFixed(2)} GMD</p>
                     )}
+                    {effectiveStatus === 'Paid' && (ticket.paidByName || ticket.paidById) && (
+                        <p className="text-xs font-bold text-purple-700">Paid by: {ticket.paidByName || ticket.paidById}</p>
+                    )}
                 </div>
                 <div className="flex flex-col items-end gap-2">
                     {isCancellable && (
@@ -108,6 +111,14 @@ const TicketItem: React.FC<{ ticket: Ticket; isCancellable: boolean; onCancel: (
                                     </div>
                                 ))}
                             </div>
+                        </div>
+                     )}
+                     {effectiveStatus === 'Paid' && (ticket.paidByName || ticket.paidById) && (
+                        <div className="mt-2 pt-2 border-t border-dashed text-xs text-purple-800">
+                            <p><span className="font-bold">Payment by:</span> {ticket.paidByName || ticket.paidById}</p>
+                            {ticket.paidAt && (
+                                <p><span className="font-bold">Paid at:</span> {ticket.paidAt.toLocaleString()}</p>
+                            )}
                         </div>
                      )}
                 </div>

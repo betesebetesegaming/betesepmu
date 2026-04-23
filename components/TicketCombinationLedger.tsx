@@ -51,6 +51,7 @@ interface LedgerRow {
   stake: number;
   status: Ticket['status'];
   payout: number;
+  paidBy: string;
 }
 
 export const TicketCombinationLedger: React.FC<TicketCombinationLedgerProps> = ({ tickets, onClose }) => {
@@ -74,6 +75,7 @@ export const TicketCombinationLedger: React.FC<TicketCombinationLedgerProps> = (
           stake: sel.cost * sel.multiplier,
           status: ticket.status,
           payout: breakdown?.totalPayout || 0,
+          paidBy: ticket.paidByName || ticket.paidById || '',
         };
       })
     );
@@ -222,7 +224,12 @@ export const TicketCombinationLedger: React.FC<TicketCombinationLedgerProps> = (
                     </td>
                     <td className="py-3 px-3 text-right font-bold text-gray-800 text-xs">{stake} GMD</td>
                     <td className={`py-3 px-3 text-xs font-semibold ${getStatusColor(row.status)}`}>{row.status}</td>
-                    <td className="py-3 px-3 text-right text-xs font-semibold text-gray-700">{row.payout.toFixed(2)} GMD</td>
+                    <td className="py-3 px-3 text-right text-xs font-semibold text-gray-700">
+                      <div>{row.payout.toFixed(2)} GMD</div>
+                      {row.status === 'Paid' && row.paidBy && (
+                        <div className="text-[10px] text-purple-700 font-bold">by {row.paidBy}</div>
+                      )}
+                    </td>
                   </tr>
                 );
               })}

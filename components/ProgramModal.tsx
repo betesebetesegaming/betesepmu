@@ -27,7 +27,7 @@ const BeteseAd: React.FC = () => (
 );
 
 
-const ActualProgram = React.forwardRef<HTMLDivElement, { imageSrc: string | null, zoom: number, position: { x: number, y: number } }>(({ imageSrc, zoom, position }, ref) => {
+const ActualProgram = React.forwardRef<HTMLDivElement, { imageSrc: string | null, mediaType: 'image' | 'video', zoom: number, position: { x: number, y: number } }>(({ imageSrc, mediaType, zoom, position }, ref) => {
     const style = {
         transform: `scale(${zoom}) translate(${position.x}px, ${position.y}px)`,
         transition: 'transform 0.2s ease-out',
@@ -37,7 +37,11 @@ const ActualProgram = React.forwardRef<HTMLDivElement, { imageSrc: string | null
     if (imageSrc) {
         return (
              <div ref={ref} className="bg-white p-1 flex justify-center items-center h-full w-full" style={style}>
-                <img src={imageSrc} alt="Daily Program" className="max-w-full max-h-full h-auto object-contain" />
+                {mediaType === 'video' ? (
+                    <video src={imageSrc} className="max-w-full max-h-full h-auto object-contain" controls playsInline />
+                ) : (
+                    <img src={imageSrc} alt="Daily Program" className="max-w-full max-h-full h-auto object-contain" />
+                )}
             </div>
         )
     }
@@ -203,8 +207,20 @@ export const ProgramModal: React.FC<ProgramModalProps> = ({ isOpen, onClose, pro
         setPosition({ x: 0, y: 0 });
     }, [isOpen, activeIndex]);
 
-    const handleNext = useCallback(() => setActiveIndex((prev) => (prev + 1) % programImages.length), [programImages.length]);
-    const handlePrev = useCallback(() => setActiveIndex((prev) => (prev - 1 + programImages.length) % programImages.length), [programImages.length]);
+    useEffect(() => {
+        if (activeIndex > 0 && activeIndex >= programImages.length) {
+            setActiveIndex(0);
+        }
+    }, [activeIndex, programImages.length]);
+
+    const handleNext = useCallback(() => {
+        if (programImages.length <= 1) return;
+        setActiveIndex((prev) => (prev + 1) % programImages.length);
+    }, [programImages.length]);
+    const handlePrev = useCallback(() => {
+        if (programImages.length <= 1) return;
+        setActiveIndex((prev) => (prev - 1 + programImages.length) % programImages.length);
+    }, [programImages.length]);
 
     const handleZoomIn  = () => setZoom(prev => Math.min(parseFloat((prev + 0.25).toFixed(2)), 4));
     const handleZoomOut = () => { setZoom(prev => { const next = Math.max(parseFloat((prev - 0.25).toFixed(2)), 1); if (next === 1) setPosition({ x: 0, y: 0 }); return next; }); };
@@ -293,7 +309,8 @@ export const ProgramModal: React.FC<ProgramModalProps> = ({ isOpen, onClose, pro
                 const blob = await response.blob();
                 const url = URL.createObjectURL(blob);
                 const link = document.createElement('a');
-                link.download = `betese-${currentImage?.type || 'program'}-${activeIndex + 1}.png`;
+                const fileExt = currentImage?.mediaType === 'video' ? 'mp4' : 'png';
+                link.download = `betese-${currentImage?.type || 'program'}-${activeIndex + 1}.${fileExt}`;
                 link.href = url;
                 link.click();
                 URL.revokeObjectURL(url);
@@ -333,7 +350,8 @@ export const ProgramModal: React.FC<ProgramModalProps> = ({ isOpen, onClose, pro
                 try {
                     const response = await fetch(imageUrl);
                     const blob = await response.blob();
-                    const file = new File([blob], `betese-${currentImage?.type || 'program'}.png`, { type: blob.type || 'image/png' });
+                    const fileExt = currentImage?.mediaType === 'video' ? 'mp4' : 'png';
+                    const file = new File([blob], `betese-${currentImage?.type || 'program'}.${fileExt}`, { type: blob.type || 'application/octet-stream' });
                     if (navigator.canShare && navigator.canShare({ files: [file] })) {
                         await navigator.share({ title: 'Betese PMU', text: `Today's racing program from Betese PMU!`, files: [file] });
                         return;
@@ -401,12 +419,12 @@ export const ProgramModal: React.FC<ProgramModalProps> = ({ isOpen, onClose, pro
 
                 {/* ── Hint bar ── */}
                 <div className="bg-blue-50 border-b border-blue-100 px-4 py-1 flex items-center justify-center gap-3 text-blue-600 text-[11px] font-semibold flex-shrink-0 flex-wrap">
-                    <span>🔍 Tap image to zoom</span>
+                    <span>Tap image to zoom</span>
                     <span>·</span>
-                    <span>✋ Drag to pan when zoomed</span>
-                    {programImages.length > 1 && <><span>·</span><span>👈 Swipe or arrows to navigate</span></>}
+                    <span>Drag to pan when zoomed</span>
+                    {programImages.length > 1 && <><span>·</span><span>Swipe or arrows to navigate</span></>}
                     <span>·</span>
-                    <span>⌨️ ← → + - 0 keys work too</span>
+                    <span>Use keyboard: left, right, +, -, 0</span>
                 </div>
 
                 {/* ── Main image area ── */}
@@ -422,7 +440,7 @@ export const ProgramModal: React.FC<ProgramModalProps> = ({ isOpen, onClose, pro
                     onTouchMove={handleTouchMove}
                     onTouchEnd={handleTouchEnd}
                 >
-                    <ActualProgram ref={programRef} imageSrc={currentImage?.url ?? null} zoom={zoom} position={position} />
+                    <ActualProgram ref={programRef} imageSrc={currentImage?.url ?? null} mediaType={currentImage?.mediaType || 'image'} zoom={zoom} position={position} />
 
                     {/* Zoom badge */}
                     {zoom !== 1 && (
@@ -454,7 +472,11 @@ export const ProgramModal: React.FC<ProgramModalProps> = ({ isOpen, onClose, pro
                                     onClick={() => setActiveIndex(index)}
                                     className={`relative w-16 h-12 sm:w-20 sm:h-14 flex-shrink-0 rounded-md overflow-hidden border-2 transition-all ${index === activeIndex ? 'border-yellow-400 scale-110 shadow-lg' : 'border-transparent opacity-60 hover:opacity-90'}`}
                                 >
-                                    <img src={image.url} alt={`Page ${index + 1}`} className="w-full h-full object-cover" />
+                                    {image.mediaType === 'video' ? (
+                                        <video src={image.url} className="w-full h-full object-cover" muted playsInline />
+                                    ) : (
+                                        <img src={image.url} alt={`Page ${index + 1}`} className="w-full h-full object-cover" />
+                                    )}
                                     <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[9px] text-center py-0.5 font-bold">{index + 1}</div>
                                 </button>
                             ))}

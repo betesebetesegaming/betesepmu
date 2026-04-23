@@ -130,6 +130,12 @@ export const TicketCheckPanel: React.FC<TicketCheckPanelProps> = ({ allTickets, 
                     <p className={`font-black text-right uppercase ${foundTicket.status === 'Winning' ? 'text-blue-600' : 'text-gray-800'}`}>{foundTicket.status}</p>
                     <p className="text-gray-500 font-bold uppercase text-[10px]">Cost:</p>
                     <p className="font-black text-right">{foundTicket.totalCost.toFixed(2)}</p>
+                    {foundTicket.status === 'Paid' && (foundTicket.paidByName || foundTicket.paidById) && (
+                      <>
+                        <p className="text-gray-500 font-bold uppercase text-[10px]">Paid By:</p>
+                        <p className="font-black text-right text-purple-700">{foundTicket.paidByName || foundTicket.paidById}</p>
+                      </>
+                    )}
                 </div>
 
                 <div className="mt-1 p-2 rounded-lg bg-white border text-xs">
@@ -174,7 +180,9 @@ export const TicketCheckPanel: React.FC<TicketCheckPanelProps> = ({ allTickets, 
                     </button>
                   ) : (
                     <div className="text-center p-2 bg-gray-200 rounded-lg text-xs font-bold text-gray-600 flex items-center justify-center">
-                      {foundTicket.status === 'Paid' ? 'ALREADY PAID' : 'NOT A WINNING TICKET'}
+                      {foundTicket.status === 'Paid'
+                        ? `ALREADY PAID${(foundTicket.paidByName || foundTicket.paidById) ? ` BY ${String(foundTicket.paidByName || foundTicket.paidById).toUpperCase()}` : ''}`
+                        : 'NOT A WINNING TICKET'}
                     </div>
                   )}
                   {onCancelTicket && ['Active', 'Booked'].includes(foundTicket.status) && (

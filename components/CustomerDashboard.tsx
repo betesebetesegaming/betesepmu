@@ -133,6 +133,20 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
       .filter(r => r.result)
       .sort((a, b) => b.endDate.getTime() - a.endDate.getTime())[0] || null;
   }, [races]);
+
+  const programItems = useMemo(() => {
+    return (programImages || []).filter((item) => {
+      const typeValue = String((item as any)?.type || '').trim().toLowerCase();
+      return typeValue === 'program' || typeValue.includes('prog');
+    });
+  }, [programImages]);
+
+  const advertisementItems = useMemo(() => {
+    return (programImages || []).filter((item) => {
+      const typeValue = String((item as any)?.type || '').trim().toLowerCase();
+      return typeValue === 'advertisement' || typeValue.includes('ad');
+    });
+  }, [programImages]);
   
   useEffect(() => {
     if (!selectedRace && availableRaces.length > 0) {
@@ -184,8 +198,8 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   return (
     <div className="space-y-6">
       <WhatsAppButton />
-      {/* Floating program button — always visible while betting */}
-      {activeTab === 'bet' && programImages.filter(i => i.type === 'program').length > 0 && (
+      {/* Floating program button — always visible for online customer */}
+      {programItems.length > 0 && (
         <button
           onClick={() => setIsProgramModalOpen(true)}
           title="View Racing Program"
@@ -205,9 +219,9 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
       )}
       {winningTicketToShow && <WinningTicketModal ticket={winningTicketToShow} onClose={() => onMarkWinningTicketAsSeen(winningTicketToShow.id)} />}
       {rapportModalRace && <RapportModal race={rapportModalRace} onClose={() => setRapportModalRace(null)} showPrintButton={false} />}
-      <ProgramModal isOpen={isProgramModalOpen} onClose={() => setIsProgramModalOpen(false)} programImages={programImages.filter(i => i.type === 'program')} />
+      <ProgramModal isOpen={isProgramModalOpen} onClose={() => setIsProgramModalOpen(false)} programImages={programItems} />
       <RulesModal isOpen={isRulesModalOpen} onClose={() => setIsRulesModalOpen(false)} />
-      {showPromoTV && <PromotionCarousel ads={programImages.filter(i => i.type === 'advertisement')} onClose={() => setShowPromoTV(false)} />}
+      {showPromoTV && <PromotionCarousel ads={advertisementItems} onClose={() => setShowPromoTV(false)} />}
       <PromotionTicker promotions={promotions} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -222,8 +236,7 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
             {activeTab === 'bet' && (
               <div className="bg-white p-6 rounded-lg shadow-lg relative">
                   {(() => {
-                    const programs = programImages.filter(i => i.type === 'program');
-                    if (programs.length === 0) return null;
+                    if (programItems.length === 0) return null;
                     return (
                       <div
                         onClick={() => setIsProgramModalOpen(true)}
@@ -235,7 +248,7 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                             <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
                             <span className="text-white font-black uppercase tracking-wide text-sm">Today's Racing Program</span>
                             <span className="bg-yellow-400 text-blue-900 text-[10px] font-black px-2 py-0.5 rounded-full uppercase animate-pulse">
-                              {programs.length} {programs.length === 1 ? 'Page' : 'Pages'}
+                              {programItems.length} {programItems.length === 1 ? 'Page' : 'Pages'}
                             </span>
                           </div>
                           <span className="text-white text-xs font-bold opacity-80 group-hover:opacity-100 transition-opacity flex items-center gap-1">
@@ -247,17 +260,21 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                         </div>
                         {/* Thumbnail strip */}
                         <div className="bg-gray-900 flex gap-1 p-2 overflow-x-auto">
-                          {programs.slice(0, 4).map((img, idx) => (
+                          {programItems.slice(0, 4).map((img, idx) => (
                             <div key={img.id} className="relative flex-shrink-0 w-24 h-16 rounded overflow-hidden border border-white/20">
-                              <img src={img.url} alt={`Program page ${idx + 1}`} className="w-full h-full object-cover" />
+                              {img.mediaType === 'video' ? (
+                                <video src={img.url} className="w-full h-full object-cover" muted playsInline />
+                              ) : (
+                                <img src={img.url} alt={`Program page ${idx + 1}`} className="w-full h-full object-cover" />
+                              )}
                               <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[9px] text-center py-0.5 font-bold">
                                 Page {idx + 1}
                               </div>
                             </div>
                           ))}
-                          {programs.length > 4 && (
+                          {programItems.length > 4 && (
                             <div className="flex-shrink-0 w-24 h-16 rounded bg-blue-800/60 border border-white/20 flex items-center justify-center text-white font-black text-lg">
-                              +{programs.length - 4}
+                              +{programItems.length - 4}
                             </div>
                           )}
                         </div>

@@ -259,7 +259,14 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                       {/* Result */}
                       <td className="py-3 px-4 align-top text-xs font-semibold whitespace-nowrap border-r border-gray-200">
                         {hasWinnings ? (
-                          <span className="text-blue-700">{ticket.winnings!.toFixed(2)} GMD</span>
+                          <div className="space-y-0.5">
+                            <span className="text-blue-700">{ticket.winnings!.toFixed(2)} GMD</span>
+                            {displayStatus === 'Paid' && (ticket.paidByName || ticket.paidById) && (
+                              <div className="text-[11px] text-purple-700 font-bold">
+                                Paid by {ticket.paidByName || ticket.paidById}
+                              </div>
+                            )}
+                          </div>
                         ) : null}
                       </td>
 
