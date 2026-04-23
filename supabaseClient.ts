@@ -52,7 +52,7 @@ export const checkBackendConnection = async () => {
 
 export const dbSaveRace = async (race: Race) => {
     if (!supabase) throw new Error("Database not connected");
-    const { error } = await supabase.from('races').insert({
+    const payloadWithMetadata = {
         id: race.id,
         race_code: race.raceCode || null,
         name: race.name,
@@ -62,13 +62,30 @@ export const dbSaveRace = async (race: Race) => {
         horse_count: race.horseCount,
         non_runners: race.nonRunners || [],
         jackpot: race.jackpot || 0
+    };
+
+    const { error } = await supabase.from('races').insert(payloadWithMetadata);
+    if (!error) return;
+
+    const message = (error as any)?.message || '';
+    const missingMetadataColumn = message.includes("'race_code'") || message.includes("'venue'");
+    if (!missingMetadataColumn) throw error;
+
+    const { error: fallbackError } = await supabase.from('races').insert({
+        id: race.id,
+        name: race.name,
+        start_date: race.startDate.toISOString(),
+        end_date: race.endDate.toISOString(),
+        horse_count: race.horseCount,
+        non_runners: race.nonRunners || [],
+        jackpot: race.jackpot || 0
     });
-    if (error) throw error;
+    if (fallbackError) throw fallbackError;
 };
 
 export const dbUpdateRace = async (race: Race) => {
     if (!supabase) throw new Error("Database not connected");
-    const { error } = await supabase.from('races').update({
+    const payloadWithMetadata = {
         race_code: race.raceCode || null,
         name: race.name,
         venue: race.venue || null,
@@ -76,8 +93,23 @@ export const dbUpdateRace = async (race: Race) => {
         end_date: race.endDate.toISOString(),
         horse_count: race.horseCount,
         jackpot: race.jackpot || 0
+    };
+
+    const { error } = await supabase.from('races').update(payloadWithMetadata).eq('id', race.id);
+    if (!error) return;
+
+    const message = (error as any)?.message || '';
+    const missingMetadataColumn = message.includes("'race_code'") || message.includes("'venue'");
+    if (!missingMetadataColumn) throw error;
+
+    const { error: fallbackError } = await supabase.from('races').update({
+        name: race.name,
+        start_date: race.startDate.toISOString(),
+        end_date: race.endDate.toISOString(),
+        horse_count: race.horseCount,
+        jackpot: race.jackpot || 0
     }).eq('id', race.id);
-    if (error) throw error;
+    if (fallbackError) throw fallbackError;
 };
 
 export const dbDeleteRace = async (raceId: string) => {
