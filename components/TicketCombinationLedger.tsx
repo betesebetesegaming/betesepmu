@@ -32,6 +32,13 @@ const toDateInput = (date: Date): string => {
   return `${yyyy}-${mm}-${dd}`;
 };
 
+const normalizeDate = (value: Date | string | number | undefined): Date | null => {
+  if (!value) return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
 type LedgerFilterStatus = Ticket['status'] | 'All';
 
 interface LedgerRow {
@@ -56,10 +63,11 @@ export const TicketCombinationLedger: React.FC<TicketCombinationLedgerProps> = (
     return tickets.flatMap(ticket =>
       ticket.selections.map((sel, selectionIndex) => {
         const breakdown = ticket.winningsBreakdown?.find(b => b.selectionIndex === selectionIndex);
+        const safeDate = normalizeDate(ticket.timestamp as unknown as Date | string | number);
         return {
           ticketId: ticket.id,
           vendorName: ticket.vendorName || '-',
-          dateKey: toDateInput(ticket.timestamp),
+          dateKey: safeDate ? toDateInput(safeDate) : '',
           race: sel.raceName || sel.raceId,
           betType: sel.betType,
           combination: formatCombination(sel),
@@ -212,7 +220,9 @@ export const TicketCombinationLedger: React.FC<TicketCombinationLedgerProps> = (
               {filteredRows.length === 0 && (
                 <tr>
                   <td colSpan={7} className="py-5 text-center text-sm text-gray-500">
-                    No rows match current filters. Click "Clear all filters" to view all transactions.
+                    {rows.length === 0
+                      ? 'No ticket transaction data available to display.'
+                      : 'No rows match current filters. Click "Clear all filters" to view all transactions.'}
                   </td>
                 </tr>
               )}
