@@ -11,7 +11,9 @@ interface TicketDetailsTableProps {
   onCancelTicket?: (ticketId: string) => void;
 }
 
-const getStatusColor = (status: Ticket['status']) => {
+type DisplayStatus = Ticket['status'] | 'Pending Result';
+
+const getStatusColor = (status: DisplayStatus) => {
   switch (status) {
     case 'Winning':  return 'text-blue-600';
     case 'Paid':     return 'text-purple-600';
@@ -19,6 +21,7 @@ const getStatusColor = (status: Ticket['status']) => {
     case 'Canceled': return 'text-gray-400';
     case 'Active':   return 'text-gray-900';
     case 'Booked':   return 'text-yellow-700';
+    case 'Pending Result': return 'text-amber-700';
     default:         return 'text-gray-700';
   }
 };
@@ -55,6 +58,41 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
   const [ticketToView, setTicketToView] = useState<Ticket | null>(null);
   const [ledgerTicket, setLedgerTicket] = useState<Ticket | null>(null);
 
+  const raceById = useMemo(() => {
+    return new Map(races.map(r => [r.id, r]));
+  }, [races]);
+
+  const getDisplayStatus = (ticket: Ticket): DisplayStatus => {
+    if (ticket.status !== 'Active') return ticket.status;
+
+    const now = new Date();
+    const ticketRaces = ticket.selections
+      .map(sel => raceById.get(sel.raceId))
+      .filter((r): r is Race => Boolean(r));
+
+    if (ticketRaces.length === 0) return ticket.status;
+
+    const hasRaceStarted = ticketRaces.some(r => now >= r.startDate);
+    if (!hasRaceStarted) return 'Active';
+
+    const anyWin = ticket.winningsBreakdown?.some(b => b.status === 'Win') || (ticket.winnings || 0) > 0;
+    if (anyWin) return 'Winning';
+
+    const allRacesHaveResult = ticketRaces.every(r => Boolean(r.result));
+    if (allRacesHaveResult) return 'Lost';
+
+    return 'Pending Result';
+  };
+
+  const matchesStatusFilter = (ticket: Ticket): boolean => {
+    if (filterStatus === 'All') return true;
+    const displayStatus = getDisplayStatus(ticket);
+    if (filterStatus === 'Active') return displayStatus === 'Active';
+    if (filterStatus === 'Lost') return displayStatus === 'Lost';
+    if (filterStatus === 'Winning') return displayStatus === 'Winning';
+    return displayStatus === filterStatus;
+  };
+
   const agentOptions = useMemo(() =>
     Array.from(new Set(tickets.map(t => t.vendorName).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
   [tickets]);
@@ -73,7 +111,7 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
         )
       );
     }
-    if (filterStatus !== 'All') result = result.filter(t => t.status === filterStatus);
+    if (filterStatus !== 'All') result = result.filter(matchesStatusFilter);
     if (filterAgent !== 'All') result = result.filter(t => (t.vendorName || '').toLowerCase() === filterAgent.toLowerCase());
     if (filterDate) {
       result = result.filter(t => {
@@ -84,7 +122,7 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
       });
     }
     return result;
-  }, [tickets, filterStatus, filterAgent, filterDate, searchTerm]);
+  }, [tickets, filterStatus, filterAgent, filterDate, searchTerm, races]);
 
   return (
     <>
@@ -160,6 +198,14 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                 filteredTickets.map((ticket, rowIdx) => {
                   const raceLabels = Array.from(new Set(ticket.selections.map(sel => sel.raceName || sel.raceId)));
                   const hasWinnings = ticket.winnings !== undefined && ticket.winnings > 0;
+                  const displayStatus = getDisplayStatus(ticket);
+                  const raceInfo = Array.from(new Set(ticket.selections.map(sel => sel.raceId))).map((raceId) => {
+                    const race = raceById.get(raceId);
+                    if (!race) return { label: raceId, time: '' };
+                    const hh = String(race.startDate.getHours()).padStart(2, '0');
+                    const mm = String(race.startDate.getMinutes()).padStart(2, '0');
+                    return { label: race.name || raceId, time: `${hh}:${mm}` };
+                  });
 
                   return (
                     <tr
@@ -175,16 +221,23 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                         >
                           {ticket.id}
                         </button>
+                        <div className="text-[11px] text-gray-500 mt-1">{ticket.vendorName || 'Unknown Vendor'}</div>
                       </td>
 
                       {/* Race number */}
                       <td className="py-3 px-4 align-top text-xs text-gray-700 whitespace-nowrap border-r border-gray-200">
-                        {raceLabels.map((label, i) => <div key={i}>{label}</div>)}
+                        {raceInfo.map((item, i) => (
+                          <div key={i} className="mb-1 last:mb-0">
+                            <div className="font-semibold">{item.label}</div>
+                            {item.time && <div className="text-[11px] text-gray-500">Time: {item.time}</div>}
+                          </div>
+                        ))}
                       </td>
 
                       {/* Bet time */}
                       <td className="py-3 px-4 align-top text-xs text-gray-600 whitespace-nowrap border-r border-gray-200">
-                        {formatDate(ticket.timestamp)}
+                        <div>{ticket.timestamp.toLocaleDateString('en-US')}</div>
+                        <div className="text-[11px] text-gray-500">{ticket.timestamp.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}</div>
                       </td>
 
                       {/* Bet combinations — full-width inline boxes */}
@@ -195,7 +248,8 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                               key={i}
                               className="text-xs text-gray-800 border border-gray-300 px-3 py-1.5 bg-white leading-snug w-full"
                             >
-                              {sel.betType} - {formatBetNumbers(sel)} - {sel.multiplier} ticket(s) {(sel.cost * sel.multiplier).toFixed(0)} GMD
+                              <div className="font-semibold">Ticket: {ticket.id}</div>
+                              <div>{sel.betType} - Pattern: {formatBetNumbers(sel)} - {sel.multiplier} ticket(s) {(sel.cost * sel.multiplier).toFixed(0)} GMD</div>
                             </div>
                           ))}
                         </div>
@@ -209,8 +263,8 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                       </td>
 
                       {/* Status */}
-                      <td className={`py-3 px-4 align-top text-xs font-semibold whitespace-nowrap border-r border-gray-200 ${getStatusColor(ticket.status)}`}>
-                        {ticket.status}
+                      <td className={`py-3 px-4 align-top text-xs font-semibold whitespace-nowrap border-r border-gray-200 ${getStatusColor(displayStatus)}`}>
+                        {displayStatus}
                       </td>
 
                       {/* Options */}
