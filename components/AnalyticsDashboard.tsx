@@ -179,22 +179,9 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
             });
         }
 
-        const latestWinningRace = [...races]
-            .filter((race) => race.result)
-            .sort((a, b) => b.endDate.getTime() - a.endDate.getTime())[0];
-
-        const latestWinningInfo = latestWinningRace ? {
-            raceCode: latestWinningRace.raceCode || latestWinningRace.id,
-            raceName: latestWinningRace.name,
-            winningNumbersText: latestWinningRace.result?.winningNumbers?.join('-') || 'N/A',
-            totalWinningSales: byRace[latestWinningRace.id]?.winningSales || 0,
-            totalPayout: byRace[latestWinningRace.id]?.totalPayout || 0,
-        } : null;
-
         return {
             overall: { ticketsSold, totalStake, totalPayout, netProfit },
             raceCards,
-            latestWinningInfo,
             combinationLedger,
         };
 
@@ -218,32 +205,6 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
                 <InfoCard title="Total Stake" value={`${analyticsData.overall.totalStake.toFixed(2)}`} color="text-gray-600" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>} />
                 <InfoCard title="Total Payouts" value={`${analyticsData.overall.totalPayout.toFixed(2)}`} color="text-red-600" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" /></svg>} />
                 <InfoCard title="Net Profit" value={`${analyticsData.overall.netProfit.toFixed(2)}`} color="text-betese-green" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-betese-green" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>} />
-            </div>
-
-            <div className="bg-white p-6 rounded-lg shadow-lg">
-                <h3 className="text-xl font-bold text-betese-dark mb-2">Last Race Winning Summary</h3>
-                {analyticsData.latestWinningInfo ? (
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-sm">
-                        <div className="p-3 rounded-lg border bg-gray-50">
-                            <p className="text-[10px] uppercase font-bold text-gray-500">Race</p>
-                            <p className="font-black text-betese-dark">{analyticsData.latestWinningInfo.raceCode} - {analyticsData.latestWinningInfo.raceName}</p>
-                        </div>
-                        <div className="p-3 rounded-lg border bg-blue-50">
-                            <p className="text-[10px] uppercase font-bold text-gray-500">Winning Numbers</p>
-                            <p className="font-black text-blue-700 font-mono">{analyticsData.latestWinningInfo.winningNumbersText}</p>
-                        </div>
-                        <div className="p-3 rounded-lg border bg-purple-50">
-                            <p className="text-[10px] uppercase font-bold text-gray-500">Winning Sales</p>
-                            <p className="font-black text-purple-700">{analyticsData.latestWinningInfo.totalWinningSales.toFixed(2)}</p>
-                        </div>
-                        <div className="p-3 rounded-lg border bg-red-50">
-                            <p className="text-[10px] uppercase font-bold text-gray-500">Payout</p>
-                            <p className="font-black text-red-700">{analyticsData.latestWinningInfo.totalPayout.toFixed(2)}</p>
-                        </div>
-                    </div>
-                ) : (
-                    <p className="text-sm text-gray-500">No completed race result found yet.</p>
-                )}
             </div>
 
             <div className="bg-white p-6 rounded-lg shadow-lg">
