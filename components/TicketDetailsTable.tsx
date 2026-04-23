@@ -214,7 +214,7 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                       key={ticket.id}
                       className={`${rowIdx % 2 === 0 ? 'bg-white' : 'bg-gray-100/70'} border-b border-gray-300 hover:bg-gray-50`}
                     >
-                      {/* Ticket number — clickable for ledger */}
+                      {/* Ticket number */}
                       <td className="py-3 px-4 align-top border-r border-gray-200">
                         <button
                           onClick={() => setLedgerTicket(ticket)}
@@ -223,23 +223,20 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                         >
                           {ticket.id}
                         </button>
-                        <div className="text-[11px] text-gray-500 mt-1">{ticket.vendorName || '-'}</div>
                       </td>
 
                       {/* Race number */}
                       <td className="py-3 px-4 align-top text-xs text-gray-700 whitespace-nowrap border-r border-gray-200">
                         {raceInfo.map((item, i) => (
                           <div key={i} className="mb-1 last:mb-0">
-                            <div className="font-semibold">{item.label}</div>
-                            {item.time && <div className="text-[11px] text-gray-500">Time: {item.time}</div>}
+                            <div className="font-semibold">{item.time ? `${item.label} (${item.time})` : item.label}</div>
                           </div>
                         ))}
                       </td>
 
                       {/* Bet time */}
                       <td className="py-3 px-4 align-top text-xs text-gray-600 whitespace-nowrap border-r border-gray-200">
-                        <div>{ticket.timestamp.toLocaleDateString('en-US')}</div>
-                        <div className="text-[11px] text-gray-500">{ticket.timestamp.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}</div>
+                        {formatDate(ticket.timestamp)}
                       </td>
 
                       {/* Bet combinations — full-width inline boxes */}
@@ -283,18 +280,6 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                             </svg>
                           </button>
                           </div>
-
-                          {ticket.status === 'Canceled' && (
-                            <div className="text-[10px] text-gray-500 leading-tight">
-                              Canceled by: {ticket.canceledByName || 'Admin/Vendor'}
-                            </div>
-                          )}
-
-                          {ticket.status === 'Paid' && (
-                            <div className="text-[10px] text-gray-700 leading-tight font-semibold">
-                              Paid by: {ticket.paidByName || 'Admin/Vendor'}
-                            </div>
-                          )}
                         </div>
                       </td>
                     </tr>
