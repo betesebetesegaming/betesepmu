@@ -114,7 +114,15 @@ export const TicketCombinationLedger: React.FC<TicketCombinationLedgerProps> = (
         </div>
 
         {/* Filters */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 px-6 py-4 border-b bg-green-50">
+        <div className="px-6 py-3 border-b" style={{ backgroundColor: '#eef9ee' }}>
+          <div className="text-xs font-bold text-gray-700 mb-2 uppercase">Filter Controls</div>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+              gap: '12px'
+            }}
+          >
           <div>
             <label className="block text-[10px] text-gray-500 font-bold uppercase mb-1">Agent Name Filter</label>
             <select
@@ -165,6 +173,7 @@ export const TicketCombinationLedger: React.FC<TicketCombinationLedgerProps> = (
               <option value="Paid">Paid</option>
               <option value="Canceled">Canceled</option>
             </select>
+          </div>
           </div>
         </div>
 
