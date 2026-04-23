@@ -69,7 +69,7 @@ interface AdminDashboardProps {
     allTickets: Ticket[];
     onCancelTicket: (ticketId: string) => void;
     programImages: ProgramImage[];
-    onAddProgramImage: (imageDataUrl: string, type: 'program' | 'advertisement', mediaType: 'image' | 'video') => void;
+    onAddProgramImage: (file: File, type: 'program' | 'advertisement', mediaType: 'image' | 'video') => Promise<void>;
     onDeleteProgramImage: (id: string) => void;
     promotions: Promotion[];
     onTogglePromotionStatus: (promoId: string) => void;

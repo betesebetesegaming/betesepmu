@@ -4,7 +4,7 @@ import { ProgramImage } from '../types';
 
 interface ProgramManagementPanelProps {
     programImages: ProgramImage[];
-    onUpload: (imageDataUrl: string, type: 'program' | 'advertisement') => void;
+    onUpload: (file: File, type: 'program' | 'advertisement', mediaType: 'image' | 'video') => Promise<void>;
     onDelete: (id: string) => void;
 }
 
@@ -12,6 +12,7 @@ export const ProgramManagementPanel: React.FC<ProgramManagementPanelProps> = ({ 
     const [preview, setPreview] = useState<string | null>(null);
     const [file, setFile] = useState<File | null>(null);
     const [uploadType, setUploadType] = useState<'program' | 'advertisement'>('program');
+    const [isUploading, setIsUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -26,14 +27,17 @@ export const ProgramManagementPanel: React.FC<ProgramManagementPanelProps> = ({ 
         }
     };
 
-    const handleUpload = () => {
-        if (preview) {
-            onUpload(preview, uploadType);
+    const handleUpload = async () => {
+        if (!file) return;
+        const mediaType: 'image' | 'video' = file.type.startsWith('video/') ? 'video' : 'image';
+        setIsUploading(true);
+        try {
+            await onUpload(file, uploadType, mediaType);
             setPreview(null);
             setFile(null);
-            if(fileInputRef.current) {
-                fileInputRef.current.value = "";
-            }
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        } finally {
+            setIsUploading(false);
         }
     };
 
@@ -47,24 +51,30 @@ export const ProgramManagementPanel: React.FC<ProgramManagementPanelProps> = ({ 
                     <div className="w-full md:w-1/3">
                         <input
                             type="file"
-                            accept="image/*"
+                            accept="image/*,video/*"
                             ref={fileInputRef}
                             onChange={handleFileChange}
                             className="hidden"
+                            disabled={isUploading}
                         />
                         <button
                             onClick={() => fileInputRef.current?.click()}
-                            className="w-full px-4 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+                            className="w-full px-4 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                            disabled={isUploading}
                         >
-                            {preview ? 'Change Image' : 'Choose Image'}
+                            {preview ? 'Change File' : 'Choose Image / Video'}
                         </button>
                         {file && <p className="text-sm text-center mt-2 text-gray-600">Selected: {file.name}</p>}
                     </div>
                     <div className="w-full md:w-1/3 p-2 border rounded-lg bg-gray-50 min-h-[100px] flex items-center justify-center">
                         {preview ? (
-                            <img src={preview} alt="Program Preview" className="max-h-32 object-contain rounded" />
+                            file?.type.startsWith('video/') ? (
+                                <video src={preview} className="max-h-32 object-contain rounded" muted playsInline />
+                            ) : (
+                                <img src={preview} alt="Program Preview" className="max-h-32 object-contain rounded" />
+                            )
                         ) : (
-                            <p className="text-gray-500 text-center">Image preview</p>
+                            <p className="text-gray-500 text-center">Image / Video preview</p>
                         )}
                     </div>
                      <div className="w-full md:w-1/3 space-y-2">
@@ -81,13 +91,21 @@ export const ProgramManagementPanel: React.FC<ProgramManagementPanelProps> = ({ 
                         </div>
                     </div>
                 </div>
-                 {preview && (
+                {preview && (
                     <div className="mt-4">
                         <button
                             onClick={handleUpload}
-                            className="w-full px-6 py-3 bg-betese-green text-white font-bold rounded-lg shadow-md hover:bg-green-700"
+                            disabled={isUploading}
+                            className="w-full px-6 py-3 bg-betese-green text-white font-bold rounded-lg shadow-md hover:bg-green-700 disabled:opacity-60 flex items-center justify-center gap-2"
                         >
-                            Add & Publish New {uploadType === 'program' ? 'Program' : 'Ad'}
+                            {isUploading ? (
+                                <>
+                                    <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                                    Uploading to server...
+                                </>
+                            ) : (
+                                `Add & Publish New ${uploadType === 'program' ? 'Program' : 'Ad'}`
+                            )}
                         </button>
                     </div>
                 )}

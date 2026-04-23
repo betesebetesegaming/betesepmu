@@ -26,7 +26,7 @@ import {
     dbCreateWithdrawalRequest, dbAddUser, dbFetchPromotions,
     dbTogglePromotionStatus, dbUpdatePromotion, dbMovePromotion,
     dbCreatePromotion, dbDeletePromotion, dbFetchProgramImages,
-    dbAddProgramImage, dbDeleteProgramImage, dbFetchPaymentConfigs,
+    dbAddProgramImage, dbDeleteProgramImage, dbUploadProgramFile, dbFetchPaymentConfigs,
     dbSavePaymentConfig, dbFetchManualBetOrders, dbCreateManualBetOrder,
     dbCancelManualBetOrder, dbMarkManualBetOrderCompleted, dbPayForBooking,
     dbProcessWithdrawalRequest, dbFetchChatThreads, dbFetchChatMessages,
@@ -786,21 +786,26 @@ const AppContent: React.FC = () => {
       setPromotions(prev => prev.filter(p => p.id !== id));
   };
 
-  const handleAddProgramImage = async (url: string, type: 'program' | 'advertisement', mediaType: 'image' | 'video') => {
+  const handleAddProgramImage = async (file: File, type: 'program' | 'advertisement', mediaType: 'image' | 'video') => {
       const image: ProgramImage = {
           id: `media-${Date.now()}`,
           type,
-          url,
+          url: '',
           mediaType
       };
 
       if (supabase) {
           try {
+              const url = await dbUploadProgramFile(file);
+              image.url = url;
               await dbAddProgramImage(image);
           } catch (e: any) {
               alert("Failed to upload media: " + e.message);
               return;
           }
+      } else {
+          // No DB: use a temporary object URL (won't survive page refresh)
+          image.url = URL.createObjectURL(file);
       }
       setProgramImages(prev => [image, ...prev]);
   };
