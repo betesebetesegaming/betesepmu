@@ -91,6 +91,10 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
 
                 const selectionStake = selection.cost * selection.multiplier;
                 const betTypeStats = byRaceBetType[raceId][selection.betType];
+                const selectionIndex = ticket.selections.indexOf(selection);
+                const matchedBreakdown = ticket.winningsBreakdown?.find((row) => row.selectionIndex === selectionIndex);
+                const isSelectionWin = matchedBreakdown?.status === 'Win';
+
                 stats[raceId].betsPlaced++;
                 stats[raceId].totalStake += selectionStake;
                 raceTicketSet.get(raceId)?.add(ticket.id);
@@ -98,13 +102,11 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
                 betTypeStats.betsPlaced++;
                 betTypeStats.totalStake += selectionStake;
                 
-                if (ticket.status === 'Winning' || ticket.status === 'Paid') {
+                if (isSelectionWin) {
                     stats[raceId].winningBets++;
                     stats[raceId].winningSales += selectionStake;
                     betTypeStats.winningBets++;
                     betTypeStats.winningSales += selectionStake;
-
-                    const matchedBreakdown = ticket.winningsBreakdown?.find((row) => row.selectionIndex === ticket.selections.indexOf(selection) && row.status === 'Win');
                     let selectionPayout = 0;
                     if (matchedBreakdown?.totalPayout) {
                         selectionPayout = matchedBreakdown.totalPayout;
