@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { Ticket, WinningsBreakdown } from '../types';
 
 interface TicketCombinationLedgerProps {
@@ -32,9 +32,47 @@ const formatCombination = (sel: Ticket['selections'][number]): string => {
   return prefix + sel.numbers.join(' - ');
 };
 
+const toDateInput = (date: Date): string => {
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+};
+
+type LedgerFilterStatus = 'All' | 'Win' | 'Loss' | 'Pending';
+
 export const TicketCombinationLedger: React.FC<TicketCombinationLedgerProps> = ({ ticket, onClose }) => {
   const hasResult = ticket.winningsBreakdown && ticket.winningsBreakdown.length > 0;
   const totalWinnings = ticket.winnings ?? 0;
+  const [filterAgent, setFilterAgent] = useState<string>('All');
+  const [filterDate, setFilterDate] = useState<string>('');
+  const [filterTicketNumber, setFilterTicketNumber] = useState<string>('');
+  const [filterStatus, setFilterStatus] = useState<LedgerFilterStatus>('All');
+
+  const agentOptions = useMemo(() => {
+    return ticket.vendorName ? [ticket.vendorName] : [];
+  }, [ticket.vendorName]);
+
+  const filteredSelections = useMemo(() => {
+    const ticketDate = toDateInput(ticket.timestamp);
+    const ticketIdLower = ticket.id.toLowerCase();
+    const selectedAgent = (ticket.vendorName || '').toLowerCase();
+
+    const agentMatches =
+      filterAgent === 'All' || selectedAgent === filterAgent.toLowerCase();
+    const dateMatches = !filterDate || filterDate === ticketDate;
+    const ticketMatches =
+      !filterTicketNumber.trim() || ticketIdLower.includes(filterTicketNumber.trim().toLowerCase());
+
+    if (!agentMatches || !dateMatches || !ticketMatches) return [];
+
+    return ticket.selections.filter((_, i) => {
+      if (filterStatus === 'All') return true;
+      const breakdown = getWinBreakdown(ticket, i);
+      if (filterStatus === 'Pending') return !breakdown;
+      return breakdown?.status === filterStatus;
+    });
+  }, [ticket, filterAgent, filterDate, filterTicketNumber, filterStatus]);
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 overflow-y-auto">
@@ -73,6 +111,58 @@ export const TicketCombinationLedger: React.FC<TicketCombinationLedgerProps> = (
           </div>
         </div>
 
+        {/* Filters */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 px-6 py-4 border-b bg-green-50">
+          <div>
+            <label className="block text-[10px] text-gray-500 font-bold uppercase mb-1">Filter Agent</label>
+            <select
+              value={filterAgent}
+              onChange={e => setFilterAgent(e.target.value)}
+              className="w-full p-2 border rounded bg-white text-sm"
+            >
+              <option value="All">All Agents</option>
+              {agentOptions.map(agent => (
+                <option key={agent} value={agent}>{agent}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[10px] text-gray-500 font-bold uppercase mb-1">Date</label>
+            <input
+              type="date"
+              value={filterDate}
+              onChange={e => setFilterDate(e.target.value)}
+              className="w-full p-2 border rounded bg-white text-sm"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[10px] text-gray-500 font-bold uppercase mb-1">Ticket Manualy</label>
+            <input
+              type="text"
+              value={filterTicketNumber}
+              onChange={e => setFilterTicketNumber(e.target.value)}
+              placeholder="Enter ticket number"
+              className="w-full p-2 border rounded bg-white text-sm"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[10px] text-gray-500 font-bold uppercase mb-1">Filter by Status</label>
+            <select
+              value={filterStatus}
+              onChange={e => setFilterStatus(e.target.value as LedgerFilterStatus)}
+              className="w-full p-2 border rounded bg-white text-sm"
+            >
+              <option value="All">All</option>
+              <option value="Win">Win</option>
+              <option value="Loss">Loss</option>
+              <option value="Pending">Pending</option>
+            </select>
+          </div>
+        </div>
+
         {/* Combination Table */}
         <div className="overflow-x-auto px-6 py-4">
           <table className="w-full text-sm border-collapse">
@@ -92,8 +182,9 @@ export const TicketCombinationLedger: React.FC<TicketCombinationLedgerProps> = (
               </tr>
             </thead>
             <tbody>
-              {ticket.selections.map((sel, i) => {
-                const breakdown = getWinBreakdown(ticket, i);
+              {filteredSelections.map((sel, i) => {
+                const originalIndex = ticket.selections.findIndex((ticketSel) => ticketSel === sel);
+                const breakdown = getWinBreakdown(ticket, originalIndex);
                 const stake = (sel.cost * sel.multiplier).toFixed(2);
 
                 return (
@@ -164,15 +255,22 @@ export const TicketCombinationLedger: React.FC<TicketCombinationLedgerProps> = (
                   </tr>
                 );
               })}
+              {filteredSelections.length === 0 && (
+                <tr>
+                  <td colSpan={hasResult ? 7 : 5} className="py-5 text-center text-sm text-gray-500">
+                    No combinations match current filters.
+                  </td>
+                </tr>
+              )}
             </tbody>
 
             {/* Footer: totals */}
             <tfoot>
               <tr className="bg-gray-100 border-t-2 border-gray-300">
                 <td colSpan={hasResult ? 4 : 4} className="py-3 px-3 text-xs font-black text-gray-600 uppercase tracking-wide">
-                  Total ({ticket.selections.length} selection{ticket.selections.length !== 1 ? 's' : ''})
+                  Total ({filteredSelections.length} selection{filteredSelections.length !== 1 ? 's' : ''})
                 </td>
-                <td className="py-3 px-3 text-right font-black text-gray-900 text-sm">{ticket.totalCost.toFixed(2)} GMD</td>
+                <td className="py-3 px-3 text-right font-black text-gray-900 text-sm">{filteredSelections.reduce((sum, sel) => sum + (sel.cost * sel.multiplier), 0).toFixed(2)} GMD</td>
                 {hasResult && (
                   <>
                     <td className="py-3 px-3"></td>
