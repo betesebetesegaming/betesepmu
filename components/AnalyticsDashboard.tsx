@@ -48,6 +48,13 @@ interface CombinationLedgerRow {
     payout: number;
 }
 
+const normalizeDate = (value: Date | string | number | undefined): Date | null => {
+    if (!value) return null;
+    if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
 export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets, races }) => {
     const [ledgerFilterAgent, setLedgerFilterAgent] = useState<string>('All');
     const [ledgerFilterDate, setLedgerFilterDate] = useState<string>('');
@@ -118,13 +125,14 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
                 const fallbackPayout = ticket.totalCost > 0
                     ? ((selection.cost * selection.multiplier) / ticket.totalCost) * (ticket.winnings ?? 0)
                     : 0;
-                const yyyy = ticket.timestamp.getFullYear();
-                const mm = String(ticket.timestamp.getMonth() + 1).padStart(2, '0');
-                const dd = String(ticket.timestamp.getDate()).padStart(2, '0');
+                const safeDate = normalizeDate(ticket.timestamp as unknown as Date | string | number);
+                const yyyy = safeDate ? safeDate.getFullYear() : 0;
+                const mm = safeDate ? String(safeDate.getMonth() + 1).padStart(2, '0') : '00';
+                const dd = safeDate ? String(safeDate.getDate()).padStart(2, '0') : '00';
                 return {
-                    ticketId: ticket.id,
+                    ticketId: String(ticket.id),
                     vendorName: ticket.vendorName || '-',
-                    dateKey: `${yyyy}-${mm}-${dd}`,
+                    dateKey: safeDate ? `${yyyy}-${mm}-${dd}` : '',
                     raceId: selection.raceId,
                     raceName: raceNameMap.get(selection.raceId) || selection.raceName || selection.raceId,
                     betType: selection.betType,
