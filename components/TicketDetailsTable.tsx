@@ -272,6 +272,13 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                       <td className="py-3 px-4 align-top">
                         <div className="space-y-1">
                           <div className="flex items-start gap-1">
+                          <button
+                            onClick={() => setLedgerTicket(ticket)}
+                            title="Open Ticket Combination Ledger"
+                            className="px-2 py-1 rounded border border-blue-400 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[10px] font-bold leading-none"
+                          >
+                            Ledger
+                          </button>
                           {/* Print/view icon button */}
                           <button
                             onClick={() => setTicketToView(ticket)}
