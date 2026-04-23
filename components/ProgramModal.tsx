@@ -186,6 +186,9 @@ interface ProgramModalProps {
 
 export const ProgramModal: React.FC<ProgramModalProps> = ({ isOpen, onClose, programImages }) => {
     const programRef = useRef<HTMLDivElement>(null);
+    const MIN_ZOOM = 1;
+    const MAX_ZOOM = 6;
+    const QUICK_MAGNIFY_ZOOM = 2.5;
     const [activeIndex, setActiveIndex] = useState(0);
     const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -222,9 +225,17 @@ export const ProgramModal: React.FC<ProgramModalProps> = ({ isOpen, onClose, pro
         setActiveIndex((prev) => (prev - 1 + programImages.length) % programImages.length);
     }, [programImages.length]);
 
-    const handleZoomIn  = () => setZoom(prev => Math.min(parseFloat((prev + 0.25).toFixed(2)), 4));
-    const handleZoomOut = () => { setZoom(prev => { const next = Math.max(parseFloat((prev - 0.25).toFixed(2)), 1); if (next === 1) setPosition({ x: 0, y: 0 }); return next; }); };
-    const handleZoomReset = () => { setZoom(1); setPosition({ x: 0, y: 0 }); };
+    const handleZoomIn  = () => setZoom(prev => Math.min(parseFloat((prev + 0.25).toFixed(2)), MAX_ZOOM));
+    const handleZoomOut = () => { setZoom(prev => { const next = Math.max(parseFloat((prev - 0.25).toFixed(2)), MIN_ZOOM); if (next === MIN_ZOOM) setPosition({ x: 0, y: 0 }); return next; }); };
+    const handleZoomReset = () => { setZoom(MIN_ZOOM); setPosition({ x: 0, y: 0 }); };
+    const handleMagnifyToggle = () => {
+        if (zoom <= 1.1) {
+            setZoom(QUICK_MAGNIFY_ZOOM);
+            setPosition({ x: 0, y: 0 });
+        } else {
+            handleZoomReset();
+        }
+    };
 
     // Keyboard navigation
     useEffect(() => {
@@ -242,7 +253,7 @@ export const ProgramModal: React.FC<ProgramModalProps> = ({ isOpen, onClose, pro
     }, [isOpen, handleNext, handlePrev, onClose]);
 
     const handleImageClick = () => {
-        if (zoom === 1) setZoom(2);
+        if (zoom === 1) setZoom(QUICK_MAGNIFY_ZOOM);
         else handleZoomReset();
     };
 
@@ -275,9 +286,9 @@ export const ProgramModal: React.FC<ProgramModalProps> = ({ isOpen, onClose, pro
             const dist = Math.hypot(dx, dy);
             if (lastPinchDistRef.current !== null) {
                 const scale = dist / lastPinchDistRef.current;
-                const newZoom = Math.min(Math.max(parseFloat((lastZoomRef.current * scale).toFixed(2)), 1), 4);
+                const newZoom = Math.min(Math.max(parseFloat((lastZoomRef.current * scale).toFixed(2)), MIN_ZOOM), MAX_ZOOM);
                 setZoom(newZoom);
-                if (newZoom === 1) setPosition({ x: 0, y: 0 });
+                if (newZoom === MIN_ZOOM) setPosition({ x: 0, y: 0 });
             }
         }
     };
@@ -397,7 +408,7 @@ export const ProgramModal: React.FC<ProgramModalProps> = ({ isOpen, onClose, pro
 
                 {/* ── Hint bar ── */}
                 <div className="bg-blue-50 border-b border-blue-100 px-4 py-1 flex items-center justify-center gap-3 text-blue-600 text-[11px] font-semibold flex-shrink-0 flex-wrap">
-                    <span>Tap image to zoom</span>
+                    <span>Tap image or magnify button to zoom</span>
                     <span>·</span>
                     <span>Drag to pan when zoomed</span>
                     {programImages.length > 1 && <><span>·</span><span>Swipe or arrows to navigate</span></>}
@@ -468,7 +479,17 @@ export const ProgramModal: React.FC<ProgramModalProps> = ({ isOpen, onClose, pro
                     <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1">
                         <button onClick={(e) => { e.stopPropagation(); handleZoomOut(); }} disabled={zoom <= 1} title="Zoom out (-)" className="w-8 h-8 rounded-lg bg-white shadow-sm font-black text-lg disabled:opacity-30 hover:bg-gray-50 transition-colors flex items-center justify-center">−</button>
                         <button onClick={(e) => { e.stopPropagation(); handleZoomReset(); }} title="Reset zoom (0)" className="px-3 h-8 rounded-lg bg-white shadow-sm text-xs font-black hover:bg-gray-50 transition-colors min-w-[52px]">{zoomPct}%</button>
-                        <button onClick={(e) => { e.stopPropagation(); handleZoomIn(); }} disabled={zoom >= 4} title="Zoom in (+)" className="w-8 h-8 rounded-lg bg-white shadow-sm font-black text-lg disabled:opacity-30 hover:bg-gray-50 transition-colors flex items-center justify-center">+</button>
+                        <button onClick={(e) => { e.stopPropagation(); handleZoomIn(); }} disabled={zoom >= MAX_ZOOM} title="Zoom in (+)" className="w-8 h-8 rounded-lg bg-white shadow-sm font-black text-lg disabled:opacity-30 hover:bg-gray-50 transition-colors flex items-center justify-center">+</button>
+                        <button
+                            onClick={(e) => { e.stopPropagation(); handleMagnifyToggle(); }}
+                            title="Magnify for reading"
+                            className={`px-3 h-8 rounded-lg shadow-sm text-xs font-black transition-colors flex items-center gap-1 ${zoom > 1 ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-white hover:bg-gray-50 text-gray-700'}`}
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35m1.1-4.15a7.25 7.25 0 11-14.5 0 7.25 7.25 0 0114.5 0z" />
+                            </svg>
+                            Magnify
+                        </button>
                     </div>
 
                     {/* Action buttons */}
