@@ -7,18 +7,6 @@ interface AnalyticsDashboardProps {
   races: Race[];
 }
 
-const InfoCard: React.FC<{ title: string; value: string; color: string; icon: React.ReactNode }> = ({ title, value, color, icon }) => (
-    <div className="bg-white p-6 rounded-lg shadow-lg flex items-center gap-4">
-        <div className={`p-3 rounded-full bg-opacity-20 ${color.replace('text-', 'bg-')}`}>
-            {icon}
-        </div>
-        <div>
-            <h3 className="text-sm font-semibold text-gray-500">{title}</h3>
-            <p className={`text-2xl font-bold ${color}`}>{value}</p>
-        </div>
-    </div>
-);
-
 interface BetTypePerformance {
     betsPlaced: number;
     totalStake: number;
@@ -70,12 +58,6 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
     };
 
     const analyticsData = useMemo(() => {
-        // Overall stats
-        const ticketsSold = tickets.filter(t => ['Active', 'Winning', 'Lost', 'Paid'].includes(t.status)).length;
-        const totalStake = tickets.reduce((sum, t) => sum + t.totalCost, 0);
-        const totalPayout = tickets.filter(t => t.status === 'Paid').reduce((sum, t) => sum + (t.winnings ?? 0), 0);
-        const netProfit = totalStake - totalPayout;
-
         // Per-race and per-race-bet-type stats
         const raceTicketSet = new Map<string, Set<string>>();
         const byRaceBetType: Record<string, Record<BetTypeOption, BetTypePerformance>> = {};
@@ -180,7 +162,6 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
         }
 
         return {
-            overall: { ticketsSold, totalStake, totalPayout, netProfit },
             raceCards,
             combinationLedger,
         };
@@ -200,13 +181,6 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
 
     return (
         <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <InfoCard title="Total Tickets Sold" value={analyticsData.overall.ticketsSold.toLocaleString()} color="text-blue-600" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" /></svg>} />
-                <InfoCard title="Total Stake" value={`${analyticsData.overall.totalStake.toFixed(2)}`} color="text-gray-600" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>} />
-                <InfoCard title="Total Payouts" value={`${analyticsData.overall.totalPayout.toFixed(2)}`} color="text-red-600" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" /></svg>} />
-                <InfoCard title="Net Profit" value={`${analyticsData.overall.netProfit.toFixed(2)}`} color="text-betese-green" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-betese-green" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>} />
-            </div>
-
             <div className="bg-white p-6 rounded-lg shadow-lg">
                 <h3 className="text-xl font-bold text-betese-dark mb-2">Race Performance (Collapsible by Race)</h3>
                 <p className="text-sm text-gray-600 mb-4">Click each race (R1, R2, MAIN) to view all bet-type performance for that race.</p>
