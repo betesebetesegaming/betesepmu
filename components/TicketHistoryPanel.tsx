@@ -10,7 +10,7 @@ interface TicketHistoryPanelProps {
   effectiveTime: Date;
 }
 
-type TicketFilter = 'all' | 'won' | 'lost' | 'active';
+type TicketFilter = 'all' | 'active' | 'winning' | 'paid' | 'lost' | 'canceled';
 
 const TicketItem: React.FC<{ ticket: Ticket; isCancellable: boolean; onCancel: () => void; effectiveTime: Date; races: Race[]; }> = ({ ticket, isCancellable, onCancel, effectiveTime, races }) => {
     const [isExpanded, setIsExpanded] = useState(false);
@@ -118,6 +118,12 @@ const TicketItem: React.FC<{ ticket: Ticket; isCancellable: boolean; onCancel: (
 
 export const TicketHistoryPanel: React.FC<TicketHistoryPanelProps> = ({ tickets, onCancelTicket, races, effectiveTime }) => {
     const [filter, setFilter] = useState<TicketFilter>('all');
+    const [filterAgent, setFilterAgent] = useState<string>('All');
+    const [filterDate, setFilterDate] = useState<string>('');
+
+    const agentOptions = useMemo(() => {
+        return Array.from(new Set(tickets.map(t => t.vendorName).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+    }, [tickets]);
 
     const historySummary = useMemo(() => {
         const activeCount = tickets.filter((ticket) => {
@@ -134,59 +140,80 @@ export const TicketHistoryPanel: React.FC<TicketHistoryPanelProps> = ({ tickets,
     }, [tickets, effectiveTime]);
 
     const filteredTickets = useMemo(() => {
-        const sorted = [...tickets].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-        if (filter === 'all') {
-            return sorted;
+        let sorted = [...tickets].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+
+        // Agent filter
+        if (filterAgent !== 'All') {
+            sorted = sorted.filter(t => (t.vendorName || '').toLowerCase() === filterAgent.toLowerCase());
         }
-        return sorted.filter(ticket => {
-            const status = getEffectiveTicketStatus(ticket, effectiveTime);
-            switch(filter) {
-                case 'won': return status === 'Winning' || status === 'Paid';
-                case 'lost': return status === 'Lost' || status === 'Canceled' || status === 'Expired';
-                case 'active': return status === 'Active' || status === 'Booked';
-                default: return true;
-            }
-        });
-    }, [tickets, filter, effectiveTime]);
+
+        // Date filter
+        if (filterDate) {
+            sorted = sorted.filter(t => {
+                const yyyy = t.timestamp.getFullYear();
+                const mm = String(t.timestamp.getMonth() + 1).padStart(2, '0');
+                const dd = String(t.timestamp.getDate()).padStart(2, '0');
+                return `${yyyy}-${mm}-${dd}` === filterDate;
+            });
+        }
+
+        // Status filter
+        if (filter !== 'all') {
+            sorted = sorted.filter(ticket => {
+                const status = getEffectiveTicketStatus(ticket, effectiveTime);
+                switch (filter) {
+                    case 'active':   return status === 'Active' || status === 'Booked';
+                    case 'winning':  return status === 'Winning';
+                    case 'paid':     return status === 'Paid';
+                    case 'lost':     return status === 'Lost' || status === 'Expired';
+                    case 'canceled': return status === 'Canceled';
+                    default: return true;
+                }
+            });
+        }
+
+        return sorted;
+    }, [tickets, filter, filterAgent, filterDate, effectiveTime]);
 
     const isTicketCancellable = (ticket: Ticket): boolean => {
         if (ticket.status === 'Booked') return true;
         if (ticket.status !== 'Active') return false;
-        
         const hasRaceStarted = ticket.selections.some(selection => {
             const race = races.find(r => r.id === selection.raceId);
             return race && effectiveTime >= race.startDate;
         });
-
         return !hasRaceStarted;
     };
 
     const getCount = (filterType: TicketFilter) => {
         if (filterType === 'all') return tickets.length;
         return tickets.filter(ticket => {
-             const status = getEffectiveTicketStatus(ticket, effectiveTime);
-             switch(filterType) {
-                case 'won': return status === 'Winning' || status === 'Paid';
-                case 'lost': return status === 'Lost' || status === 'Canceled' || status === 'Expired';
-                case 'active': return status === 'Active' || status === 'Booked';
+            const status = getEffectiveTicketStatus(ticket, effectiveTime);
+            switch (filterType) {
+                case 'active':   return status === 'Active' || status === 'Booked';
+                case 'winning':  return status === 'Winning';
+                case 'paid':     return status === 'Paid';
+                case 'lost':     return status === 'Lost' || status === 'Expired';
+                case 'canceled': return status === 'Canceled';
                 default: return false;
             }
         }).length;
-    }
+    };
 
-    const FilterButton: React.FC<{label: string, type: TicketFilter, count: number}> = ({ label, type, count }) => (
-      <button 
-        onClick={() => setFilter(type)}
-        className={`flex items-center gap-2 px-3 py-1.5 text-sm font-semibold rounded-full transition-colors ${filter === type ? 'bg-betese-green text-white shadow' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
-      >
-        {label}
-        <span className={`text-xs px-2 py-0.5 rounded-full ${filter === type ? 'bg-white/20' : 'bg-gray-300'}`}>{count}</span>
-      </button>
-    );
+    const filterConfig: { label: string; type: TicketFilter; color: string; activeColor: string }[] = [
+        { label: 'All',      type: 'all',      color: 'bg-gray-200 text-gray-700 hover:bg-gray-300',         activeColor: 'bg-gray-800 text-white' },
+        { label: 'Active',   type: 'active',   color: 'bg-green-100 text-green-800 hover:bg-green-200',      activeColor: 'bg-green-600 text-white' },
+        { label: 'Winning',  type: 'winning',  color: 'bg-blue-100 text-blue-800 hover:bg-blue-200',         activeColor: 'bg-blue-600 text-white' },
+        { label: 'Paid',     type: 'paid',     color: 'bg-purple-100 text-purple-800 hover:bg-purple-200',   activeColor: 'bg-purple-600 text-white' },
+        { label: 'Lost',     type: 'lost',     color: 'bg-red-100 text-red-800 hover:bg-red-200',            activeColor: 'bg-red-600 text-white' },
+        { label: 'Canceled', type: 'canceled', color: 'bg-gray-100 text-gray-600 hover:bg-gray-200',         activeColor: 'bg-gray-500 text-white' },
+    ];
 
     return (
         <div className="bg-white p-6 rounded-lg shadow-lg">
             <h3 className="text-xl font-bold text-betese-dark mb-4">Betting History</h3>
+
+            {/* Summary cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
                 <div className="p-3 rounded-lg border bg-gray-50">
                     <p className="text-[10px] uppercase font-bold text-gray-500">Tickets</p>
@@ -209,18 +236,66 @@ export const TicketHistoryPanel: React.FC<TicketHistoryPanelProps> = ({ tickets,
                 <span className="font-semibold text-gray-700">Total Stake: <span className="font-black text-betese-dark">{historySummary.totalStake.toFixed(2)} GMD</span></span>
                 <span className="font-semibold text-gray-700">Net: <span className="font-black text-betese-dark">{(historySummary.totalWinnings - historySummary.totalStake).toFixed(2)} GMD</span></span>
             </div>
-            <div className="flex flex-wrap justify-center gap-2 mb-4 border-b pb-4">
-                <FilterButton label="All" type="all" count={getCount('all')} />
-                <FilterButton label="Won" type="won" count={getCount('won')} />
-                <FilterButton label="Lost" type="lost" count={getCount('lost')} />
-                <FilterButton label="Active" type="active" count={getCount('active')} />
+
+            {/* Filter boxes */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4 p-3 border rounded-lg bg-green-50">
+                <div>
+                    <label className="block text-[10px] font-bold uppercase text-gray-500 mb-1">Filter by Agent / Vendor</label>
+                    <select
+                        value={filterAgent}
+                        onChange={e => setFilterAgent(e.target.value)}
+                        className="w-full p-2 border rounded bg-white text-sm font-semibold"
+                    >
+                        <option value="All">All Agents</option>
+                        {agentOptions.map(agent => (
+                            <option key={agent} value={agent}>{agent}</option>
+                        ))}
+                    </select>
+                </div>
+                <div>
+                    <label className="block text-[10px] font-bold uppercase text-gray-500 mb-1">Filter by Date</label>
+                    <input
+                        type="date"
+                        value={filterDate}
+                        onChange={e => setFilterDate(e.target.value)}
+                        className="w-full p-2 border rounded bg-white text-sm"
+                    />
+                </div>
             </div>
+
+            {/* Status filter pills */}
+            <div className="flex flex-wrap gap-2 mb-4 border-b pb-4">
+                {filterConfig.map(({ label, type, color, activeColor }) => (
+                    <button
+                        key={type}
+                        onClick={() => setFilter(type)}
+                        className={`flex items-center gap-2 px-3 py-1.5 text-sm font-semibold rounded-full transition-colors ${filter === type ? activeColor : color}`}
+                    >
+                        {label}
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${filter === type ? 'bg-white/25' : 'bg-black/10'}`}>
+                            {getCount(type)}
+                        </span>
+                    </button>
+                ))}
+                {(filterAgent !== 'All' || filterDate) && (
+                    <button
+                        onClick={() => { setFilterAgent('All'); setFilterDate(''); }}
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold rounded-full bg-orange-100 text-orange-700 hover:bg-orange-200 border border-orange-300"
+                    >
+                        ✕ Clear Filters
+                    </button>
+                )}
+            </div>
+
+            {/* Ticket count */}
+            <p className="text-xs font-semibold text-gray-500 mb-3">Showing {filteredTickets.length} ticket{filteredTickets.length !== 1 ? 's' : ''}</p>
+
             <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
                 {filteredTickets.length === 0 ? (
-                    <p className="text-gray-500 text-center py-4">You have no {filter === 'all' ? '' : filter} bets.</p>
+                    <p className="text-gray-500 text-center py-4">No tickets match the current filter.</p>
                 ) : (
                     filteredTickets.map((ticket) => (
-                        <TicketItem 
+                        <TicketItem
                             key={ticket.id}
                             ticket={ticket}
                             isCancellable={isTicketCancellable(ticket)}
