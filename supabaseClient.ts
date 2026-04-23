@@ -879,12 +879,12 @@ export const dbUploadProgramFile = async (file: File): Promise<string> => {
     if (!supabase) throw new Error("Database not connected");
     const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
     const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-    const { error } = await supabase.storage.from('programs').upload(path, file, {
+    const { error } = await supabase.storage.from('PROGRAMS').upload(path, file, {
         cacheControl: '3600',
         upsert: false
     });
-    if (error) throw new Error(`Storage upload failed: ${error.message}. Make sure the "programs" bucket exists in Supabase Storage and is set to public.`);
-    const { data } = supabase.storage.from('programs').getPublicUrl(path);
+    if (error) throw new Error(`Storage upload failed: ${error.message}`);
+    const { data } = supabase.storage.from('PROGRAMS').getPublicUrl(path);
     return data.publicUrl;
 };
 
