@@ -7,6 +7,7 @@ interface TicketDetailsTableProps {
   title: string;
   tickets: Ticket[];
   races: Race[]; // Added races for filtering
+  onCancelTicket?: (ticketId: string) => void;
 }
 
 const getStatusColor = (status: Ticket['status']) => {
@@ -23,19 +24,23 @@ const getStatusColor = (status: Ticket['status']) => {
 
 type FilterStatus = Ticket['status'] | 'All';
 
-export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ title, tickets, races }) => {
+export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets, races, onCancelTicket }) => {
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('All');
-  const [filterRaceId, setFilterRaceId] = useState<string>('All');
+  const [filterAgent, setFilterAgent] = useState<string>('All');
+  const [filterDate, setFilterDate] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [ticketToView, setTicketToView] = useState<Ticket | null>(null);
+
+  const agentOptions = useMemo(() => {
+    return Array.from(new Set(tickets.map(t => t.vendorName).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+  }, [tickets]);
 
   const filteredTickets = useMemo(() => {
     let sortedTickets = [...tickets].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
 
-    // Ticket ID search overrides other filters
     if (searchTerm.trim() !== '') {
       const term = searchTerm.trim().toLowerCase();
-      return sortedTickets.filter(t => {
+      sortedTickets = sortedTickets.filter(t => {
         const combinationText = t.selections
           .map(sel => [sel.betType, sel.raceName, sel.pattern?.join('-') || sel.numbers.join('-'), sel.numbers.join(','), String(sel.xCount || 0)].join(' '))
           .join(' ')
@@ -47,138 +52,70 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ title, t
     if (filterStatus !== 'All') {
         sortedTickets = sortedTickets.filter(t => t.status === filterStatus);
     }
-    
-    if (filterRaceId !== 'All') {
-        sortedTickets = sortedTickets.filter(t => t.selections.some(sel => sel.raceId === filterRaceId));
+
+    if (filterAgent !== 'All') {
+        sortedTickets = sortedTickets.filter(t => (t.vendorName || '').toLowerCase() === filterAgent.toLowerCase());
+    }
+
+    if (filterDate) {
+        sortedTickets = sortedTickets.filter(t => {
+            const yyyy = t.timestamp.getFullYear();
+            const mm = String(t.timestamp.getMonth() + 1).padStart(2, '0');
+            const dd = String(t.timestamp.getDate()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}` === filterDate;
+        });
     }
 
     return sortedTickets;
-  }, [tickets, filterStatus, filterRaceId, searchTerm]);
-
-  const summaryRows = useMemo(() => {
-    const summary = new Map<string, { betType: string; betCount: number; totalStake: number; winningBets: number; totalPayout: number }>();
-    filteredTickets.forEach(ticket => {
-      ticket.selections.forEach((selection, index) => {
-        const key = selection.betType;
-        const existing = summary.get(key) || { betType: key, betCount: 0, totalStake: 0, winningBets: 0, totalPayout: 0 };
-        const stake = selection.cost * selection.multiplier;
-        const breakdown = ticket.winningsBreakdown?.find(item => item.selectionIndex === index && item.status === 'Win');
-        existing.betCount += 1;
-        existing.totalStake += stake;
-        if (breakdown) {
-          existing.winningBets += 1;
-          existing.totalPayout += Number(breakdown.totalPayout || 0);
-        }
-        summary.set(key, existing);
-      });
-    });
-    return Array.from(summary.values()).map(row => ({
-      ...row,
-      netProfit: row.totalStake - row.totalPayout
-    }));
-  }, [filteredTickets]);
-
-  const getTicketCount = (status: FilterStatus) => {
-      if (status === 'All') return tickets.length;
-      return tickets.filter(t => t.status === status).length;
-  }
-
-  const FilterButton: React.FC<{ status: FilterStatus, label: string }> = ({ status, label }) => (
-    <button
-        onClick={() => setFilterStatus(status)}
-        className={`px-3 py-1.5 text-sm font-semibold rounded-full transition-colors flex items-center gap-2 ${
-            filterStatus === status
-                ? 'bg-betese-green text-white shadow'
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-        }`}
-    >
-        {label}
-        <span className={`text-xs px-2 py-0.5 rounded-full ${filterStatus === status ? 'bg-white/20' : 'bg-gray-300'}`}>
-            {getTicketCount(status)}
-        </span>
-    </button>
-  );
+  }, [tickets, filterStatus, filterAgent, filterDate, searchTerm]);
 
 
   return (
     <>
     {ticketToView && <TicketModal ticket={ticketToView} onClose={() => setTicketToView(null)} showPrintButton={true} races={races} />}
     <div className="bg-white p-6 rounded-lg shadow-lg">
-      <h2 className="text-xl font-bold text-betese-dark mb-4">{title}</h2>
+      <h2 className="text-3xl font-black text-betese-dark mb-4 uppercase">TICKET</h2>
       
-      {/* Search and Filter Section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 p-4 border rounded-lg bg-gray-50">
-        <div>
-            <label htmlFor="ticket-search" className="block text-sm font-medium text-gray-700">Search by Ticket ID or Combination</label>
-            <input 
-                id="ticket-search"
-                type="text" 
-              placeholder="Type ticket, horse numbers, pattern or bet type..."
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-                className="mt-1 p-2 border rounded w-full bg-white"
-            />
-        </div>
-        <div>
-            <label htmlFor="race-filter" className="block text-sm font-medium text-gray-700">Filter by Race</label>
-            <select id="race-filter" value={filterRaceId} onChange={e => setFilterRaceId(e.target.value)} className="mt-1 p-2 border rounded w-full bg-white">
-              <option value="All">All Races</option>
-              {races.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-            </select>
-        </div>
+      <div className="mb-4 text-sm font-semibold text-gray-700">Tickets list({filteredTickets.length})</div>
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4 p-3 border rounded-lg bg-green-50">
+        <select value={filterAgent} onChange={e => setFilterAgent(e.target.value)} className="p-2 border rounded bg-white text-sm font-semibold">
+          <option value="All">Filter by agent</option>
+          {agentOptions.map(agent => <option key={agent} value={agent}>{agent}</option>)}
+        </select>
+
+        <input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)} className="p-2 border rounded bg-white text-sm" />
+
+        <input
+          type="text"
+          placeholder="Ticket number"
+          value={searchTerm}
+          onChange={e => setSearchTerm(e.target.value)}
+          className="p-2 border rounded bg-white text-sm"
+        />
+
+        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as FilterStatus)} className="p-2 border rounded bg-white text-sm font-semibold">
+          <option value="All">Filter by status</option>
+          <option value="Active">Active</option>
+          <option value="Winning">Winning</option>
+          <option value="Paid">Paid</option>
+          <option value="Lost">Lost</option>
+          <option value="Canceled">Canceled</option>
+          <option value="Booked">Booked</option>
+        </select>
       </div>
 
-      <div className="flex flex-wrap gap-2 mb-4 pb-4 border-b">
-          <FilterButton status="All" label="All Tickets" />
-          <FilterButton status="Winning" label="Winning" />
-          <FilterButton status="Paid" label="Paid" />
-          <FilterButton status="Lost" label="Lost" />
-          <FilterButton status="Active" label="Active" />
-          <FilterButton status="Canceled" label="Canceled" />
-          <FilterButton status="Booked" label="Booked" />
-      </div>
-      <div className="overflow-x-auto mb-4">
-        <table className="min-w-full bg-white text-sm border rounded-lg overflow-hidden">
-          <thead className="bg-green-50">
-            <tr>
-              <th className="text-left py-2 px-3">Bet Type</th>
-              <th className="text-right py-2 px-3">Bet Placed</th>
-              <th className="text-right py-2 px-3">Total Stake</th>
-              <th className="text-right py-2 px-3">Winning Bet</th>
-              <th className="text-right py-2 px-3">Total Payout</th>
-              <th className="text-right py-2 px-3">Net Profit</th>
-            </tr>
-          </thead>
-          <tbody>
-            {summaryRows.length > 0 ? summaryRows.map((row) => (
-              <tr key={row.betType} className="border-b">
-                <td className="py-2 px-3 font-semibold">{row.betType}</td>
-                <td className="py-2 px-3 text-right">{row.betCount}</td>
-                <td className="py-2 px-3 text-right">{row.totalStake.toFixed(2)} GMD</td>
-                <td className="py-2 px-3 text-right">{row.winningBets}</td>
-                <td className="py-2 px-3 text-right text-blue-700 font-semibold">{row.totalPayout.toFixed(2)} GMD</td>
-                <td className="py-2 px-3 text-right font-semibold">{row.netProfit.toFixed(2)} GMD</td>
-              </tr>
-            )) : (
-              <tr>
-                <td colSpan={6} className="py-3 px-3 text-center text-gray-500">No bet summary available for the current filter.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
       <div className="overflow-x-auto">
         <table className="min-w-full bg-white text-sm">
           <thead className="bg-gray-200">
             <tr>
-              <th className="text-left py-2 px-3">Ticket ID</th>
-              <th className="text-left py-2 px-3">Processed By</th>
-              <th className="text-left py-2 px-3">Timestamp</th>
-              <th className="text-left py-2 px-3">Selections & Stake</th>
-              <th className="text-right py-2 px-3">Total Cost</th>
-              <th className="text-right py-2 px-3">Winnings</th>
+              <th className="text-left py-2 px-3">Ticket Number</th>
+              <th className="text-left py-2 px-3">Race Number</th>
+              <th className="text-left py-2 px-3">Bet Time</th>
+              <th className="text-left py-2 px-3">Bet-Combinations</th>
+              <th className="text-left py-2 px-3">Result</th>
               <th className="text-left py-2 px-3">Status</th>
-              <th className="text-left py-2 px-3">Actions</th>
+              <th className="text-left py-2 px-3">Cancel Options</th>
             </tr>
           </thead>
           <tbody>
@@ -186,44 +123,40 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ title, t
               filteredTickets.map(ticket => (
                 <tr key={ticket.id} className="border-b hover:bg-gray-50">
                   <td className="py-2 px-3 text-xs font-mono">{ticket.id}</td>
-                  <td className="py-2 px-3">{ticket.vendorName}</td>
+                  <td className="py-2 px-3 text-xs">
+                    <div className="space-y-1">
+                      {Array.from(new Set(ticket.selections.map(sel => sel.raceName || sel.raceId))).map((raceLabel, idx) => (
+                        <div key={idx} className="font-semibold">{raceLabel}</div>
+                      ))}
+                    </div>
+                  </td>
                   <td className="py-2 px-3 whitespace-nowrap">{ticket.timestamp.toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}</td>
                   <td className="py-2 px-3">
-                    {ticket.selections.map((sel, i) => (
-                      <div key={i} className={`py-1 ${i > 0 ? 'mt-1 pt-1 border-t border-gray-200' : ''}`}>
-                        <div className="flex justify-between items-start">
-                           <div>
-                                <span className="font-semibold">{sel.raceName} - {sel.betType}</span>
-                                <div className="text-xs text-gray-700 font-mono">
-                                  Ticket: {ticket.id}
-                                </div>
-                                <div className="text-xs text-gray-700 font-mono">
-                                  Combo: {sel.pattern && sel.pattern.length > 0 ? sel.pattern.join('-') : `${sel.xCount > 0 ? 'X-'.repeat(sel.xCount) : ''}${sel.numbers.join('-')}`}
-                                </div>
-                           </div>
-                           <div className="text-right ml-2">
-                               <span className="font-semibold text-xs whitespace-nowrap">Stake (x{sel.multiplier})</span>
-                               <div className="font-bold text-xs whitespace-nowrap">
-                                {(sel.cost * sel.multiplier).toFixed(2)} GMD
-                               </div>
-                               {ticket.winningsBreakdown?.find(item => item.selectionIndex === i && item.status === 'Win') && (
-                                <div className="text-[11px] text-blue-700 font-semibold whitespace-nowrap">
-                                  Win: {(ticket.winningsBreakdown?.find(item => item.selectionIndex === i)?.totalPayout || 0).toFixed(2)}
-                                </div>
-                               )}
-                           </div>
-                        </div>
+                    <details>
+                      <summary className="cursor-pointer text-xs font-semibold text-blue-700">Show selections ({ticket.selections.length})</summary>
+                      <div className="mt-2 space-y-1">
+                        {ticket.selections.map((sel, i) => (
+                          <div key={i} className="text-xs border rounded px-2 py-1 bg-gray-50">
+                            <div className="font-semibold">{sel.betType}</div>
+                            <div className="font-mono">{sel.pattern && sel.pattern.length > 0 ? sel.pattern.join('-') : `${sel.xCount > 0 ? 'X-'.repeat(sel.xCount) : ''}${sel.numbers.join('-')}`}</div>
+                            <div className="text-gray-600">Stake: {(sel.cost * sel.multiplier).toFixed(2)} GMD</div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    </details>
                   </td>
-                  <td className="py-2 px-3 font-semibold whitespace-nowrap text-right">{ticket.totalCost.toFixed(2)} GMD</td>
-                  <td className="py-2 px-3 font-semibold whitespace-nowrap text-right text-blue-600">{ticket.winnings?.toFixed(2) ?? '---'}</td>
+                  <td className="py-2 px-3 font-semibold text-blue-700">{ticket.winnings !== undefined && ticket.winnings > 0 ? `${ticket.winnings.toFixed(2)} GMD` : '-'}</td>
                   <td className={`py-2 px-3 font-bold ${getStatusColor(ticket.status)}`}>{ticket.status}</td>
                    <td className="py-2 px-3 text-xs">
                     <div className="flex flex-col gap-1 items-start">
                         <button onClick={() => setTicketToView(ticket)} className="px-2 py-1 bg-blue-500 text-white font-semibold rounded hover:bg-blue-600 text-xs">
                             View
                         </button>
+                        {onCancelTicket && (ticket.status === 'Active' || ticket.status === 'Booked') && (
+                          <button onClick={() => onCancelTicket(ticket.id)} className="px-2 py-1 bg-red-600 text-white font-semibold rounded hover:bg-red-700 text-xs">
+                            Cancel
+                          </button>
+                        )}
                         {ticket.status === 'Canceled' && ticket.canceledByName && (
                           <span>By: {ticket.canceledByName}</span>
                         )}
@@ -236,7 +169,7 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ title, t
               ))
             ) : (
               <tr>
-                <td colSpan={8} className="py-4 px-3 text-center text-gray-500">
+                <td colSpan={7} className="py-4 px-3 text-center text-gray-500">
                   No tickets match the current filter.
                 </td>
               </tr>

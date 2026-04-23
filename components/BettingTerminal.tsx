@@ -314,7 +314,7 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                                  <div className="p-4 bg-gray-50 rounded-lg border text-center"><span className="text-[10px] font-black text-gray-500 uppercase">Vol.</span><span className="block text-2xl font-black text-gray-800">{placedTickets.length}</span></div>
                                  <div className="p-4 bg-gray-50 rounded-lg border text-center"><span className="text-[10px] font-black text-gray-500 uppercase">Net Profit</span><span className="block text-2xl font-black text-orange-600">GMD {reportNet.toFixed(0)}</span></div>
                              </div>
-                             <TicketDetailsTable title="Full Transaction History" tickets={placedTickets} races={races} />
+                             <TicketDetailsTable title="Full Transaction History" tickets={placedTickets} races={races} onCancelTicket={props.onCancelTicket} />
                         </div>
                     </div>
                 );
