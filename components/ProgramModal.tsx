@@ -303,75 +303,53 @@ export const ProgramModal: React.FC<ProgramModalProps> = ({ isOpen, onClose, pro
 
     const handleDownload = async () => {
         const imageUrl = currentImage?.url;
-        if (imageUrl) {
-            try {
-                const response = await fetch(imageUrl);
+        if (!imageUrl) return;
+        const fileExt = currentImage?.mediaType === 'video' ? 'mp4' : 'jpg';
+        const fileName = `betese-program-${activeIndex + 1}.${fileExt}`;
+        // Try fetch + blob (works when server allows CORS)
+        try {
+            const response = await fetch(imageUrl, { mode: 'cors' });
+            if (response.ok) {
                 const blob = await response.blob();
                 const url = URL.createObjectURL(blob);
                 const link = document.createElement('a');
-                const fileExt = currentImage?.mediaType === 'video' ? 'mp4' : 'png';
-                link.download = `betese-${currentImage?.type || 'program'}-${activeIndex + 1}.${fileExt}`;
                 link.href = url;
+                link.download = fileName;
+                document.body.appendChild(link);
                 link.click();
-                URL.revokeObjectURL(url);
+                document.body.removeChild(link);
+                setTimeout(() => URL.revokeObjectURL(url), 2000);
                 return;
-            } catch { /* fall through */ }
-        }
-        if (programRef.current) {
-            try {
-                const orig = programRef.current.style.transform;
-                programRef.current.style.transform = 'scale(1) translate(0,0)';
-                const canvas = await html2canvas(programRef.current, { scale: 2, useCORS: true });
-                programRef.current.style.transform = orig;
-                const link = document.createElement('a');
-                link.download = `betese-${currentImage?.type || 'program'}-${activeIndex + 1}.png`;
-                link.href = canvas.toDataURL('image/png');
-                link.click();
-            } catch (error) {
-                alert('Sorry, there was an error generating the image for download.');
             }
-        }
+        } catch { /* fall through to open-in-tab */ }
+        // Fallback: open directly in new tab so user can long-press/save
+        window.open(imageUrl, '_blank', 'noopener,noreferrer');
     };
 
     const handleShare = async () => {
-        if (!navigator.share) {
-            const imageUrl = currentImage?.url;
-            if (imageUrl && navigator.clipboard) {
-                try { await navigator.clipboard.writeText(imageUrl); alert('Image link copied to clipboard! You can now paste and share it.'); }
-                catch { alert('Sharing is not supported by your browser. Try downloading the image instead.'); }
-            } else {
-                alert('Sharing is not supported by your browser. Try downloading the image instead.');
+        const imageUrl = currentImage?.url;
+        if (!imageUrl) return;
+        // Try Web Share API with URL (widely supported on mobile, no CORS issue)
+        if (navigator.share) {
+            try {
+                await navigator.share({
+                    title: 'Betese PMU – Racing Program',
+                    text: "Today's racing program from Betese PMU!",
+                    url: imageUrl,
+                });
+                return;
+            } catch (error) {
+                if ((error as DOMException).name === 'AbortError') return; // user cancelled
+                // fall through to clipboard
             }
-            return;
         }
+        // Fallback: copy URL to clipboard
         try {
-            const imageUrl = currentImage?.url;
-            if (imageUrl) {
-                try {
-                    const response = await fetch(imageUrl);
-                    const blob = await response.blob();
-                    const fileExt = currentImage?.mediaType === 'video' ? 'mp4' : 'png';
-                    const file = new File([blob], `betese-${currentImage?.type || 'program'}.${fileExt}`, { type: blob.type || 'application/octet-stream' });
-                    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                        await navigator.share({ title: 'Betese PMU', text: `Today's racing program from Betese PMU!`, files: [file] });
-                        return;
-                    }
-                } catch { /* fall through */ }
-            }
-            if (programRef.current) {
-                const orig = programRef.current.style.transform;
-                programRef.current.style.transform = 'scale(1) translate(0,0)';
-                const canvas = await html2canvas(programRef.current, { scale: 2, useCORS: true });
-                programRef.current.style.transform = orig;
-                canvas.toBlob(async (blob) => {
-                    if (blob) {
-                        const file = new File([blob], `betese-program.png`, { type: 'image/png' });
-                        await navigator.share({ title: 'Betese PMU', text: `Today's racing program!`, files: [file] });
-                    }
-                }, 'image/png');
-            }
-        } catch (error) {
-            if ((error as DOMException).name !== 'AbortError') alert('An error occurred while trying to share.');
+            await navigator.clipboard.writeText(imageUrl);
+            alert('Link copied to clipboard! Paste it to share the program.');
+        } catch {
+            // Last resort: open in new tab
+            window.open(imageUrl, '_blank', 'noopener,noreferrer');
         }
     };
 
