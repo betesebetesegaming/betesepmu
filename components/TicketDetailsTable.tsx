@@ -269,7 +269,8 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
 
                       {/* Options */}
                       <td className="py-3 px-4 align-top">
-                        <div className="flex items-start gap-1">
+                        <div className="space-y-1">
+                          <div className="flex items-start gap-1">
                           {/* Print/view icon button */}
                           <button
                             onClick={() => setTicketToView(ticket)}
@@ -292,12 +293,18 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                               </svg>
                             </button>
                           )}
+                          </div>
 
-                          {ticket.status === 'Canceled' && ticket.canceledByName && (
-                            <span className="text-[10px] text-gray-400 block mt-1">By: {ticket.canceledByName}</span>
+                          {ticket.status === 'Canceled' && (
+                            <div className="text-[10px] text-gray-500 leading-tight">
+                              Canceled by: {ticket.canceledByName || 'Admin/Vendor'}
+                            </div>
                           )}
-                          {ticket.status === 'Paid' && ticket.paidByName && (
-                            <span className="text-[10px] text-gray-400 block mt-1">By: {ticket.paidByName}</span>
+
+                          {ticket.status === 'Paid' && (
+                            <div className="text-[10px] text-gray-700 leading-tight font-semibold">
+                              Paid by: {ticket.paidByName || 'Admin/Vendor'}
+                            </div>
                           )}
                         </div>
                       </td>
