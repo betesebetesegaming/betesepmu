@@ -2,6 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { Ticket, Race } from '../types';
 import { TicketModal } from './TicketModal';
+import { TicketCombinationLedger } from './TicketCombinationLedger';
 
 interface TicketDetailsTableProps {
   title: string;
@@ -30,6 +31,7 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
   const [filterDate, setFilterDate] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [ticketToView, setTicketToView] = useState<Ticket | null>(null);
+  const [ledgerTicket, setLedgerTicket] = useState<Ticket | null>(null);
 
   const agentOptions = useMemo(() => {
     return Array.from(new Set(tickets.map(t => t.vendorName).filter(Boolean))).sort((a, b) => a.localeCompare(b));
@@ -73,6 +75,7 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
   return (
     <>
     {ticketToView && <TicketModal ticket={ticketToView} onClose={() => setTicketToView(null)} showPrintButton={true} races={races} />}
+    {ledgerTicket && <TicketCombinationLedger ticket={ledgerTicket} onClose={() => setLedgerTicket(null)} />}
     <div className="bg-white p-6 rounded-lg shadow-lg">
       <h2 className="text-3xl font-black text-betese-dark mb-4 uppercase">TICKET</h2>
       
@@ -122,7 +125,15 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
             {filteredTickets.length > 0 ? (
               filteredTickets.map(ticket => (
                 <tr key={ticket.id} className="border-b hover:bg-gray-50">
-                  <td className="py-2 px-3 text-xs font-mono">{ticket.id}</td>
+                  <td className="py-2 px-3 text-xs font-mono">
+                    <button
+                      onClick={() => setLedgerTicket(ticket)}
+                      className="text-blue-700 font-mono font-semibold hover:underline hover:text-blue-900 text-left"
+                      title="View combination ledger"
+                    >
+                      {ticket.id}
+                    </button>
+                  </td>
                   <td className="py-2 px-3 text-xs">
                     <div className="space-y-1">
                       {Array.from(new Set(ticket.selections.map(sel => sel.raceName || sel.raceId))).map((raceLabel, idx) => (
