@@ -53,14 +53,8 @@ type FilterStatus = Ticket['status'] | 'All';
 export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets, races, onCancelTicket }) => {
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('All');
   const [filterAgent, setFilterAgent] = useState<string>('All');
-  // Pre-fill today's date so the date box shows current date like the screenshot
-  const [filterDate, setFilterDate] = useState<string>(() => {
-    const now = new Date();
-    const yyyy = now.getFullYear();
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const dd = String(now.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}`;
-  });
+  // Keep date empty by default so agent filter can show all vendor transactions.
+  const [filterDate, setFilterDate] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [ticketToView, setTicketToView] = useState<Ticket | null>(null);
   const [ledgerTicket, setLedgerTicket] = useState<Ticket | null>(null);
@@ -105,14 +99,7 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
 
     if (searchTerm.trim()) {
       const term = searchTerm.trim().toLowerCase();
-      result = result.filter(t =>
-        t.id.toLowerCase().includes(term) ||
-        t.selections.some(sel =>
-          sel.betType.toLowerCase().includes(term) ||
-          sel.raceName.toLowerCase().includes(term) ||
-          sel.numbers.join(' ').includes(term)
-        )
-      );
+      result = result.filter(t => t.id.toLowerCase().includes(term));
     }
     if (filterStatus !== 'All') result = result.filter(matchesStatusFilter);
     if (filterAgent !== 'All') result = result.filter(t => (t.vendorName || '').toLowerCase() === filterAgent.toLowerCase());
@@ -126,6 +113,16 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
     }
     return result;
   }, [tickets, filterStatus, filterAgent, filterDate, searchTerm, races]);
+
+  const filteredSummary = useMemo(() => {
+    const totalStake = filteredTickets.reduce((sum, t) => sum + Number(t.totalCost || 0), 0);
+    const totalWinnings = filteredTickets.reduce((sum, t) => sum + Number(t.winnings || 0), 0);
+    return {
+      count: filteredTickets.length,
+      totalStake,
+      totalWinnings,
+    };
+  }, [filteredTickets]);
 
   return (
     <>
@@ -180,6 +177,12 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
             <option value="Canceled">Canceled</option>
             <option value="Booked">Booked</option>
           </select>
+        </div>
+
+        <div className="px-4 py-2 border-b bg-slate-50 text-xs text-gray-700 flex flex-wrap gap-4">
+          <span className="font-semibold">Transactions: <span className="font-black text-betese-dark">{filteredSummary.count}</span></span>
+          <span className="font-semibold">Total Stake: <span className="font-black text-betese-dark">{filteredSummary.totalStake.toFixed(2)} GMD</span></span>
+          <span className="font-semibold">Total Winnings: <span className="font-black text-betese-dark">{filteredSummary.totalWinnings.toFixed(2)} GMD</span></span>
         </div>
 
         {/* Table */}
