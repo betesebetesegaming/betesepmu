@@ -66,6 +66,7 @@ const AppContent: React.FC = () => {
   const [ticketToReprint, setTicketToReprint] = useState<Ticket | null>(null);
   const [walletFlash, setWalletFlash] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isProgramModalOpen, setIsProgramModalOpen] = useState(false);
   const [effectiveTime, setEffectiveTime] = useState(new Date());
   const [isOnline, setIsOnline] = useState(true);
 
@@ -919,6 +920,7 @@ const AppContent: React.FC = () => {
         onWalletFlashComplete={() => setWalletFlash(false)}
         onOpenChat={() => setIsChatOpen(true)}
         onRefreshSystem={handleRefreshSystem}
+        onOpenProgram={currentUser?.role === 'Customer' ? () => setIsProgramModalOpen(true) : undefined}
         messages={messages}
         threads={threads}
         pendingDepositCount={(depositRequests || []).filter(r => r.status === 'Pending').length}
@@ -1065,6 +1067,8 @@ const AppContent: React.FC = () => {
                 onDepositRequest={handleCreateDepositRequest}
                 depositRequests={depositRequests}
                 onCancelWithdrawal={handleCancelWithdrawal}
+                externalOpenProgram={isProgramModalOpen}
+                onExternalProgramClose={() => setIsProgramModalOpen(false)}
              />
         )}
       </main>

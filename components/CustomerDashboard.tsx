@@ -78,6 +78,8 @@ interface CustomerDashboardProps {
   onDepositRequest: (amount: number, method: 'Wave' | 'AfriMoney', phone: string) => void;
   depositRequests: DepositRequest[];
   onCancelWithdrawal?: (requestId: string) => void;
+  externalOpenProgram?: boolean;
+  onExternalProgramClose?: () => void;
 }
 
 export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
@@ -105,14 +107,23 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   effectiveTime,
   onDepositRequest,
   depositRequests,
-  onCancelWithdrawal
-}) => {
+  onCancelWithdrawal,
+  externalOpenProgram,
+  onExternalProgramClose,}) => {
   const [activeTab, setActiveTab] = useState<'bet' | 'history' | 'wallet' | 'info'>('bet');
   const [rapportModalRace, setRapportModalRace] = useState<Race | null>(null);
   const [isProgramModalOpen, setIsProgramModalOpen] = useState(false);
   const [isRulesModalOpen, setIsRulesModalOpen] = useState(false);
   const [showPromoTV, setShowPromoTV] = useState(true);
   const { t } = useLanguage();
+
+  // Sync external trigger (from Header PROGRAM button)
+  useEffect(() => {
+    if (externalOpenProgram) {
+      setIsProgramModalOpen(true);
+      onExternalProgramClose?.();
+    }
+  }, [externalOpenProgram]);
   
   const availableRaces = useMemo(
     () => [...races].filter(r => r.endDate > effectiveTime).sort((a,b) => a.endDate.getTime() - b.endDate.getTime()),
@@ -198,18 +209,7 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   return (
     <div className="space-y-6">
       <WhatsAppButton />
-      {/* Floating program button — always visible for online customer */}
-      {programItems.length > 0 && (
-        <button
-          onClick={() => setIsProgramModalOpen(true)}
-          title="View Racing Program"
-          className="fixed bottom-6 right-6 z-40 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-full shadow-2xl w-14 h-14 flex flex-col items-center justify-center transition-all border-2 border-white"
-          style={{ boxShadow: '0 4px 24px 0 rgba(37,99,235,0.5)' }}
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
-          <span className="text-[8px] font-black uppercase leading-none mt-0.5">Prog</span>
-        </button>
-      )}
+      {/* Floating program button removed — PROGRAM button is now in the header */}
       {/* 100% Logic: Never show print for online customers to prevent fraud */}
       {lastTicket?.status === 'Booked' && lastTicket.bookingCode && (
         <BookingCodeModal ticket={lastTicket} onClose={onCloseTicket} />
@@ -235,60 +235,19 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
 
             {activeTab === 'bet' && (
               <div className="bg-white p-6 rounded-lg shadow-lg relative">
-                  {(() => {
-                    if (programItems.length === 0) return null;
-                    return (
-                      <div
-                        onClick={() => setIsProgramModalOpen(true)}
-                        className="w-full mb-5 rounded-2xl overflow-hidden border-2 border-blue-500 shadow-lg cursor-pointer group hover:shadow-xl transition-all active:scale-[0.99]"
-                      >
-                        {/* Header bar */}
-                        <div className="bg-gradient-to-r from-blue-700 to-blue-500 px-4 py-2 flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
-                            <span className="text-white font-black uppercase tracking-wide text-sm">Today's Racing Program</span>
-                            <span className="bg-yellow-400 text-blue-900 text-[10px] font-black px-2 py-0.5 rounded-full uppercase animate-pulse">
-                              {programItems.length} {programItems.length === 1 ? 'Page' : 'Pages'}
-                            </span>
-                          </div>
-                          <span className="text-white text-xs font-bold opacity-80 group-hover:opacity-100 transition-opacity flex items-center gap-1">
-                            Tap to open
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                            </svg>
-                          </span>
-                        </div>
-                        {/* Thumbnail strip */}
-                        <div className="bg-gray-900 flex gap-1 p-2 overflow-x-auto">
-                          {programItems.slice(0, 4).map((img, idx) => (
-                            <div key={img.id} className="relative flex-shrink-0 w-24 h-16 rounded overflow-hidden border border-white/20">
-                              {img.mediaType === 'video' ? (
-                                <video src={img.url} className="w-full h-full object-cover" muted playsInline />
-                              ) : (
-                                <img src={img.url} alt={`Program page ${idx + 1}`} className="w-full h-full object-cover" />
-                              )}
-                              <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[9px] text-center py-0.5 font-bold">
-                                Page {idx + 1}
-                              </div>
-                            </div>
-                          ))}
-                          {programItems.length > 4 && (
-                            <div className="flex-shrink-0 w-24 h-16 rounded bg-blue-800/60 border border-white/20 flex items-center justify-center text-white font-black text-lg">
-                              +{programItems.length - 4}
-                            </div>
-                          )}
-                        </div>
-                        {/* Footer hint */}
-                        <div className="bg-blue-50 border-t border-blue-200 px-4 py-1.5 flex items-center justify-center gap-2 text-blue-700 text-xs font-semibold">
-                          <span>🔍 Zoom &amp; pan</span>
-                          <span>·</span>
-                          <span>⬅️ Swipe pages</span>
-                          <span>·</span>
-                          <span>⬇️ Download &amp; share</span>
-                        </div>
-                      </div>
-                    );
-                  })()}
+                  {/* view_program button — always shown in bet tab */}
+                  <button
+                    onClick={() => setIsProgramModalOpen(true)}
+                    className="w-full mb-5 flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-black uppercase rounded-xl shadow-md transition-all text-sm"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                    view_program
+                    {programItems.length > 0 && (
+                      <span className="bg-yellow-400 text-blue-900 text-[10px] font-black px-2 py-0.5 rounded-full">
+                        {programItems.length} {programItems.length === 1 ? 'page' : 'pages'}
+                      </span>
+                    )}
+                  </button>
                   {selectedRace && (
                     <div className={`sticky top-0 z-10 -mx-6 -mt-6 mb-6 p-4 border-b-4 flex justify-between items-center shadow-md transition-colors ${isBettingClosed ? 'bg-red-600 border-red-800 text-white' : 'bg-betese-green border-green-800 text-white'}`}>
                         <div>

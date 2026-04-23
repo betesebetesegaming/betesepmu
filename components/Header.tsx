@@ -11,7 +11,8 @@ interface HeaderProps {
   walletFlash: boolean;
   onWalletFlashComplete: () => void;
   onOpenChat: () => void;
-  onRefreshSystem?: () => void; // New recovery prop
+  onRefreshSystem?: () => void;
+  onOpenProgram?: () => void;
   messages: ChatMessage[];
   threads: ChatThread[];
   isTestingMode?: boolean;
@@ -26,6 +27,7 @@ export const Header: React.FC<HeaderProps> = ({
     onWalletFlashComplete, 
     onOpenChat,
     onRefreshSystem,
+    onOpenProgram,
     messages, 
     threads, 
     isTestingMode, 
@@ -137,6 +139,16 @@ export const Header: React.FC<HeaderProps> = ({
                     <p className="font-semibold text-sm truncate max-w-[100px]">{user.name}</p>
                 </div>
 
+                {onOpenProgram && user?.role === 'Customer' && (
+                    <button
+                        onClick={onOpenProgram}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs rounded-lg shadow transition-colors flex-shrink-0 uppercase tracking-wide"
+                        title="View Racing Program"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                        PROGRAM
+                    </button>
+                )}
                 <button onClick={onOpenChat} className="relative p-2 rounded-full hover:bg-gray-100 flex-shrink-0">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
                     {unreadCount > 0 && <span className="absolute top-0 right-0 inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-bold text-red-100 bg-red-600 rounded-full">{unreadCount}</span>}
