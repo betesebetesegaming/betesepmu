@@ -48,6 +48,11 @@ interface CombinationLedgerRow {
     payout: number;
 }
 
+interface GroupedLedgerRow {
+    ticketId: string;
+    rows: CombinationLedgerRow[];
+}
+
 const normalizeDate = (value: Date | string | number | undefined): Date | null => {
     if (!value) return null;
     if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
@@ -202,6 +207,23 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
         });
     }, [analyticsData.combinationLedger, ledgerFilterAgent, ledgerFilterDate, ledgerFilterTicket, ledgerFilterStatus]);
 
+    const groupedCombinationLedger = useMemo<GroupedLedgerRow[]>(() => {
+        const groups = new Map<string, CombinationLedgerRow[]>();
+        filteredCombinationLedger.forEach((row) => {
+            const existing = groups.get(row.ticketId);
+            if (existing) {
+                existing.push(row);
+            } else {
+                groups.set(row.ticketId, [row]);
+            }
+        });
+
+        return Array.from(groups.entries()).map(([ticketId, rows]) => ({
+            ticketId,
+            rows,
+        }));
+    }, [filteredCombinationLedger]);
+
     const formatRaceTime = (date: Date) => {
         if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '-';
         return date.toLocaleString('en-US', {
@@ -349,16 +371,25 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
-                            {filteredCombinationLedger.length > 0 ? filteredCombinationLedger.map((row, idx) => (
-                                <tr key={`${row.ticketId}-${row.raceId}-${idx}`}>
-                                    <td className="py-2 px-3 font-mono">{row.ticketId}</td>
-                                    <td className="py-2 px-3">{row.raceName}</td>
-                                    <td className="py-2 px-3">{row.betType}</td>
-                                    <td className="py-2 px-3 font-mono">{row.combination}</td>
-                                    <td className="py-2 px-3 text-right font-mono">{row.stake.toFixed(2)}</td>
-                                    <td className="py-2 px-3">{row.status}</td>
-                                    <td className="py-2 px-3 text-right font-mono">{row.payout.toFixed(2)}</td>
-                                </tr>
+                            {groupedCombinationLedger.length > 0 ? groupedCombinationLedger.map((group) => (
+                                group.rows.map((row, rowIndex) => (
+                                    <tr key={`${group.ticketId}-${row.raceId}-${rowIndex}`}>
+                                        {rowIndex === 0 && (
+                                            <td rowSpan={group.rows.length} className="py-2 px-3 font-mono font-bold align-top bg-gray-50 border-r border-gray-200">
+                                                <div>{group.ticketId}</div>
+                                                <div className="text-[10px] text-gray-500 font-normal mt-0.5">
+                                                    {group.rows.length} bet{group.rows.length > 1 ? 's' : ''}
+                                                </div>
+                                            </td>
+                                        )}
+                                        <td className="py-2 px-3">{row.raceName}</td>
+                                        <td className="py-2 px-3">{row.betType}</td>
+                                        <td className="py-2 px-3 font-mono">{row.combination}</td>
+                                        <td className="py-2 px-3 text-right font-mono">{row.stake.toFixed(2)}</td>
+                                        <td className="py-2 px-3">{row.status}</td>
+                                        <td className="py-2 px-3 text-right font-mono">{row.payout.toFixed(2)}</td>
+                                    </tr>
+                                ))
                             )) : (
                                 <tr>
                                     <td colSpan={7} className="py-4 px-3 text-center text-gray-500">No ticket combinations found for current filters.</td>
