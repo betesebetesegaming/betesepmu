@@ -1,5 +1,5 @@
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Ticket, Race, BetTypeOption } from '../types';
 
 interface AnalyticsDashboardProps {
@@ -37,6 +37,8 @@ interface RacePerformanceCard {
 
 interface CombinationLedgerRow {
     ticketId: string;
+    vendorName: string;
+    dateKey: string;
     raceId: string;
     raceName: string;
     betType: string;
@@ -47,6 +49,10 @@ interface CombinationLedgerRow {
 }
 
 export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets, races }) => {
+    const [ledgerFilterAgent, setLedgerFilterAgent] = useState<string>('All');
+    const [ledgerFilterDate, setLedgerFilterDate] = useState<string>('');
+    const [ledgerFilterTicket, setLedgerFilterTicket] = useState<string>('');
+    const [ledgerFilterStatus, setLedgerFilterStatus] = useState<Ticket['status'] | 'All'>('All');
     
     const raceNameMap = useMemo(() => new Map(races.map(r => [r.id, r.name])), [races]);
 
@@ -112,8 +118,13 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
                 const fallbackPayout = ticket.totalCost > 0
                     ? ((selection.cost * selection.multiplier) / ticket.totalCost) * (ticket.winnings ?? 0)
                     : 0;
+                const yyyy = ticket.timestamp.getFullYear();
+                const mm = String(ticket.timestamp.getMonth() + 1).padStart(2, '0');
+                const dd = String(ticket.timestamp.getDate()).padStart(2, '0');
                 return {
                     ticketId: ticket.id,
+                    vendorName: ticket.vendorName || '-',
+                    dateKey: `${yyyy}-${mm}-${dd}`,
                     raceId: selection.raceId,
                     raceName: raceNameMap.get(selection.raceId) || selection.raceName || selection.raceId,
                     betType: selection.betType,
@@ -167,6 +178,21 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
         };
 
     }, [tickets, raceNameMap, races]);
+
+    const ledgerAgentOptions = useMemo(() => {
+        return Array.from(new Set(analyticsData.combinationLedger.map(row => row.vendorName).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+    }, [analyticsData.combinationLedger]);
+
+    const filteredCombinationLedger = useMemo(() => {
+        const ticketTerm = ledgerFilterTicket.trim().toLowerCase();
+        return analyticsData.combinationLedger.filter((row) => {
+            if (ledgerFilterAgent !== 'All' && row.vendorName.toLowerCase() !== ledgerFilterAgent.toLowerCase()) return false;
+            if (ledgerFilterDate && row.dateKey !== ledgerFilterDate) return false;
+            if (ticketTerm && !row.ticketId.toLowerCase().includes(ticketTerm)) return false;
+            if (ledgerFilterStatus !== 'All' && row.status !== ledgerFilterStatus) return false;
+            return true;
+        });
+    }, [analyticsData.combinationLedger, ledgerFilterAgent, ledgerFilterDate, ledgerFilterTicket, ledgerFilterStatus]);
 
     const formatRaceTime = (date: Date) => {
         if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '-';
@@ -246,6 +272,61 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
             <div className="bg-white p-6 rounded-lg shadow-lg">
                 <h3 className="text-xl font-bold text-betese-dark mb-4">Ticket Combination Ledger</h3>
                 <p className="text-sm text-gray-600 mb-4">This table shows ticket number and exact combination for each selection so winning combinations can be verified per race.</p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4 p-3 border rounded-lg bg-green-50">
+                    <div>
+                        <label className="block text-[10px] text-gray-500 font-bold uppercase mb-1">Agent Name Filter</label>
+                        <select
+                            value={ledgerFilterAgent}
+                            onChange={e => setLedgerFilterAgent(e.target.value)}
+                            className="w-full p-2 border rounded bg-white text-sm"
+                        >
+                            <option value="All">All Agents</option>
+                            {ledgerAgentOptions.map((agent) => (
+                                <option key={agent} value={agent}>{agent}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label className="block text-[10px] text-gray-500 font-bold uppercase mb-1">Date Selection</label>
+                        <input
+                            type="date"
+                            value={ledgerFilterDate}
+                            onChange={e => setLedgerFilterDate(e.target.value)}
+                            className="w-full p-2 border rounded bg-white text-sm"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-[10px] text-gray-500 font-bold uppercase mb-1">Ticket Number</label>
+                        <input
+                            type="text"
+                            value={ledgerFilterTicket}
+                            onChange={e => setLedgerFilterTicket(e.target.value)}
+                            placeholder="Enter ticket number"
+                            className="w-full p-2 border rounded bg-white text-sm"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-[10px] text-gray-500 font-bold uppercase mb-1">Filter by Status</label>
+                        <select
+                            value={ledgerFilterStatus}
+                            onChange={e => setLedgerFilterStatus(e.target.value as Ticket['status'] | 'All')}
+                            className="w-full p-2 border rounded bg-white text-sm"
+                        >
+                            <option value="All">All</option>
+                            <option value="Active">Active</option>
+                            <option value="Winning">Winning</option>
+                            <option value="Lost">Lost</option>
+                            <option value="Booked">Booked</option>
+                            <option value="Paid">Paid</option>
+                            <option value="Canceled">Canceled</option>
+                        </select>
+                    </div>
+                </div>
+
                 <div className="overflow-x-auto">
                     <table className="min-w-full bg-white text-sm">
                         <thead className="bg-gray-100">
@@ -260,7 +341,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
-                            {analyticsData.combinationLedger.length > 0 ? analyticsData.combinationLedger.map((row, idx) => (
+                            {filteredCombinationLedger.length > 0 ? filteredCombinationLedger.map((row, idx) => (
                                 <tr key={`${row.ticketId}-${row.raceId}-${idx}`}>
                                     <td className="py-2 px-3 font-mono">{row.ticketId}</td>
                                     <td className="py-2 px-3">{row.raceName}</td>
@@ -272,7 +353,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
                                 </tr>
                             )) : (
                                 <tr>
-                                    <td colSpan={7} className="py-4 px-3 text-center text-gray-500">No ticket combinations found.</td>
+                                    <td colSpan={7} className="py-4 px-3 text-center text-gray-500">No ticket combinations found for current filters.</td>
                                 </tr>
                             )}
                         </tbody>
