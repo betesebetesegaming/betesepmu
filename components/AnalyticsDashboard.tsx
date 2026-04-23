@@ -37,7 +37,8 @@ interface RacePerformanceCard {
 
 interface CombinationLedgerRow {
     ticketId: string;
-    vendorName: string;
+    actorName: string;
+    stampTime: string;
     dateKey: string;
     raceId: string;
     raceName: string;
@@ -50,6 +51,8 @@ interface CombinationLedgerRow {
 
 interface GroupedLedgerRow {
     ticketId: string;
+    actorName: string;
+    stampTime: string;
     rows: CombinationLedgerRow[];
 }
 
@@ -134,9 +137,24 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
                 const yyyy = safeDate ? safeDate.getFullYear() : 0;
                 const mm = safeDate ? String(safeDate.getMonth() + 1).padStart(2, '0') : '00';
                 const dd = safeDate ? String(safeDate.getDate()).padStart(2, '0') : '00';
+                const actorName = ticket.customerId
+                    ? `ONLINE (${ticket.customerId})`
+                    : (ticket.vendorName || 'AGENT');
+                const stampTime = safeDate
+                    ? safeDate.toLocaleString('en-US', {
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit',
+                        hour12: false,
+                    })
+                    : '-';
                 return {
                     ticketId: String(ticket.id),
-                    vendorName: ticket.vendorName || '-',
+                    actorName,
+                    stampTime,
                     dateKey: safeDate ? `${yyyy}-${mm}-${dd}` : '',
                     raceId: selection.raceId,
                     raceName: raceNameMap.get(selection.raceId) || selection.raceName || selection.raceId,
@@ -193,13 +211,13 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
     }, [tickets, raceNameMap, races]);
 
     const ledgerAgentOptions = useMemo(() => {
-        return Array.from(new Set(analyticsData.combinationLedger.map(row => row.vendorName).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+        return Array.from(new Set(analyticsData.combinationLedger.map(row => row.actorName).filter(Boolean))).sort((a, b) => a.localeCompare(b));
     }, [analyticsData.combinationLedger]);
 
     const filteredCombinationLedger = useMemo(() => {
         const ticketTerm = ledgerFilterTicket.trim().toLowerCase();
         return analyticsData.combinationLedger.filter((row) => {
-            if (ledgerFilterAgent !== 'All' && row.vendorName.toLowerCase() !== ledgerFilterAgent.toLowerCase()) return false;
+            if (ledgerFilterAgent !== 'All' && row.actorName.toLowerCase() !== ledgerFilterAgent.toLowerCase()) return false;
             if (ledgerFilterDate && row.dateKey !== ledgerFilterDate) return false;
             if (ticketTerm && !row.ticketId.toLowerCase().includes(ticketTerm)) return false;
             if (ledgerFilterStatus !== 'All' && row.status !== ledgerFilterStatus) return false;
@@ -220,6 +238,8 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
 
         return Array.from(groups.entries()).map(([ticketId, rows]) => ({
             ticketId,
+            actorName: rows[0]?.actorName || '-',
+            stampTime: rows[0]?.stampTime || '-',
             rows,
         }));
     }, [filteredCombinationLedger]);
@@ -377,6 +397,8 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
                                         {rowIndex === 0 && (
                                             <td rowSpan={group.rows.length} className="py-2 px-3 font-mono font-bold align-top bg-gray-50 border-r border-gray-200">
                                                 <div>{group.ticketId}</div>
+                                                <div className="text-[10px] text-gray-700 font-semibold mt-0.5">{group.actorName}</div>
+                                                <div className="text-[10px] text-gray-500 font-normal">{group.stampTime}</div>
                                                 <div className="text-[10px] text-gray-500 font-normal mt-0.5">
                                                     {group.rows.length} bet{group.rows.length > 1 ? 's' : ''}
                                                 </div>
