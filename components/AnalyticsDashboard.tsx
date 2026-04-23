@@ -47,6 +47,8 @@ interface CombinationLedgerRow {
     stake: number;
     status: Ticket['status'];
     payout: number;
+    paidByName?: string;
+    paidById?: string;
 }
 
 interface GroupedLedgerRow {
@@ -139,7 +141,9 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
                 const dd = safeDate ? String(safeDate.getDate()).padStart(2, '0') : '00';
                 const actorName = ticket.customerId
                     ? `ONLINE (${ticket.customerId})`
-                    : (ticket.vendorName || 'AGENT');
+                    : ticket.vendorId
+                        ? `AGENT ${ticket.vendorName || '-'} (${ticket.vendorId})`
+                        : (ticket.vendorName ? `AGENT ${ticket.vendorName}` : 'SYSTEM');
                 const stampTime = safeDate
                     ? safeDate.toLocaleString('en-US', {
                         year: 'numeric',
@@ -164,7 +168,9 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
                         : `${selection.xCount > 0 ? 'X-'.repeat(selection.xCount) : ''}${selection.numbers.join('-')}`,
                     stake: selection.cost * selection.multiplier,
                     status: ticket.status,
-                    payout: matchedBreakdown?.totalPayout || fallbackPayout
+                    payout: matchedBreakdown?.totalPayout || fallbackPayout,
+                    paidByName: ticket.paidByName,
+                    paidById: ticket.paidById,
                 };
             });
         }).sort((a, b) => b.ticketId.localeCompare(a.ticketId));
@@ -456,7 +462,12 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
                                         <div className="space-y-1">
                                             {group.rows.map((row, i) => (
                                                 <div key={i} className="text-xs">
-                                                    {row.payout.toFixed(2)}
+                                                    <div>{row.payout.toFixed(2)}</div>
+                                                    {row.status === 'Paid' && (row.paidByName || row.paidById) && (
+                                                        <div className="text-[10px] text-gray-500">
+                                                            by {row.paidByName || row.paidById}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             ))}
                                         </div>
