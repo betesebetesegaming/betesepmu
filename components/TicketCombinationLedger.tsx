@@ -3,7 +3,6 @@ import { Ticket } from '../types';
 
 interface TicketCombinationLedgerProps {
   tickets: Ticket[];
-  initialTicketNumber?: string;
   onClose: () => void;
 }
 
@@ -47,10 +46,10 @@ interface LedgerRow {
   payout: number;
 }
 
-export const TicketCombinationLedger: React.FC<TicketCombinationLedgerProps> = ({ tickets, initialTicketNumber = '', onClose }) => {
+export const TicketCombinationLedger: React.FC<TicketCombinationLedgerProps> = ({ tickets, onClose }) => {
   const [filterAgent, setFilterAgent] = useState<string>('All');
   const [filterDate, setFilterDate] = useState<string>('');
-  const [filterTicketNumber, setFilterTicketNumber] = useState<string>(initialTicketNumber);
+  const [filterTicketNumber, setFilterTicketNumber] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<LedgerFilterStatus>('All');
 
   const rows = useMemo<LedgerRow[]>(() => {
@@ -161,6 +160,21 @@ export const TicketCombinationLedger: React.FC<TicketCombinationLedgerProps> = (
           </div>
         </div>
 
+        <div className="px-6 py-2 border-b bg-slate-50 text-xs text-gray-600 flex items-center justify-between">
+          <span>Showing {filteredRows.length} row{filteredRows.length !== 1 ? 's' : ''}</span>
+          <button
+            onClick={() => {
+              setFilterAgent('All');
+              setFilterDate('');
+              setFilterTicketNumber('');
+              setFilterStatus('All');
+            }}
+            className="text-xs font-semibold text-blue-700 hover:underline"
+          >
+            Clear all filters
+          </button>
+        </div>
+
         {/* Combination Table */}
         <div className="overflow-x-auto px-6 py-4">
           <table className="w-full text-sm border-collapse">
@@ -198,7 +212,7 @@ export const TicketCombinationLedger: React.FC<TicketCombinationLedgerProps> = (
               {filteredRows.length === 0 && (
                 <tr>
                   <td colSpan={7} className="py-5 text-center text-sm text-gray-500">
-                    No rows match current filters.
+                    No rows match current filters. Click "Clear all filters" to view all transactions.
                   </td>
                 </tr>
               )}
