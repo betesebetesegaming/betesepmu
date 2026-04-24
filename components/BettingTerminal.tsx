@@ -11,7 +11,6 @@ import { ProcessWithdrawalPanel } from './ProcessWithdrawalPanel';
 import { BetSlipPanel } from './BetSlipPanel';
 import { HorseSelector } from './HorseSelector';
 import { TicketCheckPanel } from './TicketCheckPanel';
-import { TicketDetailsTable } from './TicketDetailsTable';
 import { RapportPrintPanel } from './RapportPrintPanel';
 import RaceTimerButton from './RaceTimerButton';
 import { BET_PRICING } from '../constants';
@@ -51,7 +50,7 @@ interface BettingTerminalProps {
   onSaveRaceResult: (result: RaceResult) => void; 
 }
 
-type View = 'DASHBOARD' | 'PLACE_BET' | 'SCAN_PAY' | 'FINANCE' | 'SALES_REPORT' | 'RAPPORTS' | 'UPDATE_RESULTS';
+type View = 'DASHBOARD' | 'PLACE_BET' | 'SCAN_PAY' | 'FINANCE' | 'RAPPORTS' | 'UPDATE_RESULTS';
 
 type MenuIconKind = 'horse' | 'money' | 'wallet' | 'history' | 'print' | 'results' | 'chat';
 
@@ -295,29 +294,6 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                         />
                     </div>
                 );
-            case 'SALES_REPORT':
-                return (
-                    <div className="space-y-6 animate-fade-in">
-                        <div className="bg-white p-6 rounded-xl shadow-lg border-t-4 border-yellow-500">
-                             <div className="flex justify-between items-center mb-6">
-                                <h3 className="text-2xl font-black uppercase text-gray-800">Terminal Log</h3>
-                                <button 
-                                    onClick={handlePrintDailyReport}
-                                    className="px-6 py-3 bg-betese-green text-white font-black rounded-xl shadow-lg hover:brightness-110 active:scale-95 transition-all flex items-center gap-2 border-b-4 border-black/20"
-                                >
-                                    <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M4 20V12M10 20V8M16 20V5M22 20V10"/></svg> PRINT REPORT
-                                </button>
-                             </div>
-                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-                                 <div className="p-4 bg-gray-50 rounded-lg border text-center"><span className="text-[10px] font-black text-gray-500 uppercase">Gross Sales</span><span className="block text-2xl font-black text-betese-green">GMD {reportSales.toFixed(0)}</span></div>
-                                 <div className="p-4 bg-gray-50 rounded-lg border text-center"><span className="text-[10px] font-black text-gray-500 uppercase">Paid Out</span><span className="block text-2xl font-black text-blue-600">GMD {reportPayouts.toFixed(0)}</span></div>
-                                 <div className="p-4 bg-gray-50 rounded-lg border text-center"><span className="text-[10px] font-black text-gray-500 uppercase">Vol.</span><span className="block text-2xl font-black text-gray-800">{placedTickets.length}</span></div>
-                                 <div className="p-4 bg-gray-50 rounded-lg border text-center"><span className="text-[10px] font-black text-gray-500 uppercase">Net Profit</span><span className="block text-2xl font-black text-orange-600">GMD {reportNet.toFixed(0)}</span></div>
-                             </div>
-                             <TicketDetailsTable title="Full Transaction History" tickets={placedTickets} races={races} onCancelTicket={props.onCancelTicket} />
-                        </div>
-                    </div>
-                );
             case 'DASHBOARD':
             default:
                 const lastSavedTicket = placedTickets.length > 0 ? placedTickets[placedTickets.length - 1] : null;
@@ -340,7 +316,6 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                             <MenuButton onClick={() => setView('PLACE_BET')} label="Place Bet" subtext="New Ticket" iconKind="horse" color="bg-blue-600" />
                             <MenuButton onClick={() => setView('SCAN_PAY')} label="Scan/Pay" subtext="Payout" iconKind="money" color="bg-orange-600" />
                             <MenuButton onClick={() => setView('FINANCE')} label="Finance" subtext="Wallets" iconKind="wallet" color="bg-indigo-600" count={pendingFinanceCount} />
-                            <MenuButton onClick={() => setView('SALES_REPORT')} label="History" subtext="Sales Log" iconKind="history" color="bg-gray-700" />
                             <MenuButton onClick={() => setView('RAPPORTS')} label="Rapport" subtext="Print Results" iconKind="print" color="bg-cyan-600" />
                             <MenuButton onClick={() => setView('UPDATE_RESULTS')} label="Results" subtext="View Only" iconKind="results" color="bg-red-600" />
                             <MenuButton onClick={() => onOpenChat()} label="Chat" subtext="Support" iconKind="chat" color="bg-purple-600" />

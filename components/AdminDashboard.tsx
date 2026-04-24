@@ -13,7 +13,7 @@ import { PayoutReportView } from './PayoutReportView';
 import { RapportModal } from './RapportModal';
 import { RaceResultsManagement } from './RaceResultsManagement';
 import { TestPrintPanel } from './TestPrintPanel';
-import { getEffectiveTicketStatus } from '../utils';
+import { getEffectiveTicketStatus, triggerPrint } from '../utils';
 import { RecentResultsPanel } from './RecentResultsPanel';
 import { IntegrationSettingsPanel } from './IntegrationSettingsPanel';
 import { SupportPanel } from './SupportPanel';
@@ -22,7 +22,7 @@ import { BookingRetrievalPanel } from './BookingRetrievalPanel';
 import { AutomaticRaffleDrawerPanel } from './AutomaticRaffleDrawerPanel';
 
 type FilterRole = Role | 'All';
-type AdminView = 'DASHBOARD' | 'ANALYTICS' | 'PROGRAM' | 'USERS' | 'EOD' | 'RACES' | 'REPORTS' | 'TICKETS' | 'PRINTING' | 'TICKET_PAYOUT' | 'INTEGRATIONS' | 'SUPPORT' | 'MANUAL_BETS' | 'RAFFLE_DRAW';
+type AdminView = 'DASHBOARD' | 'ANALYTICS' | 'PROGRAM' | 'USERS' | 'EOD' | 'RACES' | 'REPORTS' | 'TICKETS' | 'PRINTING' | 'TICKET_PAYOUT' | 'INTEGRATIONS' | 'SUPPORT' | 'MANUAL_BETS' | 'RAFFLE_DRAW' | 'TICKET_INFORMATION';
 
 export const TicketToolsView: React.FC<{
     allTickets: Ticket[];
@@ -132,6 +132,7 @@ const AdminMenu: React.FC<{ setView: (view: AdminView) => void; }> = ({ setView 
         { view: 'USERS', label: 'User Accounts', iconKind: 'users' as AdminIconKind, color: 'from-purple-500 to-purple-700' },
         { view: 'RACES', label: 'Race Management', iconKind: 'races' as AdminIconKind, color: 'from-orange-500 to-orange-700' },
         { view: 'TICKET_PAYOUT', label: 'Office Payouts', iconKind: 'tools' as AdminIconKind, color: 'from-cyan-500 to-blue-500' },
+        { view: 'TICKET_INFORMATION', label: 'Ticket Information', iconKind: 'reports' as AdminIconKind, color: 'from-lime-600 to-green-700' },
         { view: 'REPORTS', label: 'Payout Reports', iconKind: 'reports' as AdminIconKind, color: 'from-yellow-500 to-yellow-600' },
         { view: 'INTEGRATIONS', label: 'Payment API', iconKind: 'integrations' as AdminIconKind, color: 'from-yellow-600 to-orange-600' },
         { view: 'SUPPORT', label: 'Support & Snapshot', iconKind: 'support' as AdminIconKind, color: 'from-red-600 to-red-800' },
@@ -167,6 +168,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
     const [selectedRole, setSelectedRole] = useState<FilterRole>('All');
     const [rapportModalRace, setRapportModalRace] = useState<Race | null>(null);
 
+    const adminSales = (allTickets || []).reduce((sum, t) => sum + (t?.totalCost || 0), 0);
+    const adminPayouts = (allTickets || []).filter(t => t?.status === 'Paid').reduce((sum, t) => sum + (t?.winnings || 0), 0);
+    const adminNet = adminSales - adminPayouts;
+    const handlePrintAdminReport = () => triggerPrint('printable-admin-ticket-information');
+
     const renderCurrentView = () => {
         switch (view) {
             case 'ANALYTICS': return <div className="space-y-6"><AnalyticsDashboard tickets={allTickets} races={races} /><PromotionManagementPanel promotions={promotions} onToggleStatus={onTogglePromotionStatus} onUpdatePromotion={onUpdatePromotion} onMovePromotion={onMovePromotion} onCreatePromotion={onCreatePromotion} onDeletePromotion={onDeletePromotion} /></div>;
@@ -176,6 +182,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
             case 'RACES': return <div className="space-y-6"><RaceManagement races={races} onAddRace={onAddRace} onUpdateNonRunners={props.onUpdateNonRunners} onUpdateRace={onUpdateRace} onDeleteRace={onDeleteRace} effectiveTime={effectiveTime} /><RaceResultsManagement races={races} tickets={allTickets} onSave={onSaveRaceResult} effectiveTime={effectiveTime} /></div>;
             case 'REPORTS': return <PayoutReportView races={races} onPrintRequest={setRapportModalRace} effectiveTime={effectiveTime} />;
             case 'TICKET_PAYOUT': return <TicketToolsView allTickets={allTickets} onCancelTicket={onCancelTicket} races={races} onPayoutTicket={onPayoutTicket} effectiveTime={effectiveTime} currentUser={currentUser} onReprintTicket={onReprintTicket} />;
+            case 'TICKET_INFORMATION':
+                return (
+                    <div className="space-y-6">
+                        <div className="bg-white p-6 rounded-xl shadow-lg border-t-4 border-yellow-500">
+                            <div className="flex justify-between items-center mb-6">
+                                <h3 className="text-2xl font-black uppercase text-gray-800">Terminal Log</h3>
+                                <button onClick={handlePrintAdminReport} className="px-6 py-3 bg-betese-green text-white font-black rounded-xl shadow-lg hover:brightness-110 active:scale-95 transition-all flex items-center gap-2 border-b-4 border-black/20">
+                                    <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M4 20V12M10 20V8M16 20V5M22 20V10"/></svg> PRINT REPORT
+                                </button>
+                            </div>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+                                <div className="p-4 bg-gray-50 rounded-lg border text-center"><span className="text-[10px] font-black text-gray-500 uppercase">Gross Sales</span><span className="block text-2xl font-black text-betese-green">GMD {adminSales.toFixed(0)}</span></div>
+                                <div className="p-4 bg-gray-50 rounded-lg border text-center"><span className="text-[10px] font-black text-gray-500 uppercase">Paid Out</span><span className="block text-2xl font-black text-blue-600">GMD {adminPayouts.toFixed(0)}</span></div>
+                                <div className="p-4 bg-gray-50 rounded-lg border text-center"><span className="text-[10px] font-black text-gray-500 uppercase">Vol.</span><span className="block text-2xl font-black text-gray-800">{allTickets.length}</span></div>
+                                <div className="p-4 bg-gray-50 rounded-lg border text-center"><span className="text-[10px] font-black text-gray-500 uppercase">Net Profit</span><span className="block text-2xl font-black text-orange-600">GMD {adminNet.toFixed(0)}</span></div>
+                            </div>
+                            <TicketDetailsTable title="Full Transaction History" tickets={allTickets} races={races} onCancelTicket={onCancelTicket} />
+                        </div>
+                    </div>
+                );
             case 'INTEGRATIONS': return <IntegrationSettingsPanel configs={paymentConfigs} onSave={onSavePaymentConfig} />;
             case 'SUPPORT': return <SupportPanel onRecalculateAllTickets={props.onRecalculateAllTickets} />;
             case 'PRINTING': return <TestPrintPanel />;
@@ -184,5 +210,36 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
         }
     };
     
-    return <div className="space-y-6">{rapportModalRace && <RapportModal race={rapportModalRace} onClose={() => setRapportModalRace(null)} showPrintButton={true} />}{view !== 'DASHBOARD' && <BackButton onClick={() => setView('DASHBOARD')} />}{renderCurrentView()}</div>;
+    return (
+        <div className="space-y-6">
+            {rapportModalRace && <RapportModal race={rapportModalRace} onClose={() => setRapportModalRace(null)} showPrintButton={true} />}
+            {view !== 'DASHBOARD' && <BackButton onClick={() => setView('DASHBOARD')} />}
+            {renderCurrentView()}
+
+            <div
+                id="printable-admin-ticket-information"
+                className="absolute top-0 left-[-5000px] pointer-events-none"
+                style={{ visibility: 'hidden' }}
+                aria-hidden="true"
+            >
+                <div className="c b text-lg border-b-2 border-black text-center pb-1 uppercase">BETESE ADMIN TICKET INFORMATION</div>
+                <div className="flex b text-[10px] my-2 justify-between">
+                    <span>ADMIN: {currentUser.name}</span>
+                    <span>{effectiveTime.toLocaleDateString()}</span>
+                </div>
+                <div className="solid"></div>
+                <div className="flex justify-between py-1 b"><span>TOTAL TICKETS:</span><span>{allTickets.length}</span></div>
+                <div className="flex justify-between py-1 b"><span>GROSS SALES:</span><span>GMD {adminSales.toFixed(0)}</span></div>
+                <div className="flex justify-between py-1 b"><span>TOTAL PAID:</span><span>GMD {adminPayouts.toFixed(0)}</span></div>
+                <div className="solid"></div>
+                <div className="flex b my-2 justify-between items-center">
+                    <span style={{fontSize:'12px'}}>NET REVENUE:</span>
+                    <span className="huge">GMD {adminNet.toFixed(0)}</span>
+                </div>
+                <div className="solid"></div>
+                <p className="c b text-[9px] mt-4 uppercase">Official Admin Report</p>
+                <p className="c text-[8px] opacity-70 italic">Generated: {effectiveTime.toLocaleString()}</p>
+            </div>
+        </div>
+    );
 };
