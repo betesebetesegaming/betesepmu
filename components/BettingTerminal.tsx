@@ -196,6 +196,34 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
         triggerPrint('printable-daily-sales-summary');
     };
 
+    const handlePrintEndOfSale = () => {
+        triggerPrint('printable-end-of-sale');
+    };
+
+    const handleShareEndOfSaleWhatsApp = () => {
+        const supportNumber = '2204176003';
+        const text =
+            `📊 END OF SALE REPORT\n` +
+            `Vendor: ${currentUser.name}\n` +
+            `Date: ${effectiveTime.toLocaleDateString()}\n` +
+            `──────────────────\n` +
+            `🎫 Tickets Sold : ${placedTickets.length}\n` +
+            `💰 Gross Sales  : GMD ${reportSales.toFixed(0)}\n` +
+            `💸 Paid Out     : GMD ${reportPayouts.toFixed(0)}\n` +
+            `──────────────────\n` +
+            `🏦 Net Balance  : GMD ${reportNet.toFixed(0)}\n` +
+            `──────────────────\n` +
+            `Generated: ${effectiveTime.toLocaleString()}`;
+        window.open(`https://wa.me/${supportNumber}?text=${encodeURIComponent(text)}`, '_blank');
+    };
+
+    // Last 3 tickets within last 3 days that the vendor can cancel
+    const threeDaysAgo = new Date(effectiveTime.getTime() - 3 * 24 * 60 * 60 * 1000);
+    const recentDeletableTickets = [...placedTickets]
+        .filter(t => t.timestamp >= threeDaysAgo)
+        .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+        .slice(0, 3);
+
     const pendingFinanceCount = ((depositRequests || []).filter(r => r && r.status === 'Pending').length) + 
                                ((withdrawalRequests || []).filter(r => r && r.status === 'Pending').length);
 
@@ -269,9 +297,122 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                 );
             case 'FINANCE':
                 return (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in">
-                        <CustomerDepositPanel customers={customers} onDeposit={onDeposit} depositLogs={depositLogs} currentUserRole={currentUser.role} depositRequests={depositRequests} onApproveDepositRequest={onApproveDepositRequest} onRejectDepositRequest={onRejectDepositRequest} />
-                        <ProcessWithdrawalPanel onProcessWithdrawal={onProcessWithdrawal} withdrawalRequests={withdrawalRequests} customers={customers} />
+                    <div className="space-y-6 animate-fade-in">
+
+                        {/* ── VENDOR SALES SUMMARY ── */}
+                        <div className="bg-white rounded-2xl shadow-xl border-t-4 border-betese-green overflow-hidden">
+                            <div className="bg-betese-green px-6 py-4 flex items-center justify-between">
+                                <div>
+                                    <p className="text-[10px] font-black text-white/70 uppercase tracking-widest">Vendor Sales Summary</p>
+                                    <h3 className="text-xl font-black text-white uppercase">{currentUser.name}</h3>
+                                </div>
+                                <p className="text-white/80 text-sm font-bold">{effectiveTime.toLocaleDateString()}</p>
+                            </div>
+
+                            {/* 3 stat boxes */}
+                            <div className="grid grid-cols-3 divide-x divide-gray-200">
+                                <div className="p-5 text-center">
+                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Sales</p>
+                                    <p className="text-2xl font-black text-betese-green leading-none">GMD {reportSales.toFixed(0)}</p>
+                                    <p className="text-[10px] text-gray-400 mt-1">{placedTickets.length} ticket(s)</p>
+                                </div>
+                                <div className="p-5 text-center">
+                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Paid Out</p>
+                                    <p className="text-2xl font-black text-orange-500 leading-none">GMD {reportPayouts.toFixed(0)}</p>
+                                    <p className="text-[10px] text-gray-400 mt-1">
+                                        {placedTickets.filter(t => t.status === 'Paid').length} paid
+                                    </p>
+                                </div>
+                                <div className="p-5 text-center">
+                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Net Balance</p>
+                                    <p className={`text-2xl font-black leading-none ${reportNet >= 0 ? 'text-blue-700' : 'text-red-600'}`}>
+                                        GMD {reportNet.toFixed(0)}
+                                    </p>
+                                    <p className="text-[10px] text-gray-400 mt-1">sales − payouts</p>
+                                </div>
+                            </div>
+
+                            {/* Action buttons */}
+                            <div className="border-t border-gray-100 px-5 py-4 flex flex-wrap gap-3">
+                                <button
+                                    onClick={handlePrintEndOfSale}
+                                    className="flex-1 min-w-[140px] flex items-center justify-center gap-2 px-5 py-3 bg-betese-green text-white font-black rounded-xl shadow hover:brightness-110 active:scale-95 transition-all border-b-4 border-black/20 text-sm uppercase"
+                                >
+                                    <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                                        <rect x="7" y="4" width="10" height="5"/><rect x="5" y="9" width="14" height="8" rx="2"/><rect x="8" y="14" width="8" height="6"/>
+                                    </svg>
+                                    Print End of Sale
+                                </button>
+                                <button
+                                    onClick={handleShareEndOfSaleWhatsApp}
+                                    className="flex-1 min-w-[140px] flex items-center justify-center gap-2 px-5 py-3 bg-green-600 text-white font-black rounded-xl shadow hover:brightness-110 active:scale-95 transition-all border-b-4 border-black/20 text-sm uppercase"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
+                                        <path d="M13.601 2.326A7.854 7.854 0 0 0 7.994 0C3.627 0 .068 3.558.064 7.926c0 1.399.366 2.76 1.057 3.965L0 16l4.204-1.102a7.933 7.933 0 0 0 3.79.965h.004c4.368 0 7.926-3.558 7.93-7.93A7.898 7.898 0 0 0 13.6 2.326zM7.994 14.521a6.573 6.573 0 0 1-3.356-.92l-.24-.144-2.494.654.666-2.433-.156-.251a6.56 6.56 0 0 1-1.007-3.505c0-3.626 2.957-6.584 6.591-6.584a6.56 6.56 0 0 1 4.66 1.931 6.557 6.557 0 0 1 1.928 4.66c-.004 3.639-2.961 6.592-6.592 6.592zm3.615-4.934c-.197-.099-1.17-.578-1.353-.646-.182-.065-.315-.099-.445.099-.133.197-.513.646-.627.775-.114.133-.232.148-.43.05-.197-.1-.836-.308-1.592-.985-.59-.525-.985-1.175-1.103-1.372-.114-.198-.011-.304.088-.403.087-.088.197-.232.296-.346.1-.114.133-.198.198-.33.065-.134.034-.248-.015-.347-.05-.099-.445-1.076-.612-1.47-.16-.389-.323-.335-.445-.34-.114-.007-.247-.007-.38-.007a.729.729 0 0 0-.529.247c-.182.198-.691.677-.691 1.654 0 .977.71 1.916.81 2.049.098.133 1.394 2.132 3.383 2.992.47.205.84.326 1.129.418.475.152.904.129 1.246.08.38-.058 1.171-.48 1.338-.943.164-.464.164-.86.114-.943-.049-.084-.182-.133-.38-.232z"/>
+                                    </svg>
+                                    Share on WhatsApp
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* ── LAST 3 RECENT TICKETS ── */}
+                        <div className="bg-white rounded-2xl shadow-xl border-t-4 border-red-500 overflow-hidden">
+                            <div className="bg-red-500 px-6 py-3 flex items-center gap-3">
+                                <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5 text-white" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
+                                <h3 className="text-base font-black text-white uppercase">Cancel Recent Tickets (Last 3 · within 3 days)</h3>
+                            </div>
+                            <div className="p-4">
+                                {recentDeletableTickets.length === 0 ? (
+                                    <p className="text-center text-gray-400 py-4 text-sm italic">No recent tickets in the last 3 days.</p>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {recentDeletableTickets.map(ticket => {
+                                            const canCancel = ticket.status === 'Active' || ticket.status === 'Booked';
+                                            return (
+                                                <div key={ticket.id} className="flex items-center justify-between p-4 rounded-xl border-2 border-gray-200 bg-gray-50 hover:bg-gray-100 transition-colors gap-3">
+                                                    <div className="min-w-0">
+                                                        <p className="font-mono font-black text-sm text-gray-800 truncate">#{ticket.id}</p>
+                                                        <p className="text-[11px] text-gray-500">
+                                                            {ticket.timestamp.toLocaleDateString()} {ticket.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                            {' · '}GMD {ticket.totalCost.toFixed(0)}
+                                                        </p>
+                                                    </div>
+                                                    <div className="flex items-center gap-2 flex-shrink-0">
+                                                        <span className={`text-[10px] font-black uppercase px-2 py-1 rounded-full ${
+                                                            ticket.status === 'Paid' ? 'bg-purple-100 text-purple-700' :
+                                                            ticket.status === 'Winning' ? 'bg-blue-100 text-blue-700' :
+                                                            ticket.status === 'Lost' ? 'bg-red-100 text-red-600' :
+                                                            ticket.status === 'Canceled' ? 'bg-gray-200 text-gray-500' :
+                                                            'bg-green-100 text-green-700'
+                                                        }`}>{ticket.status}</span>
+                                                        {canCancel ? (
+                                                            <button
+                                                                onClick={() => {
+                                                                    if (window.confirm(`Cancel ticket #${ticket.id}? This cannot be undone.`)) {
+                                                                        props.onCancelTicket(ticket.id);
+                                                                    }
+                                                                }}
+                                                                className="px-4 py-2 bg-red-600 text-white text-xs font-black rounded-lg hover:bg-red-700 active:scale-95 transition-all border-b-2 border-red-800"
+                                                            >
+                                                                Cancel
+                                                            </button>
+                                                        ) : (
+                                                            <span className="px-4 py-2 bg-gray-200 text-gray-400 text-xs font-black rounded-lg cursor-not-allowed">Locked</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* ── CUSTOMER DEPOSITS & WITHDRAWALS ── */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <CustomerDepositPanel customers={customers} onDeposit={onDeposit} depositLogs={depositLogs} currentUserRole={currentUser.role} depositRequests={depositRequests} onApproveDepositRequest={onApproveDepositRequest} onRejectDepositRequest={onRejectDepositRequest} />
+                            <ProcessWithdrawalPanel onProcessWithdrawal={onProcessWithdrawal} withdrawalRequests={withdrawalRequests} customers={customers} />
+                        </div>
                     </div>
                 );
             case 'RAPPORTS':
@@ -361,6 +502,32 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                 <div className="solid"></div>
                 <p className="c b text-[9px] mt-4 uppercase">Official Terminal Report</p>
                 <p className="c text-[8px] opacity-70 italic">Generated: {effectiveTime.toLocaleString()}</p>
+            </div>
+
+            {/* END OF SALE printable */}
+            <div
+                id="printable-end-of-sale"
+                className="absolute top-0 left-[-5000px] pointer-events-none"
+                style={{ visibility: 'hidden' }}
+                aria-hidden="true"
+            >
+                <div className="c b text-lg border-b-2 border-black text-center pb-1 uppercase">BETESE END OF SALE</div>
+                <div className="flex b text-[10px] my-2 justify-between">
+                    <span>VEND: {currentUser.name}</span>
+                    <span>{effectiveTime.toLocaleDateString()}</span>
+                </div>
+                <div className="solid"></div>
+                <div className="flex justify-between py-1 b"><span>TICKETS SOLD:</span><span>{placedTickets.length}</span></div>
+                <div className="flex justify-between py-1 b"><span>GROSS SALES:</span><span>GMD {reportSales.toFixed(0)}</span></div>
+                <div className="flex justify-between py-1 b"><span>PAID OUT:</span><span>GMD {reportPayouts.toFixed(0)}</span></div>
+                <div className="solid"></div>
+                <div className="flex b my-2 justify-between items-center">
+                    <span style={{fontSize:'12px'}}>NET BALANCE:</span>
+                    <span className="huge">GMD {reportNet.toFixed(0)}</span>
+                </div>
+                <div className="solid"></div>
+                <p className="c b text-[9px] mt-4 uppercase">Official End of Sale Report</p>
+                <p className="c text-[8px] opacity-70 italic">Time: {effectiveTime.toLocaleString()}</p>
             </div>
         </div>
     );
