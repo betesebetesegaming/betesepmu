@@ -1,7 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
 import { Ticket, Race } from '../types';
-import { TicketModal } from './TicketModal';
 import { TicketCombinationLedger } from './TicketCombinationLedger';
 
 interface TicketDetailsTableProps {
@@ -9,6 +8,7 @@ interface TicketDetailsTableProps {
   tickets: Ticket[];
   races: Race[];
   onCancelTicket?: (ticketId: string) => void;
+  onPayoutTicket?: (ticketId: string) => void;
 }
 
 type DisplayStatus = Ticket['status'];
@@ -50,13 +50,12 @@ const formatBetLabel = (betType: string): string => {
 
 type FilterStatus = Ticket['status'] | 'All';
 
-export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets, races, onCancelTicket }) => {
+export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets, races, onCancelTicket, onPayoutTicket }) => {
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('All');
   const [filterAgent, setFilterAgent] = useState<string>('All');
   // Keep date empty by default so agent filter can show all vendor transactions.
   const [filterDate, setFilterDate] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
-  const [ticketToView, setTicketToView] = useState<Ticket | null>(null);
   const [ledgerTicket, setLedgerTicket] = useState<Ticket | null>(null);
 
   const raceById = useMemo(() => {
@@ -126,7 +125,6 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
 
   return (
     <>
-      {ticketToView && <TicketModal ticket={ticketToView} onClose={() => setTicketToView(null)} showPrintButton={true} races={races} />}
       {ledgerTicket && <TicketCombinationLedger tickets={tickets} onClose={() => setLedgerTicket(null)} />}
 
       <div className="bg-white rounded-lg shadow-lg overflow-hidden">
@@ -204,6 +202,7 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                 filteredTickets.map((ticket, rowIdx) => {
                   const hasWinnings = ticket.winnings !== undefined && ticket.winnings > 0;
                   const displayStatus = getDisplayStatus(ticket);
+                  const canPayout = hasWinnings && displayStatus === 'Winning' && typeof onPayoutTicket === 'function';
                   const raceInfo = Array.from(new Set(ticket.selections.map(sel => sel.raceId))).map((raceId) => {
                     const race = raceById.get(raceId);
                     if (!race) return { label: raceId, time: '' };
@@ -286,15 +285,17 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                           >
                             Ledger
                           </button>
-                          {/* Print/view icon button */}
                           <button
-                            onClick={() => setTicketToView(ticket)}
-                            title="View / Print"
-                            className="p-1 rounded border border-gray-400 bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors"
+                            onClick={() => {
+                              if (canPayout) {
+                                onPayoutTicket(ticket.id);
+                              }
+                            }}
+                            title={canPayout ? 'Pay winning ticket' : 'Payment available for winning tickets only'}
+                            disabled={!canPayout}
+                            className={`px-2 py-1 rounded border text-[10px] font-bold leading-none transition-colors ${canPayout ? 'border-emerald-500 bg-emerald-50 hover:bg-emerald-100 text-emerald-700' : 'border-gray-300 bg-gray-100 text-gray-400 cursor-not-allowed'}`}
                           >
-                            <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                              <path fillRule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v5a2 2 0 002 2h1v1a1 1 0 001 1h8a1 1 0 001-1v-1h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a1 1 0 00-1-1H6a1 1 0 00-1 1zm2 0h6v3H7V4zm-1 9H5V9h10v4h-1v-1a1 1 0 00-1-1H7a1 1 0 00-1 1v1zm2 2v-2h4v2H8z" clipRule="evenodd" />
-                            </svg>
+                            Payment
                           </button>
                           </div>
                         </div>

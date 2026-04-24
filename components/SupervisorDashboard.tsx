@@ -163,7 +163,13 @@ export const SupervisorDashboard: React.FC<SupervisorDashboardProps> = (props) =
                 return (
                     <div className="space-y-6">
                         <PayoutReportView races={races} onPrintRequest={setRapportModalRace} effectiveTime={effectiveTime} />
-                        <TicketDetailsTable title="All Tickets" tickets={filteredTickets} races={races} onCancelTicket={onCancelTicket} />
+                        <TicketDetailsTable
+                            title="All Tickets"
+                            tickets={filteredTickets}
+                            races={races}
+                            onCancelTicket={onCancelTicket}
+                            onPayoutTicket={onPayoutTicket}
+                        />
                     </div>
                 );
             case 'TICKET_PAYOUT':

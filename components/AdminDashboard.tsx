@@ -186,11 +186,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
                 return (
                     <div className="space-y-6">
                         <div className="bg-white p-6 rounded-xl shadow-lg border-t-4 border-yellow-500">
-                            <div className="flex justify-between items-center mb-6">
+                            <div className="mb-6">
                                 <h3 className="text-2xl font-black uppercase text-gray-800">Terminal Log</h3>
-                                <button onClick={handlePrintAdminReport} className="px-6 py-3 bg-betese-green text-white font-black rounded-xl shadow-lg hover:brightness-110 active:scale-95 transition-all flex items-center gap-2 border-b-4 border-black/20">
-                                    <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M4 20V12M10 20V8M16 20V5M22 20V10"/></svg> PRINT REPORT
-                                </button>
                             </div>
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
                                 <div className="p-4 bg-gray-50 rounded-lg border text-center"><span className="text-[10px] font-black text-gray-500 uppercase">Gross Sales</span><span className="block text-2xl font-black text-betese-green">GMD {adminSales.toFixed(0)}</span></div>
@@ -198,7 +195,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
                                 <div className="p-4 bg-gray-50 rounded-lg border text-center"><span className="text-[10px] font-black text-gray-500 uppercase">Vol.</span><span className="block text-2xl font-black text-gray-800">{allTickets.length}</span></div>
                                 <div className="p-4 bg-gray-50 rounded-lg border text-center"><span className="text-[10px] font-black text-gray-500 uppercase">Net Profit</span><span className="block text-2xl font-black text-orange-600">GMD {adminNet.toFixed(0)}</span></div>
                             </div>
-                            <TicketDetailsTable title="Full Transaction History" tickets={allTickets} races={races} onCancelTicket={onCancelTicket} />
+                            <TicketDetailsTable
+                                title="Full Transaction History"
+                                tickets={allTickets}
+                                races={races}
+                                onCancelTicket={onCancelTicket}
+                                onPayoutTicket={onPayoutTicket}
+                            />
                         </div>
                     </div>
                 );
