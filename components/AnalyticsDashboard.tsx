@@ -70,6 +70,9 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
     const [ledgerFilterDate, setLedgerFilterDate] = useState<string>('');
     const [ledgerFilterTicket, setLedgerFilterTicket] = useState<string>('');
     const [ledgerFilterStatus, setLedgerFilterStatus] = useState<Ticket['status'] | 'All'>('All');
+    const [raceDateSearch, setRaceDateSearch] = useState<string>('');
+    const [selectedRaceDate, setSelectedRaceDate] = useState<string>('');
+    const [expandedRaceId, setExpandedRaceId] = useState<string | null>(null);
     
     const raceNameMap = useMemo(() => new Map(races.map(r => [r.id, r.name])), [races]);
 
@@ -250,6 +253,35 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
         }));
     }, [filteredCombinationLedger]);
 
+    // Build sorted list of unique dates that have races
+    const raceDateGroups = useMemo(() => {
+        const dateMap = new Map<string, RacePerformanceCard[]>();
+        analyticsData.raceCards.forEach(card => {
+            if (!(card.scheduledTime instanceof Date) || Number.isNaN(card.scheduledTime.getTime())) return;
+            const d = card.scheduledTime;
+            const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            if (!dateMap.has(key)) dateMap.set(key, []);
+            dateMap.get(key)!.push(card);
+        });
+        return Array.from(dateMap.entries())
+            .sort((a, b) => b[0].localeCompare(a[0])); // newest first
+    }, [analyticsData.raceCards]);
+
+    const filteredDateGroups = useMemo(() => {
+        if (!raceDateSearch) return raceDateGroups;
+        return raceDateGroups.filter(([dateKey]) => dateKey.includes(raceDateSearch));
+    }, [raceDateGroups, raceDateSearch]);
+
+    const racesForSelectedDate = useMemo(() => {
+        if (!selectedRaceDate) return [];
+        return analyticsData.raceCards.filter(card => {
+            if (!(card.scheduledTime instanceof Date) || Number.isNaN(card.scheduledTime.getTime())) return false;
+            const d = card.scheduledTime;
+            const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            return key === selectedRaceDate;
+        });
+    }, [analyticsData.raceCards, selectedRaceDate]);
+
     const formatRaceTime = (date: Date) => {
         if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '-';
         return date.toLocaleString('en-US', {
@@ -263,66 +295,160 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
 
     return (
         <div className="space-y-6">
+            {/* ── RACE LOOKUP BY DATE ─────────────────────────────── */}
             <div className="bg-white p-6 rounded-lg shadow-lg">
-                <h3 className="text-xl font-bold text-betese-dark mb-2">Race Performance (Collapsible by Race)</h3>
-                <p className="text-sm text-gray-600 mb-4">Click each race (R1, R2, MAIN) to view all bet-type performance for that race.</p>
+                <h3 className="text-xl font-bold text-betese-dark mb-1">Race Performance Lookup</h3>
+                <p className="text-sm text-gray-500 mb-4">Search for a date, click it to load races, then click a race to view bet-type performance.</p>
 
-                <div className="space-y-3">
-                    {analyticsData.raceCards.map((raceCard) => {
-                        const netProfit = raceCard.overall.totalStake - raceCard.overall.totalPayout;
-                        return (
-                            <details key={raceCard.raceId} className="border rounded-lg bg-gray-50 open:bg-white open:shadow-sm">
-                                <summary className="cursor-pointer list-none px-4 py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-                                    <div>
-                                        <p className="font-black text-betese-dark">{raceCard.raceCode} - {raceCard.raceName}</p>
-                                        <p className="text-xs text-gray-500">{formatRaceTime(raceCard.scheduledTime)} | Winning: {raceCard.winningNumbersText}</p>
-                                    </div>
-                                    <div className="flex flex-wrap gap-2 text-xs font-semibold">
-                                        <span className="px-2 py-1 bg-gray-200 rounded">Tickets {raceCard.overall.ticketsCount}</span>
-                                        <span className="px-2 py-1 bg-gray-200 rounded">Bets {raceCard.overall.betsPlaced}</span>
-                                        <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded">Stake {raceCard.overall.totalStake.toFixed(2)}</span>
-                                        <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded">Payout {raceCard.overall.totalPayout.toFixed(2)}</span>
-                                        <span className={`px-2 py-1 rounded ${netProfit >= 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>Net {netProfit.toFixed(2)}</span>
-                                        <span className={`px-2 py-1 rounded ${raceCard.isFinished ? 'bg-gray-200 text-gray-700' : 'bg-green-100 text-green-800'}`}>{raceCard.isFinished ? 'Finished' : 'Open'}</span>
-                                    </div>
-                                </summary>
-
-                                <div className="px-4 pb-4 overflow-x-auto">
-                                    <table className="min-w-full bg-white text-sm border rounded">
-                                        <thead className="bg-gray-100">
-                                            <tr>
-                                                <th className="text-left font-semibold py-2 px-3">Bet Type</th>
-                                                <th className="text-right font-semibold py-2 px-3">Bets</th>
-                                                <th className="text-right font-semibold py-2 px-3">Stake</th>
-                                                <th className="text-right font-semibold py-2 px-3">Winning Bets</th>
-                                                <th className="text-right font-semibold py-2 px-3">Winning Sales</th>
-                                                <th className="text-right font-semibold py-2 px-3">Payout</th>
-                                                <th className="text-right font-semibold py-2 px-3">Net</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-200">
-                                            {Object.entries(raceCard.byBetType).map(([betType, stats]) => {
-                                                const typedStats = stats as BetTypePerformance;
-                                                const typedNet = typedStats.totalStake - typedStats.totalPayout;
-                                                return (
-                                                    <tr key={`${raceCard.raceId}-${betType}`}>
-                                                        <td className="py-2 px-3 font-semibold">{betType}</td>
-                                                        <td className="py-2 px-3 text-right font-mono">{typedStats.betsPlaced}</td>
-                                                        <td className="py-2 px-3 text-right font-mono">{typedStats.totalStake.toFixed(2)}</td>
-                                                        <td className="py-2 px-3 text-right font-mono">{typedStats.winningBets}</td>
-                                                        <td className="py-2 px-3 text-right font-mono">{typedStats.winningSales.toFixed(2)}</td>
-                                                        <td className="py-2 px-3 text-right font-mono">{typedStats.totalPayout.toFixed(2)}</td>
-                                                        <td className={`py-2 px-3 text-right font-mono font-bold ${typedNet >= 0 ? 'text-green-600' : 'text-red-600'}`}>{typedNet.toFixed(2)}</td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </details>
-                        );
-                    })}
+                {/* Date search input */}
+                <div className="flex items-center gap-3 mb-4">
+                    <div className="flex-1">
+                        <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Search by Date</label>
+                        <input
+                            type="date"
+                            value={raceDateSearch}
+                            onChange={e => {
+                                setRaceDateSearch(e.target.value);
+                                if (e.target.value) {
+                                    setSelectedRaceDate(e.target.value);
+                                    setExpandedRaceId(null);
+                                }
+                            }}
+                            className="w-full sm:w-64 p-2 border-2 border-betese-green rounded-lg bg-white text-sm font-semibold focus:ring-2 focus:ring-betese-green"
+                        />
+                    </div>
+                    {selectedRaceDate && (
+                        <button
+                            onClick={() => { setSelectedRaceDate(''); setRaceDateSearch(''); setExpandedRaceId(null); }}
+                            className="mt-5 px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-sm font-bold"
+                        >
+                            Clear
+                        </button>
+                    )}
                 </div>
+
+                {/* Clickable date chips */}
+                {filteredDateGroups.length > 0 && (
+                    <div className="mb-5">
+                        <p className="text-[10px] font-bold text-gray-400 uppercase mb-2">
+                            {raceDateSearch ? 'Matching dates' : 'All race dates'} — click a date to view its races
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                            {filteredDateGroups.map(([dateKey, cards]) => (
+                                <button
+                                    key={dateKey}
+                                    onClick={() => { setSelectedRaceDate(dateKey); setRaceDateSearch(dateKey); setExpandedRaceId(null); }}
+                                    className={`px-3 py-1.5 rounded-full text-sm font-bold border-2 transition-all ${
+                                        selectedRaceDate === dateKey
+                                            ? 'bg-betese-green text-white border-betese-green shadow-md'
+                                            : 'bg-gray-50 text-gray-700 border-gray-200 hover:border-betese-green hover:text-betese-green'
+                                    }`}
+                                >
+                                    {new Date(dateKey + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                    <span className="ml-1.5 text-[10px] opacity-70">{cards.length} race{cards.length > 1 ? 's' : ''}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Races for selected date */}
+                {selectedRaceDate && (
+                    <div>
+                        <p className="text-sm font-black text-betese-dark uppercase mb-3 border-b pb-2">
+                            Races on {new Date(selectedRaceDate + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
+                        </p>
+                        {racesForSelectedDate.length === 0 ? (
+                            <p className="text-gray-400 text-sm text-center py-6">No races found for this date.</p>
+                        ) : (
+                            <div className="space-y-3">
+                                {racesForSelectedDate.map((raceCard) => {
+                                    const netProfit = raceCard.overall.totalStake - raceCard.overall.totalPayout;
+                                    const isExpanded = expandedRaceId === raceCard.raceId;
+                                    return (
+                                        <div key={raceCard.raceId} className={`border-2 rounded-lg transition-all ${isExpanded ? 'border-betese-green shadow-md bg-white' : 'border-gray-200 bg-gray-50 hover:border-gray-300'}`}>
+                                            {/* Race header — click to expand */}
+                                            <button
+                                                className="w-full text-left px-4 py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2"
+                                                onClick={() => setExpandedRaceId(isExpanded ? null : raceCard.raceId)}
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    <span className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-sm flex-shrink-0 ${isExpanded ? 'bg-betese-green text-white' : 'bg-gray-200 text-gray-700'}`}>
+                                                        {raceCard.raceCode}
+                                                    </span>
+                                                    <div>
+                                                        <p className="font-black text-betese-dark">{raceCard.raceName}</p>
+                                                        <p className="text-xs text-gray-500">
+                                                            {formatRaceTime(raceCard.scheduledTime)} &nbsp;·&nbsp;
+                                                            <span className="font-semibold">Result: {raceCard.winningNumbersText}</span>
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex flex-wrap gap-2 text-xs font-semibold items-center">
+                                                    <span className="px-2 py-1 bg-gray-200 rounded">Tickets {raceCard.overall.ticketsCount}</span>
+                                                    <span className="px-2 py-1 bg-gray-200 rounded">Bets {raceCard.overall.betsPlaced}</span>
+                                                    <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded">Stake {raceCard.overall.totalStake.toFixed(0)}</span>
+                                                    <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded">Payout {raceCard.overall.totalPayout.toFixed(0)}</span>
+                                                    <span className={`px-2 py-1 rounded ${netProfit >= 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>Net {netProfit.toFixed(0)}</span>
+                                                    <span className={`px-2 py-1 rounded ${raceCard.isFinished ? 'bg-gray-200 text-gray-600' : 'bg-green-100 text-green-800'}`}>{raceCard.isFinished ? 'Finished' : 'Open'}</span>
+                                                    <span className={`text-lg transition-transform ${isExpanded ? 'rotate-180' : ''}`}>▾</span>
+                                                </div>
+                                            </button>
+
+                                            {/* Expanded bet-type table */}
+                                            {isExpanded && (
+                                                <div className="px-4 pb-4 overflow-x-auto border-t border-betese-green/30">
+                                                    <table className="min-w-full bg-white text-sm border rounded mt-3">
+                                                        <thead className="bg-betese-dark text-white">
+                                                            <tr>
+                                                                <th className="text-left font-semibold py-2 px-3">Bet Type</th>
+                                                                <th className="text-right font-semibold py-2 px-3">Bets</th>
+                                                                <th className="text-right font-semibold py-2 px-3">Stake</th>
+                                                                <th className="text-right font-semibold py-2 px-3">Winning Bets</th>
+                                                                <th className="text-right font-semibold py-2 px-3">Winning Sales</th>
+                                                                <th className="text-right font-semibold py-2 px-3">Payout</th>
+                                                                <th className="text-right font-semibold py-2 px-3">Net</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-gray-200">
+                                                            {Object.entries(raceCard.byBetType)
+                                                                .filter(([, stats]) => (stats as BetTypePerformance).betsPlaced > 0)
+                                                                .map(([betType, stats]) => {
+                                                                    const typedStats = stats as BetTypePerformance;
+                                                                    const typedNet = typedStats.totalStake - typedStats.totalPayout;
+                                                                    return (
+                                                                        <tr key={`${raceCard.raceId}-${betType}`} className="hover:bg-gray-50">
+                                                                            <td className="py-2 px-3 font-semibold">{betType}</td>
+                                                                            <td className="py-2 px-3 text-right font-mono">{typedStats.betsPlaced}</td>
+                                                                            <td className="py-2 px-3 text-right font-mono">{typedStats.totalStake.toFixed(2)}</td>
+                                                                            <td className="py-2 px-3 text-right font-mono">{typedStats.winningBets}</td>
+                                                                            <td className="py-2 px-3 text-right font-mono">{typedStats.winningSales.toFixed(2)}</td>
+                                                                            <td className="py-2 px-3 text-right font-mono">{typedStats.totalPayout.toFixed(2)}</td>
+                                                                            <td className={`py-2 px-3 text-right font-mono font-bold ${typedNet >= 0 ? 'text-green-600' : 'text-red-600'}`}>{typedNet.toFixed(2)}</td>
+                                                                        </tr>
+                                                                    );
+                                                            })}
+                                                            {Object.values(raceCard.byBetType).every(s => (s as BetTypePerformance).betsPlaced === 0) && (
+                                                                <tr><td colSpan={7} className="py-3 text-center text-gray-400 text-sm">No bets placed for this race.</td></tr>
+                                                            )}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {!selectedRaceDate && filteredDateGroups.length === 0 && (
+                    <p className="text-center text-gray-400 py-8 text-sm">No races recorded yet.</p>
+                )}
+                {!selectedRaceDate && filteredDateGroups.length > 0 && (
+                    <p className="text-center text-gray-400 py-4 text-sm">Select a date above to view its races.</p>
+                )}
             </div>
 
             <div className="bg-white p-6 rounded-lg shadow-lg">
