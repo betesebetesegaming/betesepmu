@@ -258,20 +258,22 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                       {/* Result */}
                       <td className="py-3 px-4 align-top text-xs font-semibold whitespace-nowrap border-r border-gray-200">
                         {hasWinnings ? (
-                          <div className="space-y-0.5">
-                            <span className="text-blue-700">{ticket.winnings!.toFixed(2)} GMD</span>
-                            {displayStatus === 'Paid' && (ticket.paidByName || ticket.paidById) && (
-                              <div className="text-[11px] text-purple-700 font-bold">
-                                Paid by {ticket.paidByName || ticket.paidById}
-                              </div>
-                            )}
-                          </div>
+                          <span className="text-blue-700">{ticket.winnings!.toFixed(2)} GMD</span>
                         ) : null}
                       </td>
 
                       {/* Status */}
                       <td className={`py-3 px-4 align-top text-xs font-semibold whitespace-nowrap border-r border-gray-200 ${getStatusColor(displayStatus)}`}>
-                        {displayStatus}
+                        <div className="space-y-0.5">
+                          <span>{displayStatus}</span>
+                          {displayStatus === 'Paid' && (
+                            ticket.customerId
+                              ? <div className="text-[10px] font-bold text-gray-400 uppercase">Auto</div>
+                              : <div className="text-[10px] font-black text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded mt-0.5 whitespace-nowrap">
+                                  ✓ {ticket.paidByName || ticket.paidById || 'Unknown'}
+                                </div>
+                          )}
+                        </div>
                       </td>
 
                       {/* Options */}

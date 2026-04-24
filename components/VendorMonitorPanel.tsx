@@ -208,14 +208,14 @@ export const VendorMonitorPanel: React.FC<VendorMonitorPanelProps> = ({
                         <table className="min-w-full text-sm border-collapse">
                             <thead className="sticky top-0 bg-gray-50 border-b border-gray-300 z-10">
                                 <tr>
-                                    {['Ticket ID','Date','Cost','Winnings','Status','Action'].map(h => (
+                                    {['Ticket ID','Date','Cost','Winnings','Status','Auth By','Action'].map(h => (
                                         <th key={h} className="py-2 px-3 text-center text-xs font-black text-gray-600 uppercase whitespace-nowrap">{h}</th>
                                     ))}
                                 </tr>
                             </thead>
                             <tbody>
                                 {drillTickets.length === 0 ? (
-                                    <tr><td colSpan={6} className="py-8 text-center text-gray-400 italic text-sm">No tickets match filter.</td></tr>
+                                    <tr><td colSpan={7} className="py-8 text-center text-gray-400 italic text-sm">No tickets match filter.</td></tr>
                                 ) : drillTickets.map((ticket, i) => {
                                     const canCancel = ticket.status === 'Active' || ticket.status === 'Booked';
                                     return (
@@ -229,6 +229,16 @@ export const VendorMonitorPanel: React.FC<VendorMonitorPanelProps> = ({
                                                 {ticket.winnings && ticket.winnings > 0 ? formatGMD(ticket.winnings) : '—'}
                                             </td>
                                             <td className="py-2 px-3 text-center">{statusBadge(ticket.status)}</td>
+                                            <td className="py-2 px-3 text-center">
+                                                {ticket.status === 'Paid'
+                                                    ? ticket.customerId
+                                                        ? <span className="text-[10px] text-gray-400 font-bold italic">Auto</span>
+                                                        : <span className="text-[10px] font-black text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full whitespace-nowrap">
+                                                            ✓ {ticket.paidByName || ticket.paidById || 'Unknown'}
+                                                          </span>
+                                                    : <span className="text-[10px] text-gray-300">—</span>
+                                                }
+                                            </td>
                                             <td className="py-2 px-3 text-center">
                                                 {canCancel ? (
                                                     <button
