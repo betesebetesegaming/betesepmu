@@ -1,9 +1,14 @@
 
 import React, { useState, useRef } from 'react';
 
-export const SupportPanel: React.FC = () => {
+interface SupportPanelProps {
+    onRecalculateAllTickets?: () => Promise<void>;
+}
+
+export const SupportPanel: React.FC<SupportPanelProps> = ({ onRecalculateAllTickets }) => {
     const [issueText, setIssueText] = useState('');
     const [isChecking, setIsChecking] = useState(false);
+    const [isRecalculating, setIsRecalculating] = useState(false);
     const [updateStatus, setUpdateStatus] = useState<'up-to-date' | 'available'>('up-to-date');
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -95,6 +100,20 @@ export const SupportPanel: React.FC = () => {
         }, 2000);
     };
 
+    const handleRecalculateAll = async () => {
+        if (!onRecalculateAllTickets) return;
+        if (!confirm('Recalculate all existing tickets now? This will correct historical outcomes with business-safe rules.')) return;
+        setIsRecalculating(true);
+        try {
+            await onRecalculateAllTickets();
+            alert('Recalculation completed successfully.');
+        } catch (e: any) {
+            alert(`Recalculation failed: ${e.message || e}`);
+        } finally {
+            setIsRecalculating(false);
+        }
+    };
+
     return (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             
@@ -143,6 +162,16 @@ export const SupportPanel: React.FC = () => {
                     <p className="text-xs text-gray-500 mt-2 text-center">
                         If an update is available, this button will turn yellow. Clicking it will refresh the app safely.
                     </p>
+
+                    {onRecalculateAllTickets && (
+                        <button
+                            onClick={handleRecalculateAll}
+                            disabled={isRecalculating}
+                            className={`w-full mt-4 py-3 font-bold text-lg rounded-lg transition-all shadow-md flex justify-center items-center gap-2 ${isRecalculating ? 'bg-gray-300 text-gray-600' : 'bg-orange-600 text-white hover:bg-orange-700'}`}
+                        >
+                            {isRecalculating ? 'Recalculating Tickets...' : 'Recalculate All Existing Tickets'}
+                        </button>
+                    )}
                 </div>
 
                 {/* Safety Snapshot */}

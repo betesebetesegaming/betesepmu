@@ -89,6 +89,7 @@ interface AdminDashboardProps {
     manualBetOrders: ManualBetOrder[];
     onCreateManualBet: (selectionData: Omit<BetSelection, 'cost' | 'raceName'>, multiplier: number, totalCost: number, assignedVendorId: string) => void;
     onCancelManualBet: (orderId: string) => void;
+    onRecalculateAllTickets: () => Promise<void>;
 }
 
 const BackButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
@@ -176,7 +177,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
             case 'REPORTS': return <PayoutReportView races={races} onPrintRequest={setRapportModalRace} effectiveTime={effectiveTime} />;
             case 'TICKET_PAYOUT': return <TicketToolsView allTickets={allTickets} onCancelTicket={onCancelTicket} races={races} onPayoutTicket={onPayoutTicket} effectiveTime={effectiveTime} currentUser={currentUser} onReprintTicket={onReprintTicket} />;
             case 'INTEGRATIONS': return <IntegrationSettingsPanel configs={paymentConfigs} onSave={onSavePaymentConfig} />;
-            case 'SUPPORT': return <SupportPanel />;
+            case 'SUPPORT': return <SupportPanel onRecalculateAllTickets={props.onRecalculateAllTickets} />;
             case 'PRINTING': return <TestPrintPanel />;
             case 'DASHBOARD':
             default: return <div className="space-y-6"><RecentResultsPanel races={races} effectiveTime={effectiveTime} /><AdminMenu setView={setView} /></div>;

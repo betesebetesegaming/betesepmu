@@ -31,7 +31,7 @@ import {
     dbCancelManualBetOrder, dbMarkManualBetOrderCompleted, dbPayForBooking,
     dbProcessWithdrawalRequest, dbFetchChatThreads, dbFetchChatMessages,
     dbSendChatMessage, dbMarkThreadAsRead, dbSettleRaceTickets, dbCancelTicket,
-    dbToggleUserLock, dbAdminResetPassword
+    dbToggleUserLock, dbAdminResetPassword, dbRecalculateAllTicketsSafely
 } from './supabaseClient';
 
 const normalizeRole = (role: unknown): Role => {
@@ -228,6 +228,19 @@ const AppContent: React.FC = () => {
           else { setRaces(prev => (prev || []).map(r => r.id === result.raceId ? { ...r, result } : r)); }
           alert("Result saved successfully.");
       } catch (e: any) { alert("Failed to save result: " + e.message); }
+  };
+
+  const handleRecalculateAllTickets = async () => {
+      if (!currentUser || currentUser.role !== 'Admin') {
+          alert('Only Admin can recalculate all tickets.');
+          return;
+      }
+      if (!supabase) {
+          alert('Recalculation requires database mode.');
+          return;
+      }
+      await dbRecalculateAllTicketsSafely();
+      await loadLiveSystemData(currentUser);
   };
 
   const payoutTicket = async (ticketId: string) => {
@@ -1056,6 +1069,7 @@ const AppContent: React.FC = () => {
                     manualBetOrders={manualBetOrders}
                     onCreateManualBet={handleCreateManualBet}
                     onCancelManualBet={handleCancelManualBet}
+                    onRecalculateAllTickets={handleRecalculateAllTickets}
                 />
             ) : (
                 <SupervisorDashboard

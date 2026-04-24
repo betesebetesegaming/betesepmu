@@ -203,11 +203,13 @@ export const dbSettleRaceTickets = async (result: RaceResult, allRaces: Race[]) 
         const nextWinnings = Number(evaluation.totalWinnings.toFixed(2));
         const previousWinnings = Number(ticket.winnings || 0);
         const isOnlineCustomer = Boolean(ticket.customerId);
+        const wasPaidOnline = isOnlineCustomer && ticket.status === 'Paid';
 
         let nextStatus = ticket.status;
         let paidAt = ticket.paidAt;
         let paidById = ticket.paidById;
         let paidByName = ticket.paidByName;
+        let settledWinnings = nextWinnings;
 
         if (allSelectionsResolved) {
             if (nextWinnings > 0) {
@@ -228,9 +230,19 @@ export const dbSettleRaceTickets = async (result: RaceResult, allRaces: Race[]) 
             }
         }
 
+        // Business-safe rule: never claw back already-paid online winnings.
+        // If recalculation is lower after payment, preserve prior paid amount/status.
+        if (wasPaidOnline && (nextStatus !== 'Paid' || settledWinnings < previousWinnings)) {
+            nextStatus = 'Paid';
+            settledWinnings = previousWinnings;
+            paidAt = paidAt || new Date();
+            paidById = paidById || 'SYSTEM';
+            paidByName = paidByName || 'System Auto Credit';
+        }
+
         if (isOnlineCustomer) {
             const previousCredited = ticket.status === 'Paid' ? previousWinnings : 0;
-            const nextCredited = nextStatus === 'Paid' ? nextWinnings : 0;
+            const nextCredited = nextStatus === 'Paid' ? settledWinnings : 0;
             const delta = Number((nextCredited - previousCredited).toFixed(2));
             if (delta !== 0 && ticket.customerId) {
                 const currentBalance = Number(balanceMap.get(ticket.customerId) || 0);
@@ -242,7 +254,7 @@ export const dbSettleRaceTickets = async (result: RaceResult, allRaces: Race[]) 
             .from('tickets')
             .update({
                 status: nextStatus,
-                winnings: nextWinnings || null,
+                winnings: settledWinnings || null,
                 winnings_breakdown: evaluation.breakdown,
                 paid_at: paidAt ? paidAt.toISOString() : null,
                 paid_by_id: paidById || null,
@@ -260,6 +272,37 @@ export const dbSettleRaceTickets = async (result: RaceResult, allRaces: Race[]) 
             .eq('id', customerId);
         if (walletError) throw walletError;
     }
+};
+
+export const dbRecalculateAllTicketsSafely = async () => {
+    if (!supabase) throw new Error("Database not connected");
+
+    const { data: raceRows, error: raceError } = await supabase.from('races').select('*');
+    if (raceError) throw raceError;
+
+    const allRaces: Race[] = (raceRows || []).map((r: any) => ({
+        id: r.id,
+        raceCode: r.race_code || undefined,
+        name: r.name,
+        venue: r.venue || undefined,
+        startDate: new Date(r.start_date),
+        endDate: new Date(r.end_date),
+        horseCount: r.horse_count,
+        nonRunners: r.non_runners || [],
+        result: r.result || undefined,
+        disabledBetTypes: r.disabled_bet_types || [],
+        jackpot: r.jackpot || 0
+    }));
+
+    // Dummy result id keeps races unchanged while triggering full settlement pass.
+    const noopResult: RaceResult = {
+        raceId: '__RECALC_ALL__',
+        winningNumbers: [],
+        payouts: {}
+    };
+
+    await dbSettleRaceTickets(noopResult, allRaces);
+    return { success: true };
 };
 
 /**
