@@ -253,6 +253,86 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
         }));
     }, [filteredCombinationLedger]);
 
+    // ── Ledger grouped by race (for the new race-headed layout) ──────────────
+    interface LedgerRaceSection {
+        raceId: string;
+        raceName: string;
+        raceCode: string;
+        scheduledTime: Date | null;
+        isFinished: boolean;
+        winningNumbers: string;
+        dateKey: string;
+        isToday: boolean;
+        ordinal: number;
+        ticketGroups: GroupedLedgerRow[];
+    }
+
+    const ledgerByRace = useMemo<{ sections: LedgerRaceSection[]; todayKey: string }>(() => {
+        const now = new Date();
+        const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+        // Group filtered rows by raceId, then by ticketId within each race
+        const raceRowMap = new Map<string, Map<string, CombinationLedgerRow[]>>();
+        filteredCombinationLedger.forEach((row) => {
+            if (!raceRowMap.has(row.raceId)) raceRowMap.set(row.raceId, new Map());
+            const ticketMap = raceRowMap.get(row.raceId)!;
+            if (!ticketMap.has(row.ticketId)) ticketMap.set(row.ticketId, []);
+            ticketMap.get(row.ticketId)!.push(row);
+        });
+
+        const sections: LedgerRaceSection[] = Array.from(raceRowMap.entries()).map(([raceId, ticketMap]) => {
+            const raceCard = analyticsData.raceCards.find(c => c.raceId === raceId);
+            const d = (raceCard?.scheduledTime instanceof Date && !isNaN(raceCard.scheduledTime.getTime()))
+                ? raceCard.scheduledTime : null;
+            const dateKey = d
+                ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+                : '';
+
+            const ticketGroups: GroupedLedgerRow[] = Array.from(ticketMap.entries()).map(([ticketId, rows]) => ({
+                ticketId,
+                actorName: rows[0]?.actorName || '-',
+                stampTime: rows[0]?.stampTime || '-',
+                rows,
+            }));
+
+            return {
+                raceId,
+                raceName: raceCard?.raceName || raceNameMap.get(raceId) || raceId,
+                raceCode: raceCard?.raceCode || raceId,
+                scheduledTime: d,
+                isFinished: raceCard?.isFinished ?? false,
+                winningNumbers: raceCard?.winningNumbersText || 'No result yet',
+                dateKey,
+                isToday: dateKey === todayKey,
+                ordinal: 0,
+                ticketGroups,
+            };
+        });
+
+        // Assign ordinals for today's races by time (earliest = 1st)
+        const todaySorted = sections.filter(s => s.isToday).sort((a, b) => {
+            if (!a.scheduledTime) return 1;
+            if (!b.scheduledTime) return -1;
+            return a.scheduledTime.getTime() - b.scheduledTime.getTime();
+        });
+        todaySorted.forEach((s, i) => { s.ordinal = i + 1; });
+
+        // Sort: today first (finished first within today, most recently finished on top), then past dates
+        sections.sort((a, b) => {
+            if (a.isToday && !b.isToday) return -1;
+            if (!a.isToday && b.isToday) return 1;
+            if (a.isToday && b.isToday) {
+                if (a.isFinished && !b.isFinished) return -1;
+                if (!a.isFinished && b.isFinished) return 1;
+                if (a.scheduledTime && b.scheduledTime) return b.scheduledTime.getTime() - a.scheduledTime.getTime();
+                return 0;
+            }
+            return b.dateKey.localeCompare(a.dateKey);
+        });
+
+        return { sections, todayKey };
+    }, [filteredCombinationLedger, analyticsData.raceCards, raceNameMap]);
+
     // Build sorted list of unique dates that have races
     const raceDateGroups = useMemo(() => {
         const dateMap = new Map<string, RacePerformanceCard[]>();
@@ -452,10 +532,11 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
             </div>
 
             <div className="bg-white p-6 rounded-lg shadow-lg">
-                <h3 className="text-xl font-bold text-betese-dark mb-4">Ticket Combination Ledger</h3>
-                <p className="text-sm text-gray-600 mb-4">This table shows ticket number and exact combination for each selection so winning combinations can be verified per race.</p>
+                <h3 className="text-xl font-bold text-betese-dark mb-1">Ticket Combination Ledger</h3>
+                <p className="text-sm text-gray-500 mb-4">Races grouped by date · today first · most recently ended on top with OUTSTANDING badge.</p>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4 p-3 border rounded-lg bg-green-50">
+                {/* ── 4 filter boxes ────────────────────────────────── */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-5 p-3 border rounded-lg bg-green-50">
                     <div>
                         <label className="block text-[10px] text-gray-500 font-bold uppercase mb-1">Agent Name Filter</label>
                         <select
@@ -469,35 +550,21 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
                             ))}
                         </select>
                     </div>
-
                     <div>
                         <label className="block text-[10px] text-gray-500 font-bold uppercase mb-1">Date Selection</label>
-                        <input
-                            type="date"
-                            value={ledgerFilterDate}
-                            onChange={e => setLedgerFilterDate(e.target.value)}
-                            className="w-full p-2 border rounded bg-white text-sm"
-                        />
+                        <input type="date" value={ledgerFilterDate} onChange={e => setLedgerFilterDate(e.target.value)}
+                            className="w-full p-2 border rounded bg-white text-sm" />
                     </div>
-
                     <div>
                         <label className="block text-[10px] text-gray-500 font-bold uppercase mb-1">Ticket Number</label>
-                        <input
-                            type="text"
-                            value={ledgerFilterTicket}
-                            onChange={e => setLedgerFilterTicket(e.target.value)}
+                        <input type="text" value={ledgerFilterTicket} onChange={e => setLedgerFilterTicket(e.target.value)}
                             placeholder="Enter ticket number"
-                            className="w-full p-2 border rounded bg-white text-sm"
-                        />
+                            className="w-full p-2 border rounded bg-white text-sm" />
                     </div>
-
                     <div>
                         <label className="block text-[10px] text-gray-500 font-bold uppercase mb-1">Filter by Status</label>
-                        <select
-                            value={ledgerFilterStatus}
-                            onChange={e => setLedgerFilterStatus(e.target.value as Ticket['status'] | 'All')}
-                            className="w-full p-2 border rounded bg-white text-sm"
-                        >
+                        <select value={ledgerFilterStatus} onChange={e => setLedgerFilterStatus(e.target.value as Ticket['status'] | 'All')}
+                            className="w-full p-2 border rounded bg-white text-sm">
                             <option value="All">All</option>
                             <option value="Active">Active</option>
                             <option value="Winning">Winning</option>
@@ -509,104 +576,175 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
                     </div>
                 </div>
 
-                <div className="overflow-x-auto">
-                    <table className="min-w-full bg-white text-sm">
-                        <thead className="bg-gray-100">
-                            <tr>
-                                <th className="text-left font-semibold py-2 px-3">Ticket</th>
-                                <th className="text-left font-semibold py-2 px-3">Race</th>
-                                <th className="text-left font-semibold py-2 px-3">Bet Type</th>
-                                <th className="text-left font-semibold py-2 px-3">Combination</th>
-                                <th className="text-right font-semibold py-2 px-3">Stake</th>
-                                <th className="text-left font-semibold py-2 px-3">Status</th>
-                                <th className="text-right font-semibold py-2 px-3">Payout</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-200">
-                            {groupedCombinationLedger.length > 0 ? groupedCombinationLedger.map((group) => (
-                                <tr key={group.ticketId}>
-                                    <td className="py-2 px-3 font-mono font-bold align-top bg-gray-50 border-r border-gray-200">
-                                        <div>{group.ticketId}</div>
-                                        <div className="text-[10px] text-gray-700 font-semibold mt-0.5">{group.actorName}</div>
-                                        <div className="text-[10px] text-gray-500 font-normal">{group.stampTime}</div>
-                                        <div className="text-[10px] text-gray-500 font-normal mt-0.5">
-                                            {group.rows.length} bet{group.rows.length > 1 ? 's' : ''}
-                                        </div>
-                                    </td>
+                {/* ── Race-grouped sections ──────────────────────────── */}
+                {(() => {
+                    const { sections, todayKey } = ledgerByRace;
+                    if (sections.length === 0) {
+                        return <p className="text-center text-gray-400 py-8 text-sm">No ticket combinations found for current filters.</p>;
+                    }
 
-                                    <td className="py-2 px-3 align-top">
-                                        <div className="space-y-1">
-                                            {group.rows.map((row, i) => (
-                                                <div key={i} className="text-xs">
-                                                    {row.raceName}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </td>
+                    const ordinalLabel = (n: number) => {
+                        const suffix = n === 1 ? 'st' : n === 2 ? 'nd' : n === 3 ? 'rd' : 'th';
+                        return `${n}${suffix} Race`;
+                    };
 
-                                    <td className="py-2 px-3 align-top">
-                                        <div className="space-y-1">
-                                            {group.rows.map((row, i) => (
-                                                <div key={i} className="text-xs">
-                                                    {row.betType}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </td>
+                    const todaySections = sections.filter(s => s.isToday);
+                    const pastSections = sections.filter(s => !s.isToday);
 
-                                    <td className="py-2 px-3 font-mono align-top">
-                                        <div className="space-y-1">
-                                            {group.rows.map((row, i) => (
-                                                <div key={i} className="text-xs border border-gray-200 px-2 py-1 rounded bg-gray-50">
-                                                    {row.combination}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </td>
+                    // Group past by date
+                    const pastDateMap = new Map<string, typeof pastSections>();
+                    pastSections.forEach(s => {
+                        if (!pastDateMap.has(s.dateKey)) pastDateMap.set(s.dateKey, []);
+                        pastDateMap.get(s.dateKey)!.push(s);
+                    });
 
-                                    <td className="py-2 px-3 text-right font-mono align-top">
-                                        <div className="space-y-1">
-                                            {group.rows.map((row, i) => (
-                                                <div key={i} className="text-xs">
-                                                    {row.stake.toFixed(2)}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </td>
+                    const renderTicketTable = (ticketGroups: GroupedLedgerRow[]) => (
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full text-sm bg-white">
+                                <thead className="bg-gray-100">
+                                    <tr>
+                                        <th className="text-left font-semibold py-2 px-3 border-r border-gray-200 w-44">Ticket</th>
+                                        <th className="text-left font-semibold py-2 px-3">Bet Type</th>
+                                        <th className="text-left font-semibold py-2 px-3">Combination</th>
+                                        <th className="text-right font-semibold py-2 px-3">Stake</th>
+                                        <th className="text-left font-semibold py-2 px-3">Status</th>
+                                        <th className="text-right font-semibold py-2 px-3">Payout</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {ticketGroups.map((group) => (
+                                        <tr key={group.ticketId} className="hover:bg-gray-50">
+                                            <td className="py-2 px-3 font-mono font-bold align-top border-r border-gray-200 bg-gray-50">
+                                                <div className="text-betese-dark">{group.ticketId}</div>
+                                                <div className="text-[10px] text-gray-600 font-semibold mt-0.5">{group.actorName}</div>
+                                                <div className="text-[10px] text-gray-400">{group.stampTime}</div>
+                                                <div className="text-[10px] text-gray-400">{group.rows.length} bet{group.rows.length > 1 ? 's' : ''}</div>
+                                            </td>
+                                            <td className="py-2 px-3 align-top">
+                                                <div className="space-y-1">{group.rows.map((row, i) => (
+                                                    <div key={i} className="text-xs">{row.betType}</div>
+                                                ))}</div>
+                                            </td>
+                                            <td className="py-2 px-3 font-mono align-top">
+                                                <div className="space-y-1">{group.rows.map((row, i) => (
+                                                    <div key={i} className="text-xs border border-gray-200 px-2 py-0.5 rounded bg-gray-50">{row.combination}</div>
+                                                ))}</div>
+                                            </td>
+                                            <td className="py-2 px-3 text-right font-mono align-top">
+                                                <div className="space-y-1">{group.rows.map((row, i) => (
+                                                    <div key={i} className="text-xs">{row.stake.toFixed(2)}</div>
+                                                ))}</div>
+                                            </td>
+                                            <td className="py-2 px-3 align-top">
+                                                <div className="space-y-1">{group.rows.map((row, i) => (
+                                                    <div key={i} className={`text-xs font-semibold ${row.status === 'Winning' || row.status === 'Paid' ? 'text-green-600' : row.status === 'Lost' ? 'text-red-500' : 'text-gray-700'}`}>
+                                                        {row.status}
+                                                    </div>
+                                                ))}</div>
+                                            </td>
+                                            <td className="py-2 px-3 text-right font-mono align-top">
+                                                <div className="space-y-1">{group.rows.map((row, i) => (
+                                                    <div key={i} className="text-xs">
+                                                        <span className={row.payout > 0 ? 'text-green-700 font-bold' : ''}>{row.payout.toFixed(2)}</span>
+                                                        {row.status === 'Paid' && (row.paidByName || row.paidById) && (
+                                                            <div className="text-[10px] text-gray-400">by {row.paidByName || row.paidById}</div>
+                                                        )}
+                                                    </div>
+                                                ))}</div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    );
 
-                                    <td className="py-2 px-3 align-top">
-                                        <div className="space-y-1">
-                                            {group.rows.map((row, i) => (
-                                                <div key={i} className="text-xs">
-                                                    {row.status}
+                    const renderRaceSection = (sec: (typeof sections)[0], index: number, isFirstFinished: boolean) => {
+                        const isOutstanding = sec.isFinished;
+                        const timeStr = sec.scheduledTime
+                            ? sec.scheduledTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+                            : '';
+                        return (
+                            <div key={sec.raceId} className={`border-2 rounded-xl overflow-hidden ${isFirstFinished ? 'border-orange-400 shadow-lg' : isOutstanding ? 'border-amber-300 shadow-md' : 'border-gray-200'}`}>
+                                {/* Race headline */}
+                                <div className={`flex items-center justify-between px-4 py-3 gap-3 flex-wrap ${isFirstFinished ? 'bg-orange-500 text-white' : isOutstanding ? 'bg-amber-50 text-amber-900 border-b border-amber-200' : 'bg-betese-dark text-white'}`}>
+                                    <div className="flex items-center gap-3">
+                                        {sec.isToday && (
+                                            <span className={`text-[11px] font-black uppercase px-2 py-1 rounded ${isFirstFinished ? 'bg-white/20' : isOutstanding ? 'bg-amber-200 text-amber-900' : 'bg-white/10'}`}>
+                                                {ordinalLabel(sec.ordinal)}
+                                            </span>
+                                        )}
+                                        <div>
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <span className="font-black text-base uppercase">{sec.raceCode}</span>
+                                                {timeStr && <span className="text-sm font-semibold opacity-90">{timeStr}</span>}
+                                                <span className="font-semibold text-sm opacity-90">— {sec.raceName}</span>
+                                            </div>
+                                            {sec.isFinished && (
+                                                <div className={`text-xs mt-0.5 ${isFirstFinished ? 'text-white/80' : 'text-amber-700'}`}>
+                                                    Result: {sec.winningNumbers}
                                                 </div>
-                                            ))}
+                                            )}
                                         </div>
-                                    </td>
+                                    </div>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        {isOutstanding && (
+                                            <span className={`text-xs font-black uppercase px-3 py-1 rounded-full border-2 animate-pulse ${isFirstFinished ? 'border-white text-white bg-red-600' : 'border-amber-500 text-amber-800 bg-amber-100'}`}>
+                                                ★ OUTSTANDING
+                                            </span>
+                                        )}
+                                        {!sec.isFinished && (
+                                            <span className="text-xs font-semibold px-2 py-1 rounded bg-green-500 text-white">OPEN</span>
+                                        )}
+                                        <span className={`text-xs px-2 py-1 rounded font-semibold ${isFirstFinished ? 'bg-white/20' : isOutstanding ? 'bg-amber-100 text-amber-800' : 'bg-white/10'}`}>
+                                            {sec.ticketGroups.length} ticket{sec.ticketGroups.length !== 1 ? 's' : ''}
+                                        </span>
+                                    </div>
+                                </div>
+                                {/* Ticket table for this race */}
+                                {renderTicketTable(sec.ticketGroups)}
+                            </div>
+                        );
+                    };
 
-                                    <td className="py-2 px-3 text-right font-mono align-top">
-                                        <div className="space-y-1">
-                                            {group.rows.map((row, i) => (
-                                                <div key={i} className="text-xs">
-                                                    <div>{row.payout.toFixed(2)}</div>
-                                                    {row.status === 'Paid' && (row.paidByName || row.paidById) && (
-                                                        <div className="text-[10px] text-gray-500">
-                                                            by {row.paidByName || row.paidById}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </td>
-                                </tr>
-                            )) : (
-                                <tr>
-                                    <td colSpan={7} className="py-4 px-3 text-center text-gray-500">No ticket combinations found for current filters.</td>
-                                </tr>
+                    return (
+                        <div className="space-y-5">
+                            {/* TODAY section */}
+                            {todaySections.length > 0 && (
+                                <div>
+                                    <div className="flex items-center gap-3 mb-3">
+                                        <div className="flex-1 border-t-2 border-betese-green"></div>
+                                        <span className="text-xs font-black uppercase text-betese-green px-3 py-1 bg-green-50 border border-betese-green rounded-full">
+                                            TODAY'S RACES — {new Date(todayKey + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
+                                        </span>
+                                        <div className="flex-1 border-t-2 border-betese-green"></div>
+                                    </div>
+                                    <div className="space-y-4">
+                                        {todaySections.map((sec, idx) =>
+                                            renderRaceSection(sec, idx, idx === 0 && sec.isFinished)
+                                        )}
+                                    </div>
+                                </div>
                             )}
-                        </tbody>
-                    </table>
-                </div>
+
+                            {/* PAST DATES sections */}
+                            {Array.from(pastDateMap.entries()).map(([dateKey, dateSections]) => (
+                                <div key={dateKey}>
+                                    <div className="flex items-center gap-3 mb-3">
+                                        <div className="flex-1 border-t border-gray-300"></div>
+                                        <span className="text-xs font-bold uppercase text-gray-500 px-3 py-1 bg-gray-50 border border-gray-300 rounded-full">
+                                            {new Date(dateKey + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                                        </span>
+                                        <div className="flex-1 border-t border-gray-300"></div>
+                                    </div>
+                                    <div className="space-y-4">
+                                        {dateSections.map((sec, idx) => renderRaceSection(sec, idx, false))}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    );
+                })()}
             </div>
         </div>
     );
