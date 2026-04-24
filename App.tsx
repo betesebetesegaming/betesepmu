@@ -609,21 +609,51 @@ const AppContent: React.FC = () => {
 
   const handleWithdrawalRequest = async (amount: number) => {
       if (!currentUser) return;
-      const newRequest: WithdrawalRequest = {
-        id: Math.floor(10000000 + Math.random() * 90000000).toString(),
+
+      const baseRequest = {
         customerId: currentUser.id,
         customerName: currentUser.name,
         amount,
-        status: 'Pending',
-        code: Math.floor(100000 + Math.random() * 900000).toString(),
+        status: 'Pending' as const,
         requestedAt: effectiveTime
       };
 
       try {
           if (supabase) {
-              await dbCreateWithdrawalRequest(newRequest);
+              // Retry a few times in case random 6-digit code hits unique constraint.
+              let savedRequest: WithdrawalRequest | null = null;
+              for (let attempt = 0; attempt < 5; attempt++) {
+                  const candidate: WithdrawalRequest = {
+                      id: Math.floor(10000000 + Math.random() * 90000000).toString(),
+                      code: Math.floor(100000 + Math.random() * 900000).toString(),
+                      ...baseRequest
+                  };
+                  try {
+                      await dbCreateWithdrawalRequest(candidate);
+                      savedRequest = candidate;
+                      break;
+                  } catch (inner: any) {
+                      const raw = String(inner?.message || '').toLowerCase();
+                      const isCodeCollision = raw.includes('duplicate key') || raw.includes('unique') || raw.includes('withdrawal_requests_code_key');
+                      if (!isCodeCollision || attempt === 4) throw inner;
+                  }
+              }
+
+              if (!savedRequest) {
+                  throw new Error('Unable to generate a unique withdrawal code. Please try again.');
+              }
+
+              // Update local state immediately so customer sees code without needing refresh.
+              setWithdrawalRequests(prev => [savedRequest!, ...(prev || [])]);
+              alert(`Withdrawal code generated: ${savedRequest.code}`);
           } else {
-              setWithdrawalRequests(prev => [...prev || [], newRequest]);
+              const newRequest: WithdrawalRequest = {
+                  id: Math.floor(10000000 + Math.random() * 90000000).toString(),
+                  code: Math.floor(100000 + Math.random() * 900000).toString(),
+                  ...baseRequest
+              };
+              setWithdrawalRequests(prev => [newRequest, ...(prev || [])]);
+              alert(`Withdrawal code generated: ${newRequest.code}`);
           }
       } catch (e: any) {
           alert("Withdrawal Failed: " + e.message);
