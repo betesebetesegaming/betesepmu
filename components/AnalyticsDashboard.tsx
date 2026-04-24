@@ -397,6 +397,39 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
         });
     };
 
+    const getWinLevelMeta = (winType?: string) => {
+        if (!winType) return null;
+        const t = winType.toLowerCase();
+        if (t.includes('ordre') || t.includes('order')) {
+            return {
+                label: 'Order',
+                className: 'bg-emerald-100 text-emerald-800 border border-emerald-300',
+            };
+        }
+        if (t.includes('desordre') || t.includes('disorder')) {
+            return {
+                label: 'Disorder',
+                className: 'bg-sky-100 text-sky-800 border border-sky-300',
+            };
+        }
+        if (t.includes('bonus4') || t.includes('bonus 4')) {
+            return {
+                label: 'Bonus 4',
+                className: 'bg-violet-100 text-violet-800 border border-violet-300',
+            };
+        }
+        if (t.includes('bonus3') || t.includes('bonus 3')) {
+            return {
+                label: 'Bonus 3',
+                className: 'bg-fuchsia-100 text-fuchsia-800 border border-fuchsia-300',
+            };
+        }
+        return {
+            label: winType,
+            className: 'bg-gray-100 text-gray-700 border border-gray-300',
+        };
+    };
+
     return (
         <div className="space-y-6">
             {/* ── RACE LOOKUP BY DATE ─────────────────────────────── */}
@@ -653,18 +686,24 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
                                                 <div className="space-y-1">{group.rows.map((row, i) => (
                                                     <div key={i} className="text-xs border border-gray-200 px-2 py-0.5 rounded bg-gray-50">
                                                         <div>{row.combination}</div>
-                                                        {row.selectionStatus === 'Win' && row.winType && (
-                                                            <div className="text-[10px] text-green-700 font-semibold">
-                                                                Level: {row.winType}
-                                                            </div>
-                                                        )}
+                                                        {row.selectionStatus === 'Win' && row.winType && (() => {
+                                                            const levelMeta = getWinLevelMeta(row.winType);
+                                                            if (!levelMeta) return null;
+                                                            return (
+                                                                <div className="mt-1">
+                                                                    <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-bold ${levelMeta.className}`}>
+                                                                        Level: {levelMeta.label}
+                                                                    </span>
+                                                                </div>
+                                                            );
+                                                        })()}
                                                         {row.selectionStatus === 'Win' && typeof row.winningCombinations === 'number' && (
-                                                            <div className="text-[10px] text-blue-700 font-semibold">
+                                                            <div className="text-[10px] text-indigo-700 font-semibold mt-0.5">
                                                                 Winning combinations: {row.winningCombinations}
                                                             </div>
                                                         )}
                                                         {row.selectionStatus === 'Win' && row.winningCombinationText && (
-                                                            <div className="text-[10px] text-gray-500">
+                                                            <div className="text-[10px] text-gray-600 mt-0.5">
                                                                 Hits: {row.winningCombinationText}
                                                             </div>
                                                         )}
@@ -678,8 +717,18 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
                                             </td>
                                             <td className="py-2 px-3 align-top">
                                                 <div className="space-y-1">{group.rows.map((row, i) => (
-                                                    <div key={i} className={`text-xs font-semibold ${row.selectionStatus === 'Win' ? 'text-green-600' : row.selectionStatus === 'Loss' ? 'text-red-500' : 'text-gray-700'}`}>
-                                                        {row.selectionStatus === 'Win' ? 'Winning' : row.selectionStatus === 'Loss' ? 'Lost' : row.status}
+                                                    <div key={i} className="text-xs">
+                                                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 font-bold ${
+                                                            row.selectionStatus === 'Win'
+                                                                ? 'bg-green-100 text-green-700'
+                                                                : row.selectionStatus === 'Loss'
+                                                                    ? 'bg-red-100 text-red-700'
+                                                                    : row.status === 'Active'
+                                                                        ? 'bg-amber-100 text-amber-700'
+                                                                        : 'bg-gray-100 text-gray-700'
+                                                        }`}>
+                                                            {row.selectionStatus === 'Win' ? 'Winning' : row.selectionStatus === 'Loss' ? 'Lost' : row.status}
+                                                        </span>
                                                     </div>
                                                 ))}</div>
                                             </td>
@@ -688,8 +737,10 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
                                                     <div key={i} className="text-xs">
                                                         <span className={row.payout > 0 ? 'text-green-700 font-bold' : ''}>{row.payout.toFixed(2)}</span>
                                                         {row.selectionStatus === 'Win' && row.payoutCheck && (
-                                                            <div className={`text-[10px] ${row.payoutCheck === 'OK' ? 'text-green-600' : 'text-red-600 font-bold'}`}>
-                                                                {row.payoutCheck === 'OK' ? 'Payout check: OK' : 'Payout check: CHECK'}
+                                                            <div className="mt-0.5">
+                                                                <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-bold ${row.payoutCheck === 'OK' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                                    {row.payoutCheck === 'OK' ? 'Payout OK' : 'Payout Check'}
+                                                                </span>
                                                             </div>
                                                         )}
                                                         {row.status === 'Paid' && (row.paidByName || row.paidById) && (
