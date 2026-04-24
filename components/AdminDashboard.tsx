@@ -20,9 +20,10 @@ import { SupportPanel } from './SupportPanel';
 import { TicketCheckPanel } from './TicketCheckPanel';
 import { BookingRetrievalPanel } from './BookingRetrievalPanel';
 import { AutomaticRaffleDrawerPanel } from './AutomaticRaffleDrawerPanel';
+import { VendorMonitorPanel } from './VendorMonitorPanel';
 
 type FilterRole = Role | 'All';
-type AdminView = 'DASHBOARD' | 'ANALYTICS' | 'PROGRAM' | 'USERS' | 'EOD' | 'RACES' | 'REPORTS' | 'TICKETS' | 'PRINTING' | 'TICKET_PAYOUT' | 'INTEGRATIONS' | 'SUPPORT' | 'MANUAL_BETS' | 'RAFFLE_DRAW' | 'TICKET_INFORMATION';
+type AdminView = 'DASHBOARD' | 'ANALYTICS' | 'PROGRAM' | 'USERS' | 'EOD' | 'RACES' | 'REPORTS' | 'TICKETS' | 'PRINTING' | 'TICKET_PAYOUT' | 'INTEGRATIONS' | 'SUPPORT' | 'MANUAL_BETS' | 'RAFFLE_DRAW' | 'TICKET_INFORMATION' | 'VENDOR_MONITOR';
 
 export const TicketToolsView: React.FC<{
     allTickets: Ticket[];
@@ -99,7 +100,7 @@ const BackButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
   </button>
 );
 
-type AdminIconKind = 'analytics' | 'manual' | 'raffle' | 'program' | 'users' | 'races' | 'tools' | 'reports' | 'integrations' | 'support' | 'printing' | 'pmu';
+type AdminIconKind = 'analytics' | 'manual' | 'raffle' | 'program' | 'users' | 'races' | 'tools' | 'reports' | 'integrations' | 'support' | 'printing' | 'pmu' | 'monitor';
 
 const AdminMenuGraphic: React.FC<{ kind: AdminIconKind }> = ({ kind }) => {
     const photoMap: Record<AdminIconKind, { src: string; alt: string }> = {
@@ -115,6 +116,7 @@ const AdminMenuGraphic: React.FC<{ kind: AdminIconKind }> = ({ kind }) => {
         support: { src: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=140&h=140&fit=crop&q=80', alt: 'support' },
         printing: { src: 'https://images.unsplash.com/photo-1515879218367-8466d910aaa4?w=140&h=140&fit=crop&q=80', alt: 'printing' },
         pmu: { src: 'https://images.unsplash.com/photo-1489515217757-5fd1be406fef?w=140&h=140&fit=crop&q=80', alt: 'pari mutuel' },
+        monitor: { src: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=140&h=140&fit=crop&q=80', alt: 'vendor monitor' },
     };
 
     return (
@@ -126,6 +128,7 @@ const AdminMenuGraphic: React.FC<{ kind: AdminIconKind }> = ({ kind }) => {
 
 const AdminMenu: React.FC<{ setView: (view: AdminView) => void; }> = ({ setView }) => {
     const menuItems = [
+        { view: 'VENDOR_MONITOR', label: 'Vendor Monitor', iconKind: 'monitor' as AdminIconKind, color: 'from-gray-800 to-gray-900' },
         { view: 'TICKET_INFORMATION', label: 'Terminal Log / Ticket Information', iconKind: 'reports' as AdminIconKind, color: 'from-lime-600 to-green-700' },
         { view: 'ANALYTICS', label: 'Analytics Dashboard', iconKind: 'analytics' as AdminIconKind, color: 'from-green-500 to-green-700' },
         { view: 'RAFFLE_DRAW', label: 'Automatic Raffle Draw', iconKind: 'raffle' as AdminIconKind, color: 'from-amber-500 to-orange-700' },
@@ -175,6 +178,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
 
     const renderCurrentView = () => {
         switch (view) {
+            case 'VENDOR_MONITOR': return <VendorMonitorPanel allTickets={allTickets} users={users} onCancelTicket={onCancelTicket} onToggleLock={onToggleLock} />;
             case 'ANALYTICS': return <div className="space-y-6"><AnalyticsDashboard tickets={allTickets} races={races} /><PromotionManagementPanel promotions={promotions} onToggleStatus={onTogglePromotionStatus} onUpdatePromotion={onUpdatePromotion} onMovePromotion={onMovePromotion} onCreatePromotion={onCreatePromotion} onDeletePromotion={onDeletePromotion} /></div>;
             case 'RAFFLE_DRAW': return <AutomaticRaffleDrawerPanel users={users} tickets={allTickets} effectiveTime={effectiveTime} />;
             case 'PROGRAM': return <div className="space-y-6"><ProgramManagementPanel programImages={programImages} onUpload={onAddProgramImage} onDelete={onDeleteProgramImage} /><CombinationSearch allTickets={allTickets} races={races} onCancelTicket={onCancelTicket} effectiveTime={effectiveTime} /></div>;
