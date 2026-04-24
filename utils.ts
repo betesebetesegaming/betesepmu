@@ -324,40 +324,32 @@ export function calculateTicketWinnings(ticket: Ticket, allRaces: Race[]): { tot
                     break;
                 }
                 case BetTypeOption.Multi4:
-                    if (coversTargetWithWildcards(sel.numbers, sel.xCount || 0, top4)) {
+                    // Multi bets (4/5/6/7): win when the first 4 finishers are covered
+                    // by selected horses/wildcards, in any order.
+                    if (positions.length >= 4 && coversTargetWithWildcards(sel.numbers, sel.xCount || 0, top4)) {
                         matchedCombos = [top4];
                         unitPayout = Number(payouts.multi4 || 0);
                         matchedType = 'Multi 4';
                     }
                     break;
                 case BetTypeOption.Multi5:
-                    if (coversTargetWithWildcards(sel.numbers, sel.xCount || 0, top5)) {
-                        matchedCombos = [top5];
+                    if (positions.length >= 4 && coversTargetWithWildcards(sel.numbers, sel.xCount || 0, top4)) {
+                        matchedCombos = [top4];
                         unitPayout = Number(payouts.multi5 || 0);
                         matchedType = 'Multi 5';
                     }
                     break;
                 case BetTypeOption.Multi6: {
-                    // Multi 6 must have at least 6 official finishing positions.
-                    if (positions.length < 6) {
-                        break;
-                    }
-                    const top6 = positions.slice(0, 6);
-                    if (coversTargetWithWildcards(sel.numbers, sel.xCount || 0, top6)) {
-                        matchedCombos = [top6];
+                    if (positions.length >= 4 && coversTargetWithWildcards(sel.numbers, sel.xCount || 0, top4)) {
+                        matchedCombos = [top4];
                         unitPayout = Number(payouts.multi6 || 0);
                         matchedType = 'Multi 6';
                     }
                     break;
                 }
                 case BetTypeOption.Multi7: {
-                    // Multi 7 must have at least 7 official finishing positions.
-                    if (positions.length < 7) {
-                        break;
-                    }
-                    const top7 = positions.slice(0, 7);
-                    if (coversTargetWithWildcards(sel.numbers, sel.xCount || 0, top7)) {
-                        matchedCombos = [top7];
+                    if (positions.length >= 4 && coversTargetWithWildcards(sel.numbers, sel.xCount || 0, top4)) {
+                        matchedCombos = [top4];
                         unitPayout = Number(payouts.multi7 || 0);
                         matchedType = 'Multi 7';
                     }
