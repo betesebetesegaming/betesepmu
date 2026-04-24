@@ -126,13 +126,13 @@ const AdminMenuGraphic: React.FC<{ kind: AdminIconKind }> = ({ kind }) => {
 
 const AdminMenu: React.FC<{ setView: (view: AdminView) => void; }> = ({ setView }) => {
     const menuItems = [
+        { view: 'TICKET_INFORMATION', label: 'Terminal Log / Ticket Information', iconKind: 'reports' as AdminIconKind, color: 'from-lime-600 to-green-700' },
         { view: 'ANALYTICS', label: 'Analytics Dashboard', iconKind: 'analytics' as AdminIconKind, color: 'from-green-500 to-green-700' },
         { view: 'RAFFLE_DRAW', label: 'Automatic Raffle Draw', iconKind: 'raffle' as AdminIconKind, color: 'from-amber-500 to-orange-700' },
         { view: 'PROGRAM', label: 'Program & Ads', iconKind: 'program' as AdminIconKind, color: 'from-blue-500 to-blue-700' },
         { view: 'USERS', label: 'User Accounts', iconKind: 'users' as AdminIconKind, color: 'from-purple-500 to-purple-700' },
         { view: 'RACES', label: 'Race Management', iconKind: 'races' as AdminIconKind, color: 'from-orange-500 to-orange-700' },
         { view: 'TICKET_PAYOUT', label: 'Office Payouts', iconKind: 'tools' as AdminIconKind, color: 'from-cyan-500 to-blue-500' },
-        { view: 'TICKET_INFORMATION', label: 'Ticket Information', iconKind: 'reports' as AdminIconKind, color: 'from-lime-600 to-green-700' },
         { view: 'REPORTS', label: 'Payout Reports', iconKind: 'reports' as AdminIconKind, color: 'from-yellow-500 to-yellow-600' },
         { view: 'INTEGRATIONS', label: 'Payment API', iconKind: 'integrations' as AdminIconKind, color: 'from-yellow-600 to-orange-600' },
         { view: 'SUPPORT', label: 'Support & Snapshot', iconKind: 'support' as AdminIconKind, color: 'from-red-600 to-red-800' },
@@ -206,7 +206,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
             case 'SUPPORT': return <SupportPanel onRecalculateAllTickets={props.onRecalculateAllTickets} />;
             case 'PRINTING': return <TestPrintPanel />;
             case 'DASHBOARD':
-            default: return <div className="space-y-6"><RecentResultsPanel races={races} effectiveTime={effectiveTime} /><AdminMenu setView={setView} /></div>;
+            default:
+                return (
+                    <div className="space-y-6">
+                        <div className="bg-lime-50 border-l-8 border-lime-600 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow">
+                            <div>
+                                <h3 className="text-lg font-black text-lime-800 uppercase">Quick Access</h3>
+                                <p className="text-sm text-lime-700">Open Terminal Log / Ticket Information from here.</p>
+                            </div>
+                            <button
+                                onClick={() => setView('TICKET_INFORMATION')}
+                                className="px-5 py-3 bg-lime-700 text-white font-black rounded-lg hover:bg-lime-800 transition-all"
+                            >
+                                Open Ticket Information
+                            </button>
+                        </div>
+                        <RecentResultsPanel races={races} effectiveTime={effectiveTime} />
+                        <AdminMenu setView={setView} />
+                    </div>
+                );
         }
     };
     
