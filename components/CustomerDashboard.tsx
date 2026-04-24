@@ -68,7 +68,7 @@ interface CustomerDashboardProps {
   onCancelTicket: (ticketId: string) => void;
   seenWinningTickets: Set<string>;
   onMarkWinningTicketAsSeen: (id: string) => void;
-  onWithdrawalRequest: (amount: number) => void;
+  onWithdrawalRequest: (amount: number) => Promise<WithdrawalRequest | null>;
   withdrawalRequests: WithdrawalRequest[];
   onWalletFlash: () => void;
   programImages: ProgramImage[];

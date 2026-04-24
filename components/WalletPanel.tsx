@@ -1,11 +1,12 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { User, WithdrawalRequest, DepositRequest, Ticket } from '../types';
 import { useLanguage } from '../LanguageContext';
+import { WithdrawalCodeModal } from './WithdrawalCodeModal';
 
 interface WalletPanelProps {
   user: User;
-  onWithdrawalRequest: (amount: number) => void;
+    onWithdrawalRequest: (amount: number) => Promise<WithdrawalRequest | null>;
   withdrawalRequests: WithdrawalRequest[];
   onWalletFlash: () => void;
   onDepositRequest: (amount: number, method: 'Wave' | 'AfriMoney', transactionId: string) => void;
@@ -38,7 +39,14 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
   // Withdrawal Form State
   const [withdrawAmount, setWithdrawAmount] = useState<number | ''>('');
   const [withdrawError, setWithdrawError] = useState('');
+    const [latestWithdrawalRequest, setLatestWithdrawalRequest] = useState<WithdrawalRequest | null>(null);
   const { t } = useLanguage();
+
+    useEffect(() => {
+        if (!latestWithdrawalRequest) return;
+        const timer = window.setTimeout(() => setLatestWithdrawalRequest(null), 8000);
+        return () => window.clearTimeout(timer);
+    }, [latestWithdrawalRequest]);
 
     const actualBalance = Number(user.walletBalance || 0);
     const pendingWinningMoney = (tickets || [])
@@ -71,7 +79,7 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
       setDepositPhone('');
   }
 
-  const handleWithdrawalSubmit = (e: React.FormEvent) => {
+    const handleWithdrawalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setWithdrawError('');
     if (typeof withdrawAmount !== 'number' || withdrawAmount <= 0) {
@@ -83,8 +91,11 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
         onWalletFlash();
         return;
     }
-    onWithdrawalRequest(withdrawAmount);
-    setWithdrawAmount('');
+        const createdRequest = await onWithdrawalRequest(withdrawAmount);
+        if (createdRequest) {
+            setLatestWithdrawalRequest(createdRequest);
+            setWithdrawAmount('');
+        }
   };
 
   const openWhatsAppProof = () => {
@@ -98,6 +109,12 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-lg">
+            {latestWithdrawalRequest && (
+                <WithdrawalCodeModal
+                    request={latestWithdrawalRequest}
+                    onClose={() => setLatestWithdrawalRequest(null)}
+                />
+            )}
       <h3 className="text-xl font-bold text-betese-dark mb-4">{t('tab_wallet')}</h3>
       
             <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-3">

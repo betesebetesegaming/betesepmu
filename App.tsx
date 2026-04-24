@@ -607,8 +607,8 @@ const AppContent: React.FC = () => {
       }
   };
 
-  const handleWithdrawalRequest = async (amount: number) => {
-      if (!currentUser) return;
+  const handleWithdrawalRequest = async (amount: number): Promise<WithdrawalRequest | null> => {
+      if (!currentUser) return null;
 
       const baseRequest = {
         customerId: currentUser.id,
@@ -645,7 +645,7 @@ const AppContent: React.FC = () => {
 
               // Update local state immediately so customer sees code without needing refresh.
               setWithdrawalRequests(prev => [savedRequest!, ...(prev || [])]);
-              alert(`Withdrawal code generated: ${savedRequest.code}`);
+              return savedRequest;
           } else {
               const newRequest: WithdrawalRequest = {
                   id: Math.floor(10000000 + Math.random() * 90000000).toString(),
@@ -653,10 +653,11 @@ const AppContent: React.FC = () => {
                   ...baseRequest
               };
               setWithdrawalRequests(prev => [newRequest, ...(prev || [])]);
-              alert(`Withdrawal code generated: ${newRequest.code}`);
+              return newRequest;
           }
       } catch (e: any) {
           alert("Withdrawal Failed: " + e.message);
+          return null;
       }
   };
 
