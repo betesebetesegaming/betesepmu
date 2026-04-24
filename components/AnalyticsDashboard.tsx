@@ -46,7 +46,12 @@ interface CombinationLedgerRow {
     combination: string;
     stake: number;
     status: Ticket['status'];
+    selectionStatus: 'Win' | 'Loss' | 'Pending';
     payout: number;
+    winType?: string;
+    winningCombinations?: number;
+    winningCombinationText?: string;
+    payoutCheck?: 'OK' | 'CHECK';
     paidByName?: string;
     paidById?: string;
 }
@@ -134,10 +139,24 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
 
         const combinationLedger: CombinationLedgerRow[] = tickets.flatMap((ticket) => {
             return ticket.selections.map((selection, index) => {
-                const matchedBreakdown = ticket.winningsBreakdown?.find((row) => row.selectionIndex === index && row.status === 'Win');
-                const fallbackPayout = ticket.totalCost > 0
+                const matchedBreakdown = ticket.winningsBreakdown?.find((row) => row.selectionIndex === index);
+                const winBreakdown = matchedBreakdown?.status === 'Win' ? matchedBreakdown : undefined;
+                const fallbackPayout = (!matchedBreakdown && ticket.status !== 'Lost' && ticket.status !== 'Canceled' && ticket.totalCost > 0)
                     ? ((selection.cost * selection.multiplier) / ticket.totalCost) * (ticket.winnings ?? 0)
                     : 0;
+                const payoutFromBreakdown = winBreakdown?.totalPayout || 0;
+                const payout = payoutFromBreakdown || fallbackPayout;
+                const winCount = winBreakdown?.winningCombinations;
+                const perCombo = winBreakdown?.payoutPerCombination;
+                const expectedPayout = typeof winCount === 'number' && typeof perCombo === 'number'
+                    ? winCount * perCombo
+                    : undefined;
+                const payoutCheck: 'OK' | 'CHECK' | undefined = typeof expectedPayout === 'number'
+                    ? (Math.abs(expectedPayout - payout) < 0.01 ? 'OK' : 'CHECK')
+                    : undefined;
+                const winningCombinationText = winBreakdown?.winningCombinationList?.length
+                    ? winBreakdown.winningCombinationList.map((combo) => combo.join('-')).join(' | ')
+                    : undefined;
                 const safeDate = normalizeDate(ticket.timestamp as unknown as Date | string | number);
                 const yyyy = safeDate ? safeDate.getFullYear() : 0;
                 const mm = safeDate ? String(safeDate.getMonth() + 1).padStart(2, '0') : '00';
@@ -171,7 +190,12 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
                         : `${selection.xCount > 0 ? 'X-'.repeat(selection.xCount) : ''}${selection.numbers.join('-')}`,
                     stake: selection.cost * selection.multiplier,
                     status: ticket.status,
-                    payout: matchedBreakdown?.totalPayout || fallbackPayout,
+                    selectionStatus: matchedBreakdown?.status || 'Pending',
+                    payout,
+                    winType: winBreakdown?.winType,
+                    winningCombinations: winBreakdown?.winningCombinations,
+                    winningCombinationText,
+                    payoutCheck,
                     paidByName: ticket.paidByName,
                     paidById: ticket.paidById,
                 };
@@ -627,7 +651,24 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
                                             </td>
                                             <td className="py-2 px-3 font-mono align-top">
                                                 <div className="space-y-1">{group.rows.map((row, i) => (
-                                                    <div key={i} className="text-xs border border-gray-200 px-2 py-0.5 rounded bg-gray-50">{row.combination}</div>
+                                                    <div key={i} className="text-xs border border-gray-200 px-2 py-0.5 rounded bg-gray-50">
+                                                        <div>{row.combination}</div>
+                                                        {row.selectionStatus === 'Win' && row.winType && (
+                                                            <div className="text-[10px] text-green-700 font-semibold">
+                                                                Level: {row.winType}
+                                                            </div>
+                                                        )}
+                                                        {row.selectionStatus === 'Win' && typeof row.winningCombinations === 'number' && (
+                                                            <div className="text-[10px] text-blue-700 font-semibold">
+                                                                Winning combinations: {row.winningCombinations}
+                                                            </div>
+                                                        )}
+                                                        {row.selectionStatus === 'Win' && row.winningCombinationText && (
+                                                            <div className="text-[10px] text-gray-500">
+                                                                Hits: {row.winningCombinationText}
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 ))}</div>
                                             </td>
                                             <td className="py-2 px-3 text-right font-mono align-top">
@@ -637,8 +678,8 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
                                             </td>
                                             <td className="py-2 px-3 align-top">
                                                 <div className="space-y-1">{group.rows.map((row, i) => (
-                                                    <div key={i} className={`text-xs font-semibold ${row.status === 'Winning' || row.status === 'Paid' ? 'text-green-600' : row.status === 'Lost' ? 'text-red-500' : 'text-gray-700'}`}>
-                                                        {row.status}
+                                                    <div key={i} className={`text-xs font-semibold ${row.selectionStatus === 'Win' ? 'text-green-600' : row.selectionStatus === 'Loss' ? 'text-red-500' : 'text-gray-700'}`}>
+                                                        {row.selectionStatus === 'Win' ? 'Winning' : row.selectionStatus === 'Loss' ? 'Lost' : row.status}
                                                     </div>
                                                 ))}</div>
                                             </td>
@@ -646,6 +687,11 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
                                                 <div className="space-y-1">{group.rows.map((row, i) => (
                                                     <div key={i} className="text-xs">
                                                         <span className={row.payout > 0 ? 'text-green-700 font-bold' : ''}>{row.payout.toFixed(2)}</span>
+                                                        {row.selectionStatus === 'Win' && row.payoutCheck && (
+                                                            <div className={`text-[10px] ${row.payoutCheck === 'OK' ? 'text-green-600' : 'text-red-600 font-bold'}`}>
+                                                                {row.payoutCheck === 'OK' ? 'Payout check: OK' : 'Payout check: CHECK'}
+                                                            </div>
+                                                        )}
                                                         {row.status === 'Paid' && (row.paidByName || row.paidById) && (
                                                             <div className="text-[10px] text-gray-400">by {row.paidByName || row.paidById}</div>
                                                         )}
