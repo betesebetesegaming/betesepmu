@@ -1,6 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { Ticket, Race, BetTypeOption } from '../types';
+import { calculateTicketWinnings } from '../utils';
 
 interface AnalyticsDashboardProps {
   tickets: Ticket[];
@@ -138,11 +139,14 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
         });
 
         const combinationLedger: CombinationLedgerRow[] = tickets.flatMap((ticket) => {
+            // Always recompute with current race results to avoid stale DB breakdown/status.
+            const recalculated = calculateTicketWinnings(ticket, races);
             return ticket.selections.map((selection, index) => {
-                const matchedBreakdown = ticket.winningsBreakdown?.find((row) => row.selectionIndex === index);
+                const matchedBreakdown = recalculated.breakdown?.find((row) => row.selectionIndex === index)
+                    || ticket.winningsBreakdown?.find((row) => row.selectionIndex === index);
                 const winBreakdown = matchedBreakdown?.status === 'Win' ? matchedBreakdown : undefined;
                 const fallbackPayout = (!matchedBreakdown && ticket.status !== 'Lost' && ticket.status !== 'Canceled' && ticket.totalCost > 0)
-                    ? ((selection.cost * selection.multiplier) / ticket.totalCost) * (ticket.winnings ?? 0)
+                    ? ((selection.cost * selection.multiplier) / ticket.totalCost) * (recalculated.totalWinnings || ticket.winnings || 0)
                     : 0;
                 const payoutFromBreakdown = winBreakdown?.totalPayout || 0;
                 const payout = payoutFromBreakdown || fallbackPayout;
