@@ -217,10 +217,8 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
         window.open(`https://wa.me/${supportNumber}?text=${encodeURIComponent(text)}`, '_blank');
     };
 
-    // Last 3 tickets within last 3 days that the vendor can cancel
-    const threeDaysAgo = new Date(effectiveTime.getTime() - 3 * 24 * 60 * 60 * 1000);
+    // Last 3 tickets placed by this vendor — no time restriction, just most recent
     const recentDeletableTickets = [...placedTickets]
-        .filter(t => t.timestamp >= threeDaysAgo)
         .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
         .slice(0, 3);
 
@@ -359,7 +357,7 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                         <div className="bg-white rounded-2xl shadow-xl border-t-4 border-red-500 overflow-hidden">
                             <div className="bg-red-500 px-6 py-3 flex items-center gap-3">
                                 <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5 text-white" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
-                                <h3 className="text-base font-black text-white uppercase">Cancel Recent Tickets (Last 3 · within 3 days)</h3>
+                                <h3 className="text-base font-black text-white uppercase">Cancel Last 3 Tickets Placed</h3>
                             </div>
                             <div className="p-4">
                                 {recentDeletableTickets.length === 0 ? (
