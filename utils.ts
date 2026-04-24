@@ -338,6 +338,10 @@ export function calculateTicketWinnings(ticket: Ticket, allRaces: Race[]): { tot
                     }
                     break;
                 case BetTypeOption.Multi6: {
+                    // Multi 6 must have at least 6 official finishing positions.
+                    if (positions.length < 6) {
+                        break;
+                    }
                     const top6 = positions.slice(0, 6);
                     if (coversTargetWithWildcards(sel.numbers, sel.xCount || 0, top6)) {
                         matchedCombos = [top6];
@@ -347,6 +351,10 @@ export function calculateTicketWinnings(ticket: Ticket, allRaces: Race[]): { tot
                     break;
                 }
                 case BetTypeOption.Multi7: {
+                    // Multi 7 must have at least 7 official finishing positions.
+                    if (positions.length < 7) {
+                        break;
+                    }
                     const top7 = positions.slice(0, 7);
                     if (coversTargetWithWildcards(sel.numbers, sel.xCount || 0, top7)) {
                         matchedCombos = [top7];
