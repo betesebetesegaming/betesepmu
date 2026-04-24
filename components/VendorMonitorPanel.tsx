@@ -39,6 +39,8 @@ export const VendorMonitorPanel: React.FC<VendorMonitorPanelProps> = ({
     const [searchTicket, setSearchTicket] = useState('');
     const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
     const [confirmLockId, setConfirmLockId] = useState<string | null>(null);
+    const [adminCancelInput, setAdminCancelInput] = useState('');
+    const [adminCancelMsg, setAdminCancelMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
     const vendors = useMemo(() => users.filter(u => u.role === 'Vendor'), [users]);
 
@@ -182,6 +184,39 @@ export const VendorMonitorPanel: React.FC<VendorMonitorPanelProps> = ({
                     ))}
                 </div>
 
+                {/* Admin cancel-by-request box */}
+                <div className="bg-orange-50 border-2 border-orange-300 rounded-2xl p-5">
+                    <h4 className="text-sm font-black text-orange-700 uppercase mb-1">Cancel Ticket by Vendor Request</h4>
+                    <p className="text-[11px] text-orange-600 mb-3">If a vendor calls and asks to cancel a ticket they placed by mistake, enter the ticket ID here and confirm.</p>
+                    <div className="flex gap-2">
+                        <input
+                            type="text"
+                            value={adminCancelInput}
+                            onChange={e => { setAdminCancelInput(e.target.value); setAdminCancelMsg(null); }}
+                            placeholder="Ticket ID e.g. 36226201"
+                            className="flex-1 px-4 py-2 rounded-xl border-2 border-orange-300 text-sm font-mono focus:outline-none focus:border-orange-500"
+                        />
+                        <button
+                            onClick={() => {
+                                const id = adminCancelInput.trim();
+                                if (!id) return;
+                                const ticket = allTickets.find(t => t.id === id || t.bookingCode === id);
+                                if (!ticket) { setAdminCancelMsg({ ok: false, text: `Ticket #${id} not found.` }); return; }
+                                if (ticket.status !== 'Active' && ticket.status !== 'Booked') {
+                                    setAdminCancelMsg({ ok: false, text: `Cannot cancel — ticket is ${ticket.status}.` }); return;
+                                }
+                                setConfirmCancelId(ticket.id);
+                            }}
+                            className="px-5 py-2 bg-orange-600 text-white font-black text-sm rounded-xl hover:bg-orange-700 active:scale-95 transition-all border-b-2 border-orange-800"
+                        >
+                            Cancel Ticket
+                        </button>
+                    </div>
+                    {adminCancelMsg && (
+                        <p className={`mt-2 text-xs font-bold ${adminCancelMsg.ok ? 'text-green-600' : 'text-red-600'}`}>{adminCancelMsg.text}</p>
+                    )}
+                </div>
+
                 {/* Drill ticket table */}
                 <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-200">
                     <div className="bg-gray-800 px-5 py-3 flex flex-wrap items-center gap-3">
@@ -266,7 +301,7 @@ export const VendorMonitorPanel: React.FC<VendorMonitorPanelProps> = ({
                             <h3 className="text-xl font-black text-red-600 uppercase">Confirm Cancel Ticket</h3>
                             <p className="text-sm text-gray-700">Cancel ticket <span className="font-mono font-black">#{confirmCancelId}</span>? This will refund eligible online customers and cannot be undone.</p>
                             <div className="flex gap-3">
-                                <button onClick={() => { onCancelTicket(confirmCancelId!); setConfirmCancelId(null); }} className="flex-1 py-3 bg-red-600 text-white font-black rounded-xl hover:bg-red-700 active:scale-95">Yes, Cancel</button>
+                                <button onClick={() => { onCancelTicket(confirmCancelId!); setConfirmCancelId(null); setAdminCancelInput(''); setAdminCancelMsg({ ok: true, text: 'Ticket canceled successfully.' }); }} className="flex-1 py-3 bg-red-600 text-white font-black rounded-xl hover:bg-red-700 active:scale-95">Yes, Cancel</button>
                                 <button onClick={() => setConfirmCancelId(null)} className="flex-1 py-3 bg-gray-200 text-gray-700 font-black rounded-xl hover:bg-gray-300">Keep</button>
                             </div>
                         </div>

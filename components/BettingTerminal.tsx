@@ -361,11 +361,18 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                             </div>
                             <div className="p-4">
                                 {recentDeletableTickets.length === 0 ? (
-                                    <p className="text-center text-gray-400 py-4 text-sm italic">No recent tickets in the last 3 days.</p>
+                                    <p className="text-center text-gray-400 py-4 text-sm italic">No tickets placed yet.</p>
                                 ) : (
                                     <div className="space-y-3">
                                         {recentDeletableTickets.map(ticket => {
-                                            const canCancel = ticket.status === 'Active' || ticket.status === 'Booked';
+                                            // Only allow cancel while race is still running (before end time)
+                                            const raceIds = Array.from(new Set(ticket.selections.map(s => s.raceId)));
+                                            const raceStillRunning = raceIds.some(rId => {
+                                                const race = races.find(r => r.id === rId);
+                                                return race && race.endDate > effectiveTime;
+                                            });
+                                            const canCancel = (ticket.status === 'Active' || ticket.status === 'Booked') && raceStillRunning;
+                                            const raceEnded = (ticket.status === 'Active' || ticket.status === 'Booked') && !raceStillRunning;
                                             return (
                                                 <div key={ticket.id} className="flex items-center justify-between p-4 rounded-xl border-2 border-gray-200 bg-gray-50 hover:bg-gray-100 transition-colors gap-3">
                                                     <div className="min-w-0">
@@ -374,6 +381,9 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                                                             {ticket.timestamp.toLocaleDateString()} {ticket.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                                             {' · '}GMD {ticket.totalCost.toFixed(0)}
                                                         </p>
+                                                        {raceEnded && (
+                                                            <p className="text-[10px] text-red-500 font-black uppercase mt-0.5">Race ended — contact Admin to cancel</p>
+                                                        )}
                                                     </div>
                                                     <div className="flex items-center gap-2 flex-shrink-0">
                                                         <span className={`text-[10px] font-black uppercase px-2 py-1 rounded-full ${
