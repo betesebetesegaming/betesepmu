@@ -188,9 +188,11 @@ export function calculateTicketWinnings(ticket: Ticket, allRaces: Race[]): { tot
         const result = race.result;
         if (!result) return [] as Array<{ source: 'Primary' | 'Bracket 1' | 'Bracket 2'; winningNumbers: number[]; payouts: Payouts }>;
         const sources: Array<{ source: 'Primary' | 'Bracket 1' | 'Bracket 2'; winningNumbers: number[]; payouts: Payouts }> = [];
-        if (result.winningNumbers?.length) sources.push({ source: 'Primary', winningNumbers: result.winningNumbers, payouts: result.payouts || {} });
-        if (result.bracketWinningNumbers?.length) sources.push({ source: 'Bracket 1', winningNumbers: result.bracketWinningNumbers, payouts: result.bracketPayouts || {} });
-        if (result.bracket2WinningNumbers?.length) sources.push({ source: 'Bracket 2', winningNumbers: result.bracket2WinningNumbers, payouts: result.bracket2Payouts || {} });
+        // Settlement must follow the visible main result only.
+        // Hidden tie/bracket pages caused confusing/incorrect wins in production.
+        if (result.winningNumbers?.length) {
+            sources.push({ source: 'Primary', winningNumbers: result.winningNumbers, payouts: result.payouts || {} });
+        }
         return sources;
     };
 
