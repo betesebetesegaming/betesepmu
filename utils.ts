@@ -2,6 +2,13 @@
 import { Race, Ticket, BetTypeOption, Payouts, WinningsBreakdown } from './types';
 import { BET_PRICING } from './constants';
 
+// Returns the price for ONE base combination unit (e.g. 30 for CoupleGagnant, 25 for Tiercé)
+const getBetBasePrice = (betType: BetTypeOption): number => {
+    const pricing = BET_PRICING[betType];
+    if (!pricing) return 0;
+    return pricing.basePrice ?? pricing.perHorsePrice ?? 0;
+};
+
 export const formatWinningNumbersForDisplay = (numbers: number[] | undefined): string => {
     if (!numbers || numbers.length === 0) return 'N/A';
     return numbers.join('-');
@@ -275,7 +282,7 @@ export function calculateTicketWinnings(ticket: Ticket, allRaces: Race[]): { tot
                     }
                     break;
                 case BetTypeOption.Quarte: {
-                    const orderHit = matchesOrderedPattern(sel.pattern, top4) || setsMatch(sel.numbers.slice(0, 4), top4);
+                    const orderHit = matchesOrderedPattern(sel.pattern, top4);
                     const disorderHit = coversTargetWithWildcards(sel.numbers, sel.xCount || 0, top4);
                     const bonusHit = intersectionCount(sel.numbers, top4) + (sel.xCount || 0) >= 3;
                     if (orderHit && Number(payouts.quarteOrdre || 0) > 0) {
@@ -294,7 +301,7 @@ export function calculateTicketWinnings(ticket: Ticket, allRaces: Race[]): { tot
                     break;
                 }
                 case BetTypeOption.Quinte: {
-                    const orderHit = matchesOrderedPattern(sel.pattern, top5) || setsMatch(sel.numbers.slice(0, 5), top5);
+                    const orderHit = matchesOrderedPattern(sel.pattern, top5);
                     const disorderHit = coversTargetWithWildcards(sel.numbers, sel.xCount || 0, top5);
                     const hits = intersectionCount(sel.numbers, top5) + (sel.xCount || 0);
                     if (orderHit && Number(payouts.quinteOrdre || 0) > 0) {
@@ -351,7 +358,11 @@ export function calculateTicketWinnings(ticket: Ticket, allRaces: Race[]): { tot
             }
 
             if (matchedCombos.length > 0 && unitPayout > 0) {
-                const totalForSource = unitPayout * sel.cost * sel.multiplier;
+                // Use the base price for ONE combination unit, not the total sel.cost.
+                // sel.cost can be N × basePrice for combo bets (e.g. 3-horse Couplé = 90 = 3×30).
+                // Only one combination wins, so payout = rapport × basePrice × multiplier.
+                const basePrice = getBetBasePrice(sel.betType);
+                const totalForSource = unitPayout * (basePrice || sel.cost) * sel.multiplier;
                 selectionTotal += totalForSource;
                 winningCombinationList.push(...matchedCombos);
                 payoutPerCombination = unitPayout;
