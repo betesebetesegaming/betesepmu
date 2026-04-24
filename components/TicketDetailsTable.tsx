@@ -25,6 +25,13 @@ const getStatusColor = (status: DisplayStatus) => {
   }
 };
 
+const getResultLabel = (status: DisplayStatus): string => {
+  if (status === 'Winning' || status === 'Paid') return 'Win';
+  if (status === 'Lost') return 'Loss';
+  if (status === 'Canceled') return 'Canceled';
+  return 'Pending';
+};
+
 const formatBetNumbers = (sel: Ticket['selections'][number]): string => {
   if (sel.pattern && sel.pattern.length > 0) return sel.pattern.join(' ');
   const prefix = sel.xCount > 0 ? Array(sel.xCount).fill('X').join(' ') + ' ' : '';
@@ -192,6 +199,7 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                 <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Race number</th>
                 <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Bet time</th>
                 <th className="text-center py-1.5 px-3 font-semibold text-gray-700 border-r border-gray-300">Bet</th>
+                <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Amount</th>
                 <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Result</th>
                 <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Status</th>
                 <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap">Options</th>
@@ -255,11 +263,20 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                         </div>
                       </td>
 
-                      {/* Result */}
+                      {/* Amount */}
                       <td className="py-3 px-4 align-top text-xs font-semibold whitespace-nowrap border-r border-gray-200">
                         {hasWinnings ? (
                           <span className="text-blue-700">{ticket.winnings!.toFixed(2)} GMD</span>
-                        ) : null}
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </td>
+
+                      {/* Result */}
+                      <td className="py-3 px-4 align-top text-xs font-semibold whitespace-nowrap border-r border-gray-200">
+                        <span className={`${displayStatus === 'Winning' || displayStatus === 'Paid' ? 'text-blue-700' : displayStatus === 'Lost' ? 'text-red-600' : 'text-gray-500'}`}>
+                          {getResultLabel(displayStatus)}
+                        </span>
                       </td>
 
                       {/* Status */}
@@ -307,7 +324,7 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                 })
               ) : (
                 <tr>
-                  <td colSpan={7} className="py-8 px-4 text-center text-gray-400 text-sm">
+                  <td colSpan={8} className="py-8 px-4 text-center text-gray-400 text-sm">
                     No tickets match the current filter.
                   </td>
                 </tr>
