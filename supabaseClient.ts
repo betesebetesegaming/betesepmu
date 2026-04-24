@@ -173,13 +173,13 @@ export const dbSettleRaceTickets = async (result: RaceResult, allRaces: Race[]) 
     const { data: ticketRows, error: ticketError } = await supabase
         .from('tickets')
         .select('*')
-        .in('status', ['Active', 'Winning', 'Paid']);
+        .in('status', ['Active', 'Winning', 'Paid', 'Lost']);
 
     if (ticketError) throw ticketError;
 
-    const relevantTickets = (ticketRows || [])
-        .map(mapDbTicketRow)
-        .filter((ticket) => ticket.selections.some((selection) => selection.raceId === result.raceId));
+    // Re-settle all non-booked/non-canceled tickets to correct stale outcomes
+    // when result rules or prior calculations changed.
+    const relevantTickets = (ticketRows || []).map(mapDbTicketRow);
 
     const customerIds = Array.from(new Set(relevantTickets.map((ticket) => ticket.customerId).filter(Boolean))) as string[];
     const balanceMap = new Map<string, number>();
@@ -217,7 +217,8 @@ export const dbSettleRaceTickets = async (result: RaceResult, allRaces: Race[]) 
                     paidById = paidById || 'SYSTEM';
                     paidByName = paidByName || 'System Auto Credit';
                 } else {
-                    nextStatus = 'Winning';
+                    // Keep paid tickets paid after re-settlement.
+                    nextStatus = ticket.status === 'Paid' ? 'Paid' : 'Winning';
                 }
             } else {
                 nextStatus = 'Lost';
