@@ -326,21 +326,21 @@ export function calculateTicketWinnings(ticket: Ticket, allRaces: Race[]): { tot
                 case BetTypeOption.Multi4:
                     // Multi bets (4/5/6/7): win when the first 4 finishers are covered
                     // by selected horses/wildcards, in any order.
-                    if (positions.length >= 4 && coversTargetWithWildcards(sel.numbers, sel.xCount || 0, top4)) {
+                    if ((sel.numbers.length + (sel.xCount || 0)) === 4 && positions.length >= 4 && coversTargetWithWildcards(sel.numbers, sel.xCount || 0, top4)) {
                         matchedCombos = [top4];
                         unitPayout = Number(payouts.multi4 || 0);
                         matchedType = 'Multi 4';
                     }
                     break;
                 case BetTypeOption.Multi5:
-                    if (positions.length >= 4 && coversTargetWithWildcards(sel.numbers, sel.xCount || 0, top4)) {
+                    if ((sel.numbers.length + (sel.xCount || 0)) === 5 && positions.length >= 4 && coversTargetWithWildcards(sel.numbers, sel.xCount || 0, top4)) {
                         matchedCombos = [top4];
                         unitPayout = Number(payouts.multi5 || 0);
                         matchedType = 'Multi 5';
                     }
                     break;
                 case BetTypeOption.Multi6: {
-                    if (positions.length >= 4 && coversTargetWithWildcards(sel.numbers, sel.xCount || 0, top4)) {
+                    if ((sel.numbers.length + (sel.xCount || 0)) === 6 && positions.length >= 4 && coversTargetWithWildcards(sel.numbers, sel.xCount || 0, top4)) {
                         matchedCombos = [top4];
                         unitPayout = Number(payouts.multi6 || 0);
                         matchedType = 'Multi 6';
@@ -348,7 +348,7 @@ export function calculateTicketWinnings(ticket: Ticket, allRaces: Race[]): { tot
                     break;
                 }
                 case BetTypeOption.Multi7: {
-                    if (positions.length >= 4 && coversTargetWithWildcards(sel.numbers, sel.xCount || 0, top4)) {
+                    if ((sel.numbers.length + (sel.xCount || 0)) === 7 && positions.length >= 4 && coversTargetWithWildcards(sel.numbers, sel.xCount || 0, top4)) {
                         matchedCombos = [top4];
                         unitPayout = Number(payouts.multi7 || 0);
                         matchedType = 'Multi 7';
