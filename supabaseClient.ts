@@ -14,7 +14,7 @@ import {
     BetSelection,
     WithdrawalRequest
 } from './types';
-import { calculateTicketWinnings } from './utils';
+import { calculateTicketWinnings, validateTicketForPlacement } from './utils';
 
 // Safely retrieve environment variables
 const getEnvVar = (key: string): string | undefined => {
@@ -268,6 +268,12 @@ export const dbSettleRaceTickets = async (result: RaceResult, allRaces: Race[]) 
 
 export const dbPlaceBet = async (ticket: Ticket, user: User) => {
     if (!supabase) throw new Error("Supabase not connected");
+
+    const placementValidation = validateTicketForPlacement({ selections: ticket.selections, totalCost: ticket.totalCost });
+    if (!placementValidation.valid) {
+        throw new Error(`Invalid ticket formula: ${placementValidation.message}`);
+    }
+
     const isOnlineCustomer = user.role === 'Customer';
     const shouldChargeWallet = isOnlineCustomer && ticket.status !== 'Booked';
     if (shouldChargeWallet) {

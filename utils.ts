@@ -1,5 +1,5 @@
 
-import { Race, Ticket, BetTypeOption, Payouts, WinningsBreakdown } from './types';
+import { Race, Ticket, BetTypeOption, Payouts, WinningsBreakdown, BetSelection } from './types';
 import { BET_PRICING } from './constants';
 
 // Returns the price for ONE base combination unit (e.g. 30 for CoupleGagnant, 25 for Tiercé)
@@ -162,6 +162,55 @@ export function calculateWinSummary(race: Race, winningNumbers: number[], ticket
     return summary;
 }
 
+export const validateSelectionFormula = (sel: BetSelection): { valid: boolean; message?: string } => {
+    const pricing = BET_PRICING[sel.betType];
+    if (!pricing) return { valid: false, message: `Unknown bet type: ${sel.betType}` };
+
+    const xCount = sel.xCount || 0;
+    const numberCount = sel.numbers.length;
+    const totalSlots = numberCount + xCount;
+
+    if (xCount < 0) return { valid: false, message: `${sel.betType}: wildcard count cannot be negative` };
+    if (numberCount < 0) return { valid: false, message: `${sel.betType}: number count cannot be negative` };
+    if (totalSlots < pricing.minHorses) return { valid: false, message: `${sel.betType}: minimum horses not met` };
+
+    const uniqueNumbers = new Set(sel.numbers);
+    if (uniqueNumbers.size !== sel.numbers.length) return { valid: false, message: `${sel.betType}: duplicate horse numbers are not allowed` };
+
+    if (pricing.perHorsePrice !== undefined) {
+        if (xCount > 0) return { valid: false, message: `${sel.betType}: wildcard X is not allowed` };
+        const expected = pricing.perHorsePrice * numberCount;
+        if (Math.abs((sel.cost || 0) - expected) >= 0.001) {
+            return { valid: false, message: `${sel.betType}: invalid cost` };
+        }
+        return { valid: true };
+    }
+
+    let expected: number | undefined;
+    if (xCount > 0) {
+        expected = pricing.xPriceMap?.[xCount]?.[numberCount];
+    } else {
+        expected = pricing.priceMap?.[totalSlots];
+    }
+
+    if (expected === undefined) return { valid: false, message: `${sel.betType}: invalid formula structure` };
+    if (Math.abs((sel.cost || 0) - expected) >= 0.001) return { valid: false, message: `${sel.betType}: invalid cost` };
+    return { valid: true };
+};
+
+export const validateTicketForPlacement = (ticketLike: { selections: BetSelection[]; totalCost: number }): { valid: boolean; message?: string } => {
+    if (!ticketLike.selections?.length) return { valid: false, message: 'No selections in ticket' };
+    for (const sel of ticketLike.selections) {
+        const check = validateSelectionFormula(sel);
+        if (!check.valid) return check;
+    }
+    const computedTotal = ticketLike.selections.reduce((sum, sel) => sum + (sel.cost * sel.multiplier), 0);
+    if (Math.abs(computedTotal - (ticketLike.totalCost || 0)) >= 0.001) {
+        return { valid: false, message: 'Ticket total cost mismatch' };
+    }
+    return { valid: true };
+};
+
 export function calculateTicketWinnings(ticket: Ticket, allRaces: Race[]): { totalWinnings: number; breakdown: WinningsBreakdown[] } {
     const combinations = (numbers: number[], size: number): number[][] => {
         if (size <= 0 || numbers.length < size) return [];
@@ -206,48 +255,13 @@ export function calculateTicketWinnings(ticket: Ticket, allRaces: Race[]): { tot
         return matched + wildcardCount >= target.length;
     };
 
-    const isSelectionFormulaValid = (sel: Ticket['selections'][number]) => {
-        const pricing = BET_PRICING[sel.betType];
-        if (!pricing) return false;
-
-        const xCount = sel.xCount || 0;
-        const numberCount = sel.numbers.length;
-        const totalSlots = numberCount + xCount;
-
-        if (xCount < 0) return false;
-        if (numberCount < 0) return false;
-        if (totalSlots < pricing.minHorses) return false;
-
-        // No duplicate horse numbers in a formula.
-        const uniqueNumbers = new Set(sel.numbers);
-        if (uniqueNumbers.size !== sel.numbers.length) return false;
-
-        // Simple bets are per-horse and do not support wildcard X.
-        if (pricing.perHorsePrice !== undefined) {
-            if (xCount > 0) return false;
-            const expected = pricing.perHorsePrice * numberCount;
-            return Math.abs((sel.cost || 0) - expected) < 0.001;
-        }
-
-        // Combo bet expected cost must match either standard priceMap or xPriceMap formula.
-        let expected: number | undefined;
-        if (xCount > 0) {
-            expected = pricing.xPriceMap?.[xCount]?.[numberCount];
-        } else {
-            expected = pricing.priceMap?.[totalSlots];
-        }
-
-        if (expected === undefined) return false;
-        return Math.abs((sel.cost || 0) - expected) < 0.001;
-    };
-
     let grandTotalWinnings = 0;
     const finalBreakdown: WinningsBreakdown[] = [];
 
     ticket.selections.forEach((sel, index) => {
         // Strict PMU formula validation for all bet types.
         // Invalid structure/cost cannot be settled as win.
-        if (!isSelectionFormulaValid(sel)) {
+        if (!validateSelectionFormula(sel).valid) {
             finalBreakdown.push({ selectionIndex: index, status: 'Loss' });
             return;
         }

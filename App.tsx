@@ -14,7 +14,7 @@ import { WithdrawalCodeModal } from './components/WithdrawalCodeModal';
 import { TicketModal } from './components/TicketModal';
 import { ChatPanel } from './components/ChatSystem';
 import { EmergencyRecover } from './components/EmergencyRecover';
-import { SEVEN_DAYS_IN_MS, calculateTicketWinnings, BETTING_CUTOFF_MS } from './utils';
+import { SEVEN_DAYS_IN_MS, BETTING_CUTOFF_MS, validateTicketForPlacement } from './utils';
 import { LanguageProvider } from './LanguageContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { 
@@ -264,6 +264,12 @@ const AppContent: React.FC = () => {
   const placeBet = async () => {
     if (!currentUser || betSlip.selections.length === 0) return;
 
+        const placementValidation = validateTicketForPlacement({ selections: betSlip.selections, totalCost: betSlip.totalCost });
+        if (!placementValidation.valid) {
+                alert(`Invalid ticket formula: ${placementValidation.message}`);
+                return;
+        }
+
     // ONLINE CUSTOMER WALLET CHECK
     if (currentUser.role === 'Customer') {
         const balance = currentUser.walletBalance || 0;
@@ -317,6 +323,13 @@ const AppContent: React.FC = () => {
 
   const bookBet = async () => {
       if (!currentUser || betSlip.selections.length === 0) return;
+
+      const placementValidation = validateTicketForPlacement({ selections: betSlip.selections, totalCost: betSlip.totalCost });
+      if (!placementValidation.valid) {
+          alert(`Invalid ticket formula: ${placementValidation.message}`);
+          return;
+      }
+
       const bookingCode = "B" + Math.random().toString(36).substring(2, 8).toUpperCase();
       const newTicket: Ticket = {
           id: Math.floor(10000000 + Math.random() * 90000000).toString(),
@@ -446,6 +459,12 @@ const AppContent: React.FC = () => {
     const processManualBet = async (orderId: string) => {
     const order = (manualBetOrders || []).find(o => o.id === orderId);
     if (!order || !currentUser) return;
+
+        const manualValidation = validateTicketForPlacement({ selections: order.selections, totalCost: order.totalCost });
+        if (!manualValidation.valid) {
+            alert(`Invalid manual bet formula: ${manualValidation.message}`);
+            return;
+        }
     
     const newTicket: Ticket = {
       id: Math.floor(10000000 + Math.random() * 90000000).toString(),
