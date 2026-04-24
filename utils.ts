@@ -204,10 +204,52 @@ export function calculateTicketWinnings(ticket: Ticket, allRaces: Race[]): { tot
         return matched + wildcardCount >= target.length;
     };
 
+    const isSelectionFormulaValid = (sel: Ticket['selections'][number]) => {
+        const pricing = BET_PRICING[sel.betType];
+        if (!pricing) return false;
+
+        const xCount = sel.xCount || 0;
+        const numberCount = sel.numbers.length;
+        const totalSlots = numberCount + xCount;
+
+        if (xCount < 0) return false;
+        if (numberCount < 0) return false;
+        if (totalSlots < pricing.minHorses) return false;
+
+        // No duplicate horse numbers in a formula.
+        const uniqueNumbers = new Set(sel.numbers);
+        if (uniqueNumbers.size !== sel.numbers.length) return false;
+
+        // Simple bets are per-horse and do not support wildcard X.
+        if (pricing.perHorsePrice !== undefined) {
+            if (xCount > 0) return false;
+            const expected = pricing.perHorsePrice * numberCount;
+            return Math.abs((sel.cost || 0) - expected) < 0.001;
+        }
+
+        // Combo bet expected cost must match either standard priceMap or xPriceMap formula.
+        let expected: number | undefined;
+        if (xCount > 0) {
+            expected = pricing.xPriceMap?.[xCount]?.[numberCount];
+        } else {
+            expected = pricing.priceMap?.[totalSlots];
+        }
+
+        if (expected === undefined) return false;
+        return Math.abs((sel.cost || 0) - expected) < 0.001;
+    };
+
     let grandTotalWinnings = 0;
     const finalBreakdown: WinningsBreakdown[] = [];
 
     ticket.selections.forEach((sel, index) => {
+        // Strict PMU formula validation for all bet types.
+        // Invalid structure/cost cannot be settled as win.
+        if (!isSelectionFormulaValid(sel)) {
+            finalBreakdown.push({ selectionIndex: index, status: 'Loss' });
+            return;
+        }
+
         const race = allRaces.find((r) => r.id === sel.raceId);
         if (!race?.result) {
             finalBreakdown.push({ selectionIndex: index, status: 'Loss' });
