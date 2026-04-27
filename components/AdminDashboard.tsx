@@ -128,6 +128,10 @@ const AdminMenuGraphic: React.FC<{ kind: AdminIconKind }> = ({ kind }) => {
 };
 
 const AdminMenu: React.FC<{ setView: (view: AdminView) => void; onFreshStart: () => Promise<void>; }> = ({ setView, onFreshStart }) => {
+    const [showDangerZone, setShowDangerZone] = React.useState(false);
+    const [dangerCode, setDangerCode] = React.useState('');
+    const DANGER_CODE = 'ADMIN2025'; // Secret code to unlock danger zone
+
     const menuItems = [
         { view: 'VENDOR_MONITOR', label: 'Vendor Monitor', iconKind: 'monitor' as AdminIconKind, color: 'from-gray-800 to-gray-900' },
         { view: 'TICKET_INFORMATION', label: 'Terminal Log / Ticket Information', iconKind: 'reports' as AdminIconKind, color: 'from-lime-600 to-green-700' },
@@ -142,15 +146,71 @@ const AdminMenu: React.FC<{ setView: (view: AdminView) => void; onFreshStart: ()
         { view: 'SUPPORT', label: 'Support & Snapshot', iconKind: 'support' as AdminIconKind, color: 'from-red-600 to-red-800' },
         { view: 'PRINTING', label: 'Test Print', iconKind: 'printing' as AdminIconKind, color: 'from-slate-500 to-slate-700' },
     ];
+
+    const handleDangerZoneAccess = () => {
+        if (dangerCode === DANGER_CODE) {
+            setShowDangerZone(true);
+            setDangerCode('');
+        } else {
+            alert('❌ Incorrect code. Access denied.');
+            setDangerCode('');
+        }
+    };
+
+    if (showDangerZone) {
+        return (
+            <div className="bg-red-950 border-4 border-red-700 rounded-lg p-8 text-center space-y-6">
+                <h2 className="text-3xl font-black text-red-100 uppercase">⚠️ DANGER ZONE - System Maintenance</h2>
+                <p className="text-red-200 font-bold">This panel contains destructive operations. Use with extreme caution.</p>
+                
+                <div className="bg-red-900 p-6 rounded-lg border border-red-600">
+                    <p className="text-red-100 mb-4 font-bold">FRESH START</p>
+                    <p className="text-red-200 text-sm mb-4">Delete ALL races, tickets, and reset all wallet balances to 0.</p>
+                    <p className="text-red-300 text-xs mb-4">User accounts and all functions remain intact.</p>
+                    <button
+                        onClick={async () => {
+                            const tripleConfirm = window.confirm('⚠️ FIRST WARNING ⚠️\n\nThis will DELETE ALL races and tickets.\n\nContinue?');
+                            if (!tripleConfirm) return;
+                            
+                            const doubleConfirm = window.confirm('⚠️ SECOND WARNING ⚠️\n\nAll wallet balances will be reset to 0.\n\nAll unsettled bets will be lost.\n\nContinue?');
+                            if (!doubleConfirm) return;
+                            
+                            const finalConfirm = window.confirm('⚠️ FINAL WARNING ⚠️\n\nThis action CANNOT be undone.\n\nType YES in the next prompt to confirm.');
+                            if (!finalConfirm) return;
+
+                            const userInput = window.prompt('Type "YES" to permanently delete all data:');
+                            if (userInput !== 'YES') {
+                                alert('❌ Operation cancelled. Data is safe.');
+                                return;
+                            }
+
+                            try {
+                                await onFreshStart();
+                                alert('✅ Fresh start complete! All data cleared. Wallets reset to 0.');
+                                setShowDangerZone(false);
+                            } catch (err: any) {
+                                alert('❌ Failed: ' + err.message);
+                            }
+                        }}
+                        className="w-full px-6 py-4 bg-red-600 hover:bg-red-700 text-white font-black text-lg rounded-lg shadow-lg transition-all mb-4"
+                    >
+                        🔄 EXECUTE FRESH START
+                    </button>
+                </div>
+
+                <button
+                    onClick={() => setShowDangerZone(false)}
+                    className="w-full px-6 py-2 bg-gray-600 hover:bg-gray-700 text-white font-bold rounded-lg transition-all"
+                >
+                    ← Back to Admin Panel
+                </button>
+            </div>
+        );
+    }
+
     return (
         <div>
             <h2 className="text-3xl font-bold text-betese-dark mb-6 text-center">Admin Control Panel</h2>
-            <button 
-                onClick={onFreshStart}
-                className="w-full mb-6 px-6 py-4 bg-red-600 hover:bg-red-700 text-white font-black text-lg rounded-lg shadow-lg transition-all transform hover:scale-105"
-            >
-                🔄 FRESH START - Clear All Races & Tickets
-            </button>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                  {menuItems.map(item => (
                     <button key={item.view} onClick={() => setView(item.view as AdminView)} className={`p-6 rounded-lg shadow-lg text-white font-bold text-left flex flex-col justify-between h-40 transition-all transform hover:-translate-y-1 bg-gradient-to-br ${item.color}`}>
@@ -158,6 +218,27 @@ const AdminMenu: React.FC<{ setView: (view: AdminView) => void; onFreshStart: ()
                         <h3 className="text-2xl">{item.label}</h3>
                     </button>
                 ))}
+            </div>
+
+            {/* Hidden Danger Zone Access */}
+            <div className="mt-8 p-4 border-t border-gray-300">
+                <p className="text-xs text-gray-500 text-center mb-2">System Maintenance</p>
+                <div className="flex gap-2 max-w-sm mx-auto">
+                    <input
+                        type="password"
+                        placeholder="Enter admin code..."
+                        value={dangerCode}
+                        onChange={(e) => setDangerCode(e.target.value)}
+                        onKeyPress={(e) => e.key === 'Enter' && handleDangerZoneAccess()}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded text-sm"
+                    />
+                    <button
+                        onClick={handleDangerZoneAccess}
+                        className="px-4 py-2 bg-gray-600 text-white text-xs font-bold rounded hover:bg-gray-700 transition-all"
+                    >
+                        Access
+                    </button>
+                </div>
             </div>
         </div>
     );
