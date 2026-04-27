@@ -32,6 +32,26 @@ const getResultLabel = (status: DisplayStatus): string => {
   return 'Pending';
 };
 
+const getFundingMeta = (ticket: Ticket) => {
+  const firstSelection = ticket.selections?.[0];
+  const bonusStake = Number(firstSelection?.bonusStakeAmount || 0);
+  const cashStake = Number(firstSelection?.cashStakeAmount ?? Math.max(0, Number(ticket.totalCost || 0) - bonusStake));
+  const source = firstSelection?.fundingSource || (bonusStake > 0 ? (cashStake > 0 ? 'mixed' : 'bonus') : 'cash');
+  return {
+    bonusStake,
+    cashStake,
+    source,
+    label: source === 'bonus' ? 'Bonus' : source === 'mixed' ? 'Mixed' : 'Cash',
+  } as const;
+};
+
+const getWalletFlowLabel = (ticket: Ticket): string => {
+  if (ticket.status !== 'Paid') return 'Pending';
+  if (!ticket.customerId) return 'Cash Desk Payout';
+  if (ticket.paidByName === 'System Bonus Credit') return 'Bonus Wallet (Locked)';
+  return 'Real Wallet';
+};
+
 const formatBetNumbers = (sel: Ticket['selections'][number]): string => {
   if (sel.pattern && sel.pattern.length > 0) return sel.pattern.join(' ');
   const prefix = sel.xCount > 0 ? Array(sel.xCount).fill('X').join(' ') + ' ' : '';
@@ -123,10 +143,23 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
   const filteredSummary = useMemo(() => {
     const totalStake = filteredTickets.reduce((sum, t) => sum + Number(t.totalCost || 0), 0);
     const totalWinnings = filteredTickets.reduce((sum, t) => sum + Number(t.winnings || 0), 0);
+    const realMoneyPaidOut = filteredTickets.reduce((sum, t) => {
+      if (t.status !== 'Paid') return sum;
+      if (t.customerId && t.paidByName === 'System Bonus Credit') return sum;
+      return sum + Number(t.winnings || 0);
+    }, 0);
+    const bonusLockedPaidOut = filteredTickets.reduce((sum, t) => {
+      if (t.status === 'Paid' && t.customerId && t.paidByName === 'System Bonus Credit') {
+        return sum + Number(t.winnings || 0);
+      }
+      return sum;
+    }, 0);
     return {
       count: filteredTickets.length,
       totalStake,
       totalWinnings,
+      realMoneyPaidOut,
+      bonusLockedPaidOut,
     };
   }, [filteredTickets]);
 
@@ -188,6 +221,8 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
           <span className="font-semibold">Transactions: <span className="font-black text-betese-dark">{filteredSummary.count}</span></span>
           <span className="font-semibold">Total Stake: <span className="font-black text-betese-dark">{filteredSummary.totalStake.toFixed(2)} GMD</span></span>
           <span className="font-semibold">Total Winnings: <span className="font-black text-betese-dark">{filteredSummary.totalWinnings.toFixed(2)} GMD</span></span>
+          <span className="font-semibold">Real Paid Out: <span className="font-black text-blue-700">{filteredSummary.realMoneyPaidOut.toFixed(2)} GMD</span></span>
+          <span className="font-semibold">Bonus Locked: <span className="font-black text-amber-700">{filteredSummary.bonusLockedPaidOut.toFixed(2)} GMD</span></span>
         </div>
 
         {/* Table */}
@@ -199,8 +234,10 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                 <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Race number</th>
                 <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Bet time</th>
                 <th className="text-center py-1.5 px-3 font-semibold text-gray-700 border-r border-gray-300">Bet</th>
+                <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Funding</th>
                 <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Amount</th>
                 <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Result</th>
+                <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Wallet Flow</th>
                 <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Status</th>
                 <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap">Options</th>
               </tr>
@@ -208,6 +245,7 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
             <tbody>
               {filteredTickets.length > 0 ? (
                 filteredTickets.map((ticket, rowIdx) => {
+                  const funding = getFundingMeta(ticket);
                   const hasWinnings = ticket.winnings !== undefined && ticket.winnings > 0;
                   const displayStatus = getDisplayStatus(ticket);
                   const canPayout = hasWinnings && displayStatus === 'Winning' && typeof onPayoutTicket === 'function';
@@ -263,6 +301,17 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                         </div>
                       </td>
 
+                      {/* Funding */}
+                      <td className="py-3 px-4 align-top text-xs whitespace-nowrap border-r border-gray-200">
+                        <div className="space-y-0.5">
+                          <span className={`inline-block px-2 py-0.5 rounded-full font-black ${funding.source === 'bonus' ? 'bg-amber-100 text-amber-700' : funding.source === 'mixed' ? 'bg-indigo-100 text-indigo-700' : 'bg-green-100 text-green-700'}`}>
+                            {funding.label}
+                          </span>
+                          {funding.bonusStake > 0 && <div className="text-[10px] text-amber-700 font-bold">Bonus: {funding.bonusStake.toFixed(2)}</div>}
+                          {funding.cashStake > 0 && <div className="text-[10px] text-green-700 font-bold">Cash: {funding.cashStake.toFixed(2)}</div>}
+                        </div>
+                      </td>
+
                       {/* Amount */}
                       <td className="py-3 px-4 align-top text-xs font-semibold whitespace-nowrap border-r border-gray-200">
                         {hasWinnings ? (
@@ -276,6 +325,13 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                       <td className="py-3 px-4 align-top text-xs font-semibold whitespace-nowrap border-r border-gray-200">
                         <span className={`${displayStatus === 'Winning' || displayStatus === 'Paid' ? 'text-blue-700' : displayStatus === 'Lost' ? 'text-red-600' : 'text-gray-500'}`}>
                           {getResultLabel(displayStatus)}
+                        </span>
+                      </td>
+
+                      {/* Wallet flow */}
+                      <td className="py-3 px-4 align-top text-xs font-semibold whitespace-nowrap border-r border-gray-200">
+                        <span className={`${ticket.status === 'Paid' ? (ticket.customerId && ticket.paidByName === 'System Bonus Credit' ? 'text-amber-700' : 'text-blue-700') : 'text-gray-500'}`}>
+                          {getWalletFlowLabel(ticket)}
                         </span>
                       </td>
 
@@ -324,7 +380,7 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                 })
               ) : (
                 <tr>
-                  <td colSpan={8} className="py-8 px-4 text-center text-gray-400 text-sm">
+                  <td colSpan={10} className="py-8 px-4 text-center text-gray-400 text-sm">
                     No tickets match the current filter.
                   </td>
                 </tr>

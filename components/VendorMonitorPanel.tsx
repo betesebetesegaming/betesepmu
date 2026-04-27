@@ -44,11 +44,32 @@ export const VendorMonitorPanel: React.FC<VendorMonitorPanelProps> = ({
 
     const vendors = useMemo(() => users.filter(u => u.role === 'Vendor'), [users]);
 
+    const getFundingMeta = (ticket: Ticket) => {
+        const firstSelection = ticket.selections?.[0];
+        const bonusStake = Number(firstSelection?.bonusStakeAmount || 0);
+        const cashStake = Number(firstSelection?.cashStakeAmount ?? Math.max(0, Number(ticket.totalCost || 0) - bonusStake));
+        const source = firstSelection?.fundingSource || (bonusStake > 0 ? (cashStake > 0 ? 'mixed' : 'bonus') : 'cash');
+        return {
+            source,
+            label: source === 'bonus' ? 'Bonus' : source === 'mixed' ? 'Mixed' : 'Cash',
+            bonusStake,
+            cashStake,
+        } as const;
+    };
+
+    const getWalletFlowLabel = (ticket: Ticket): string => {
+        if (ticket.status !== 'Paid') return 'Pending';
+        if (!ticket.customerId) return 'Cash Desk';
+        if (ticket.paidByName === 'System Bonus Credit') return 'Bonus Wallet (Locked)';
+        return 'Real Wallet';
+    };
+
     interface VendorStat {
         vendor: User;
         totalTickets: number;
         totalSales: number;
         totalPayouts: number;
+        totalBonusLocked: number;
         netBalance: number;
         activeCount: number;
         winningCount: number;
@@ -61,12 +82,18 @@ export const VendorMonitorPanel: React.FC<VendorMonitorPanelProps> = ({
         return vendors.map(vendor => {
             const vTickets = allTickets.filter(t => t.vendorId === vendor.id);
             const totalSales = vTickets.reduce((s, t) => s + (t.totalCost || 0), 0);
-            const totalPayouts = vTickets.filter(t => t.status === 'Paid').reduce((s, t) => s + (t.winnings || 0), 0);
+            const totalPayouts = vTickets
+                .filter(t => t.status === 'Paid' && !(t.customerId && t.paidByName === 'System Bonus Credit'))
+                .reduce((s, t) => s + (t.winnings || 0), 0);
+            const totalBonusLocked = vTickets
+                .filter(t => t.status === 'Paid' && t.customerId && t.paidByName === 'System Bonus Credit')
+                .reduce((s, t) => s + (t.winnings || 0), 0);
             return {
                 vendor,
                 totalTickets: vTickets.length,
                 totalSales,
                 totalPayouts,
+                totalBonusLocked,
                 netBalance: totalSales - totalPayouts,
                 activeCount: vTickets.filter(t => t.status === 'Active').length,
                 winningCount: vTickets.filter(t => t.status === 'Winning').length,
@@ -108,6 +135,7 @@ export const VendorMonitorPanel: React.FC<VendorMonitorPanelProps> = ({
     // Overall totals
     const grandSales    = vendorStats.reduce((s, v) => s + v.totalSales, 0);
     const grandPayouts  = vendorStats.reduce((s, v) => s + v.totalPayouts, 0);
+    const grandBonusLocked = vendorStats.reduce((s, v) => s + v.totalBonusLocked, 0);
     const grandNet      = grandSales - grandPayouts;
     const grandTickets  = vendorStats.reduce((s, v) => s + v.totalTickets, 0);
 
@@ -156,7 +184,8 @@ export const VendorMonitorPanel: React.FC<VendorMonitorPanelProps> = ({
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                     {[
                         { label: 'Total Sales',    value: formatGMD(selectedStat.totalSales),    color: 'border-green-500 text-betese-green' },
-                        { label: 'Paid Out',        value: formatGMD(selectedStat.totalPayouts),  color: 'border-orange-400 text-orange-600' },
+                        { label: 'Paid Out (Real)', value: formatGMD(selectedStat.totalPayouts),  color: 'border-orange-400 text-orange-600' },
+                        { label: 'Bonus Locked',    value: formatGMD(selectedStat.totalBonusLocked), color: 'border-amber-400 text-amber-700' },
                         { label: 'Net Balance',     value: formatGMD(selectedStat.netBalance),    color: `border-blue-500 ${selectedStat.netBalance >= 0 ? 'text-blue-700' : 'text-red-600'}` },
                         { label: 'Total Tickets',   value: String(selectedStat.totalTickets),      color: 'border-gray-400 text-gray-700' },
                         { label: 'Canceled',        value: String(selectedStat.canceledCount),     color: 'border-red-400 text-red-600' },
@@ -243,15 +272,16 @@ export const VendorMonitorPanel: React.FC<VendorMonitorPanelProps> = ({
                         <table className="min-w-full text-sm border-collapse">
                             <thead className="sticky top-0 bg-gray-50 border-b border-gray-300 z-10">
                                 <tr>
-                                    {['Ticket ID','Date','Cost','Winnings','Status','Auth By','Action'].map(h => (
+                                    {['Ticket ID','Date','Cost','Winnings','Funding','Wallet Flow','Status','Auth By','Action'].map(h => (
                                         <th key={h} className="py-2 px-3 text-center text-xs font-black text-gray-600 uppercase whitespace-nowrap">{h}</th>
                                     ))}
                                 </tr>
                             </thead>
                             <tbody>
                                 {drillTickets.length === 0 ? (
-                                    <tr><td colSpan={7} className="py-8 text-center text-gray-400 italic text-sm">No tickets match filter.</td></tr>
+                                    <tr><td colSpan={9} className="py-8 text-center text-gray-400 italic text-sm">No tickets match filter.</td></tr>
                                 ) : drillTickets.map((ticket, i) => {
+                                    const funding = getFundingMeta(ticket);
                                     const canCancel = ticket.status === 'Active' || ticket.status === 'Booked';
                                     return (
                                         <tr key={ticket.id} className={`border-b border-gray-200 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-yellow-50`}>
@@ -262,6 +292,16 @@ export const VendorMonitorPanel: React.FC<VendorMonitorPanelProps> = ({
                                             <td className="py-2 px-3 text-center text-xs font-semibold text-gray-700">{formatGMD(ticket.totalCost || 0)}</td>
                                             <td className="py-2 px-3 text-center text-xs font-bold text-blue-700">
                                                 {ticket.winnings && ticket.winnings > 0 ? formatGMD(ticket.winnings) : '—'}
+                                            </td>
+                                            <td className="py-2 px-3 text-center text-xs">
+                                                <span className={`px-2 py-0.5 rounded-full font-black ${funding.source === 'bonus' ? 'bg-amber-100 text-amber-700' : funding.source === 'mixed' ? 'bg-indigo-100 text-indigo-700' : 'bg-green-100 text-green-700'}`}>
+                                                    {funding.label}
+                                                </span>
+                                            </td>
+                                            <td className="py-2 px-3 text-center text-xs font-bold">
+                                                <span className={`${ticket.status === 'Paid' ? (ticket.customerId && ticket.paidByName === 'System Bonus Credit' ? 'text-amber-700' : 'text-blue-700') : 'text-gray-500'}`}>
+                                                    {getWalletFlowLabel(ticket)}
+                                                </span>
                                             </td>
                                             <td className="py-2 px-3 text-center">{statusBadge(ticket.status)}</td>
                                             <td className="py-2 px-3 text-center">
@@ -342,7 +382,8 @@ export const VendorMonitorPanel: React.FC<VendorMonitorPanelProps> = ({
                         { label: 'Vendors',      value: String(vendors.length),    sub: `${vendors.filter(v=>v.isLocked).length} blocked`,   color: 'text-white' },
                         { label: 'Total Tickets', value: String(grandTickets),      sub: 'all time',           color: 'text-white' },
                         { label: 'Gross Sales',   value: formatGMD(grandSales),     sub: 'all transactions',   color: 'text-green-400' },
-                        { label: 'Total Paid Out',value: formatGMD(grandPayouts),   sub: 'winning payouts',    color: 'text-orange-400' },
+                        { label: 'Paid Out (Real)',value: formatGMD(grandPayouts),   sub: 'real wallet / cash', color: 'text-orange-400' },
+                        { label: 'Bonus Locked',  value: formatGMD(grandBonusLocked),sub: 'still locked',       color: 'text-amber-300' },
                     ].map(b => (
                         <div key={b.label} className="text-center">
                             <p className="text-[10px] font-black text-white/50 uppercase tracking-wider">{b.label}</p>

@@ -174,8 +174,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
     const [adminCancelMsg, setAdminCancelMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
     const adminSales = (allTickets || []).reduce((sum, t) => sum + (t?.totalCost || 0), 0);
-    const adminPayouts = (allTickets || []).filter(t => t?.status === 'Paid').reduce((sum, t) => sum + (t?.winnings || 0), 0);
-    const adminNet = adminSales - adminPayouts;
+    const adminRealPayouts = (allTickets || [])
+        .filter(t => t?.status === 'Paid' && !(t?.customerId && t?.paidByName === 'System Bonus Credit'))
+        .reduce((sum, t) => sum + (t?.winnings || 0), 0);
+    const adminBonusLocked = (allTickets || [])
+        .filter(t => t?.status === 'Paid' && t?.customerId && t?.paidByName === 'System Bonus Credit')
+        .reduce((sum, t) => sum + (t?.winnings || 0), 0);
+    const adminNet = adminSales - adminRealPayouts;
     const handlePrintAdminReport = () => triggerPrint('printable-admin-ticket-information');
 
     const renderCurrentView = () => {
@@ -230,9 +235,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
                                     <p className={`mt-2 text-xs font-bold ${adminCancelMsg.ok ? 'text-green-600' : 'text-red-600'}`}>{adminCancelMsg.text}</p>
                                 )}
                             </div>
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+                            <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-8">
                                 <div className="p-4 bg-gray-50 rounded-lg border text-center"><span className="text-[10px] font-black text-gray-500 uppercase">Gross Sales</span><span className="block text-2xl font-black text-betese-green">GMD {adminSales.toFixed(0)}</span></div>
-                                <div className="p-4 bg-gray-50 rounded-lg border text-center"><span className="text-[10px] font-black text-gray-500 uppercase">Paid Out</span><span className="block text-2xl font-black text-blue-600">GMD {adminPayouts.toFixed(0)}</span></div>
+                                <div className="p-4 bg-gray-50 rounded-lg border text-center"><span className="text-[10px] font-black text-gray-500 uppercase">Paid Out (Real)</span><span className="block text-2xl font-black text-blue-600">GMD {adminRealPayouts.toFixed(0)}</span></div>
+                                <div className="p-4 bg-gray-50 rounded-lg border text-center"><span className="text-[10px] font-black text-gray-500 uppercase">Bonus Locked</span><span className="block text-2xl font-black text-amber-700">GMD {adminBonusLocked.toFixed(0)}</span></div>
                                 <div className="p-4 bg-gray-50 rounded-lg border text-center"><span className="text-[10px] font-black text-gray-500 uppercase">Vol.</span><span className="block text-2xl font-black text-gray-800">{allTickets.length}</span></div>
                                 <div className="p-4 bg-gray-50 rounded-lg border text-center"><span className="text-[10px] font-black text-gray-500 uppercase">Net Profit</span><span className="block text-2xl font-black text-orange-600">GMD {adminNet.toFixed(0)}</span></div>
                             </div>
@@ -292,7 +298,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
                 <div className="solid"></div>
                 <div className="flex justify-between py-1 b"><span>TOTAL TICKETS:</span><span>{allTickets.length}</span></div>
                 <div className="flex justify-between py-1 b"><span>GROSS SALES:</span><span>GMD {adminSales.toFixed(0)}</span></div>
-                <div className="flex justify-between py-1 b"><span>TOTAL PAID:</span><span>GMD {adminPayouts.toFixed(0)}</span></div>
+                <div className="flex justify-between py-1 b"><span>TOTAL PAID (REAL):</span><span>GMD {adminRealPayouts.toFixed(0)}</span></div>
+                <div className="flex justify-between py-1 b"><span>BONUS LOCKED:</span><span>GMD {adminBonusLocked.toFixed(0)}</span></div>
                 <div className="solid"></div>
                 <div className="flex b my-2 justify-between items-center">
                     <span style={{fontSize:'12px'}}>NET REVENUE:</span>
