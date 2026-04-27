@@ -1326,3 +1326,39 @@ export const dbMarkManualBetOrderCompleted = async (orderId: string) => {
         .eq('status', 'Pending');
     if (error) throw error;
 };
+
+/**
+ * FRESH START - RESET ALL DATA FOR NEW BETTING SEASON
+ * Clears all races, tickets, and resets wallet balances to zero
+ * Keeps all user accounts and functions intact
+ */
+export const dbFreshStart = async () => {
+    if (!supabase) throw new Error("Database not connected");
+    
+    try {
+        // Delete all tickets first (to avoid foreign key constraints)
+        const { error: ticketError } = await supabase
+            .from('tickets')
+            .delete()
+            .neq('id', ''); // Delete all rows
+        if (ticketError) throw new Error(`Failed to delete tickets: ${ticketError.message}`);
+
+        // Delete all races
+        const { error: raceError } = await supabase
+            .from('races')
+            .delete()
+            .neq('id', ''); // Delete all rows
+        if (raceError) throw new Error(`Failed to delete races: ${raceError.message}`);
+
+        // Reset all user wallet balances to 0
+        const { error: walletError } = await supabase
+            .from('users')
+            .update({ wallet_balance: 0, bonus_balance: 0 })
+            .neq('id', ''); // Update all rows
+        if (walletError) throw new Error(`Failed to reset wallets: ${walletError.message}`);
+
+        return { success: true, message: 'Fresh start completed: all races, tickets cleared, wallets reset to 0' };
+    } catch (err: any) {
+        throw new Error(`Fresh start failed: ${err.message}`);
+    }
+};

@@ -91,6 +91,7 @@ interface AdminDashboardProps {
     onCreateManualBet: (selectionData: Omit<BetSelection, 'cost' | 'raceName'>, multiplier: number, totalCost: number, assignedVendorId: string) => void;
     onCancelManualBet: (orderId: string) => void;
     onRecalculateAllTickets: () => Promise<void>;
+    onFreshStart: () => Promise<void>;
 }
 
 const BackButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
@@ -126,7 +127,7 @@ const AdminMenuGraphic: React.FC<{ kind: AdminIconKind }> = ({ kind }) => {
     );
 };
 
-const AdminMenu: React.FC<{ setView: (view: AdminView) => void; }> = ({ setView }) => {
+const AdminMenu: React.FC<{ setView: (view: AdminView) => void; onFreshStart: () => Promise<void>; }> = ({ setView, onFreshStart }) => {
     const menuItems = [
         { view: 'VENDOR_MONITOR', label: 'Vendor Monitor', iconKind: 'monitor' as AdminIconKind, color: 'from-gray-800 to-gray-900' },
         { view: 'TICKET_INFORMATION', label: 'Terminal Log / Ticket Information', iconKind: 'reports' as AdminIconKind, color: 'from-lime-600 to-green-700' },
@@ -144,6 +145,12 @@ const AdminMenu: React.FC<{ setView: (view: AdminView) => void; }> = ({ setView 
     return (
         <div>
             <h2 className="text-3xl font-bold text-betese-dark mb-6 text-center">Admin Control Panel</h2>
+            <button 
+                onClick={onFreshStart}
+                className="w-full mb-6 px-6 py-4 bg-red-600 hover:bg-red-700 text-white font-black text-lg rounded-lg shadow-lg transition-all transform hover:scale-105"
+            >
+                🔄 FRESH START - Clear All Races & Tickets
+            </button>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                  {menuItems.map(item => (
                     <button key={item.view} onClick={() => setView(item.view as AdminView)} className={`p-6 rounded-lg shadow-lg text-white font-bold text-left flex flex-col justify-between h-40 transition-all transform hover:-translate-y-1 bg-gradient-to-br ${item.color}`}>
@@ -272,7 +279,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
                             </button>
                         </div>
                         <RecentResultsPanel races={races} effectiveTime={effectiveTime} />
-                        <AdminMenu setView={setView} />
+                        <AdminMenu setView={setView} onFreshStart={props.onFreshStart} />
                     </div>
                 );
         }

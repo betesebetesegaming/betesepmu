@@ -32,7 +32,7 @@ import {
     dbProcessWithdrawalRequest, dbFetchChatThreads, dbFetchChatMessages,
     dbSendChatMessage, dbMarkThreadAsRead, dbSettleRaceTickets, dbCancelTicket,
     dbToggleUserLock, dbAdminResetPassword, dbRecalculateAllTicketsSafely,
-    dbApplyCustomerDeposit
+    dbApplyCustomerDeposit, dbFreshStart
 } from './supabaseClient';
 
 const normalizeRole = (role: unknown): Role => {
@@ -279,6 +279,29 @@ const AppContent: React.FC = () => {
       }
       await dbRecalculateAllTicketsSafely();
       await loadLiveSystemData(currentUser);
+  };
+
+  const handleFreshStart = async () => {
+      if (!currentUser || currentUser.role !== 'Admin') {
+          alert('Only Admin can perform fresh start.');
+          return;
+      }
+      if (!supabase) {
+          alert('Fresh start requires database mode.');
+          return;
+      }
+      const confirmed = window.confirm('⚠️ FRESH START - This will delete ALL races, tickets, and reset all wallet balances to 0. All user accounts will be kept. Continue?');
+      if (!confirmed) return;
+      try {
+          const result = await dbFreshStart();
+          setRaces([]);
+          setPlacedTickets([]);
+          setBetSlip({ selections: [], totalCost: 0 });
+          await loadLiveSystemData(currentUser);
+          alert('✅ Fresh start complete: All races and tickets cleared, wallets reset to 0.');
+      } catch (err: any) {
+          alert('Fresh start failed: ' + err.message);
+      }
   };
 
   const payoutTicket = async (ticketId: string) => {
@@ -1217,6 +1240,7 @@ const AppContent: React.FC = () => {
                     onCreateManualBet={handleCreateManualBet}
                     onCancelManualBet={handleCancelManualBet}
                     onRecalculateAllTickets={handleRecalculateAllTickets}
+                    onFreshStart={handleFreshStart}
                 />
             ) : (
                 <SupervisorDashboard
