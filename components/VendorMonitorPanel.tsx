@@ -357,6 +357,42 @@ export const VendorMonitorPanel: React.FC<VendorMonitorPanelProps> = ({
                 </div>
             </div>
 
+            {/* Backoffice quick cancel box */}
+            <div className="bg-orange-50 border-2 border-orange-300 rounded-2xl p-5">
+                <h4 className="text-sm font-black text-orange-700 uppercase mb-1">Cancel Ticket by Vendor Request</h4>
+                <p className="text-[11px] text-orange-600 mb-3">Backoffice quick action: enter ticket ID or booking code to cancel a vendor mistake ticket.</p>
+                <div className="flex gap-2">
+                    <input
+                        type="text"
+                        value={adminCancelInput}
+                        onChange={e => { setAdminCancelInput(e.target.value); setAdminCancelMsg(null); }}
+                        placeholder="Ticket ID or booking code"
+                        className="flex-1 px-4 py-2 rounded-xl border-2 border-orange-300 text-sm font-mono focus:outline-none focus:border-orange-500"
+                    />
+                    <button
+                        onClick={() => {
+                            const id = adminCancelInput.trim();
+                            if (!id) return;
+                            const ticket = allTickets.find(t => t.id === id || t.bookingCode === id);
+                            if (!ticket) { setAdminCancelMsg({ ok: false, text: `Ticket #${id} not found.` }); return; }
+                            if (ticket.status !== 'Active' && ticket.status !== 'Booked') {
+                                setAdminCancelMsg({ ok: false, text: `Cannot cancel — ticket is ${ticket.status}.` }); return;
+                            }
+                            if (!window.confirm(`Cancel ticket #${ticket.id}? This cannot be undone.`)) return;
+                            onCancelTicket(ticket.id);
+                            setAdminCancelInput('');
+                            setAdminCancelMsg({ ok: true, text: `Ticket #${ticket.id} canceled successfully.` });
+                        }}
+                        className="px-5 py-2 bg-orange-600 text-white font-black text-sm rounded-xl hover:bg-orange-700 active:scale-95 transition-all border-b-2 border-orange-800"
+                    >
+                        Cancel Ticket
+                    </button>
+                </div>
+                {adminCancelMsg && (
+                    <p className={`mt-2 text-xs font-bold ${adminCancelMsg.ok ? 'text-green-600' : 'text-red-600'}`}>{adminCancelMsg.text}</p>
+                )}
+            </div>
+
             {/* Sort header */}
             <div className="flex flex-wrap items-center gap-2 text-xs font-black text-gray-500 uppercase">
                 <span>Sort by:</span>
