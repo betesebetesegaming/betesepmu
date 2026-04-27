@@ -595,7 +595,7 @@ const AppContent: React.FC = () => {
     if (!currentUser) return;
         const normalizedPhone = normalizeGambiaPhone(phone || '');
         if (!normalizedPhone) {
-                alert('Use a valid sender phone in this format: +220XXXXXXX (7 digits after +220).');
+            alert('Use a valid phone: +220XXXXXXX or +221XXXXXXXX(X), or local 7/8/9-digit number.');
                 return;
         }
     const normalizedAmount = Number(amount.toFixed(2));
@@ -902,7 +902,7 @@ const AppContent: React.FC = () => {
   const addUser = async (name: string, role: Role, phone?: string, password?: string) => {
     const normalizedPhone = role === 'Customer' ? normalizeGambiaPhone(phone || '') : undefined;
     if (role === 'Customer' && !normalizedPhone) {
-        alert('Customer phone must be valid: +220XXXXXXX (7 digits after +220).');
+        alert('Customer phone must be valid: +220XXXXXXX or +221XXXXXXXX(X), or local 7/8/9-digit number.');
         return null;
     }
 

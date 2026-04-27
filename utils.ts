@@ -30,18 +30,31 @@ export const normalizeGambiaPhone = (input: string): string | null => {
     if (!raw) return null;
 
     const digits = raw.replace(/\D/g, '');
+    let countryCode = '';
     let local = '';
 
+    // Explicit country formats.
     if (digits.startsWith('220') && digits.length === 10) {
+        countryCode = '220';
         local = digits.slice(3);
+    } else if (digits.startsWith('221') && (digits.length === 11 || digits.length === 12)) {
+        countryCode = '221';
+        local = digits.slice(3);
+    // Local formats without country code.
     } else if (digits.length === 7) {
+        countryCode = '220';
+        local = digits;
+    } else if (digits.length === 8 || digits.length === 9) {
+        countryCode = '221';
         local = digits;
     } else {
         return null;
     }
 
-    if (!/^\d{7}$/.test(local)) return null;
-    return `+220${local}`;
+    if (countryCode === '220' && !/^\d{7}$/.test(local)) return null;
+    if (countryCode === '221' && !/^\d{8,9}$/.test(local)) return null;
+
+    return `+${countryCode}${local}`;
 };
 
 export const isValidGambiaPhone = (input: string): boolean => {

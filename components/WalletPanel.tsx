@@ -105,7 +105,7 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
 
       const normalizedSenderPhone = normalizeGambiaPhone(depositPhone);
       if (!normalizedSenderPhone) {
-          setDepositMessage('Phone must be in this format: +220XXXXXXX (7 digits after +220).');
+          setDepositMessage('Use +220XXXXXXX or +221XXXXXXXX(X), or local 7/8/9-digit number.');
           return;
       }
       
@@ -294,7 +294,7 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
                         value={depositPhone} 
                         onChange={e => setDepositPhone(e.target.value)} 
                         className="w-full p-2 border border-gray-300 rounded-md"
-                                                placeholder="e.g., +2207793854"
+                                                placeholder="e.g., +2207793854 or +22177360754"
                         required
                       />
                   </div>
