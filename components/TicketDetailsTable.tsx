@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Ticket, Race } from '../types';
 import { TicketCombinationLedger } from './TicketCombinationLedger';
 import { calculateTicketWinnings, formatWinningNumbersForDisplay } from '../utils';
@@ -29,14 +29,20 @@ const getStatusColor = (status: DisplayStatus) => {
 const getWalletFlowLabel = (ticket: Ticket, displayStatus: DisplayStatus): string => {
   if (ticket.customerId) {
     if (displayStatus === 'Paid') {
-      if (ticket.paidByName === 'System Bonus Credit') return 'Bonus Wallet (Locked)';
-      return 'Real Wallet (Auto)';
+      if (ticket.paidByName === 'System Bonus Credit') return 'Bonus Wallet (Auto Paid)';
+      return 'Real Wallet (Auto Paid)';
     }
-    if (displayStatus === 'Lost') return 'Auto Settled';
-    return 'Auto Settlement Pending';
+    if (displayStatus === 'Lost') return 'Auto Settled - Lost';
+    if (displayStatus === 'Canceled') return 'Canceled';
+    if (displayStatus === 'Booked') return 'Booking Pending Payment';
+    return 'Awaiting Result';
   }
-  if (displayStatus === 'Paid') return 'Cash Desk Payout';
-  return 'Pending';
+  if (displayStatus === 'Paid') return 'Cashier Paid';
+  if (displayStatus === 'Winning') return 'Awaiting Cashier Payout';
+  if (displayStatus === 'Lost') return 'Closed - Lost';
+  if (displayStatus === 'Canceled') return 'Canceled';
+  if (displayStatus === 'Booked') return 'Booking Pending Payment';
+  return 'Awaiting Result';
 };
 
 const formatBetNumbers = (sel: Ticket['selections'][number]): string => {
@@ -71,6 +77,10 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
   const [filterDate, setFilterDate] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [ledgerTicket, setLedgerTicket] = useState<Ticket | null>(null);
+  const topScrollRef = useRef<HTMLDivElement | null>(null);
+  const tableScrollRef = useRef<HTMLDivElement | null>(null);
+  const [tableScrollWidth, setTableScrollWidth] = useState<number>(0);
+  const syncingScrollRef = useRef<'top' | 'table' | null>(null);
 
   const raceById = useMemo(() => {
     return new Map(races.map(r => [r.id, r]));
@@ -88,15 +98,11 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
   const getDisplayStatus = (ticket: Ticket): DisplayStatus => {
     if (ticket.status === 'Paid' || ticket.status === 'Canceled' || ticket.status === 'Booked') return ticket.status;
 
-    const now = new Date();
-    const ticketRaces = ticket.selections
-      .map(sel => raceById.get(sel.raceId))
-      .filter((r): r is Race => Boolean(r));
-
-    if (ticketRaces.length === 0) return ticket.status;
-
-    const allRacesEnded = ticketRaces.every(r => now >= r.endDate);
-    if (!allRacesEnded) return 'Active';
+    const allRacesResolved = ticket.selections.every(sel => {
+      const race = raceById.get(sel.raceId);
+      return Boolean(race?.result?.winningNumbers?.length);
+    });
+    if (!allRacesResolved) return 'Active';
 
     const resolvedWinnings = Number(recalculatedWinningsByTicket.get(ticket.id) ?? ticket.winnings ?? 0);
     if (resolvedWinnings > 0) {
@@ -171,6 +177,32 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
     };
   }, [filteredTickets]);
 
+  useEffect(() => {
+    const updateWidths = () => {
+      if (!tableScrollRef.current) return;
+      setTableScrollWidth(tableScrollRef.current.scrollWidth);
+    };
+    updateWidths();
+    window.addEventListener('resize', updateWidths);
+    return () => window.removeEventListener('resize', updateWidths);
+  }, [filteredTickets]);
+
+  const syncTopToTable = () => {
+    if (!topScrollRef.current || !tableScrollRef.current) return;
+    if (syncingScrollRef.current === 'table') return;
+    syncingScrollRef.current = 'top';
+    tableScrollRef.current.scrollLeft = topScrollRef.current.scrollLeft;
+    syncingScrollRef.current = null;
+  };
+
+  const syncTableToTop = () => {
+    if (!topScrollRef.current || !tableScrollRef.current) return;
+    if (syncingScrollRef.current === 'top') return;
+    syncingScrollRef.current = 'table';
+    topScrollRef.current.scrollLeft = tableScrollRef.current.scrollLeft;
+    syncingScrollRef.current = null;
+  };
+
   return (
     <>
       {ledgerTicket && <TicketCombinationLedger tickets={tickets} races={races} onClose={() => setLedgerTicket(null)} />}
@@ -233,8 +265,15 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
           <span className="font-semibold">Bonus Locked: <span className="font-black text-amber-700">{filteredSummary.bonusLockedPaidOut.toFixed(2)} GMD</span></span>
         </div>
 
+        <div className="px-4 py-2 bg-gray-50 border-b border-gray-200">
+          <div className="text-[10px] font-semibold uppercase text-gray-500 mb-1">Horizontal Scroll</div>
+          <div ref={topScrollRef} onScroll={syncTopToTable} className="overflow-x-auto overflow-y-hidden h-4 rounded bg-gray-200">
+            <div style={{ width: Math.max(tableScrollWidth, 1), height: 1 }} />
+          </div>
+        </div>
+
         {/* Table */}
-        <div className="overflow-x-auto">
+        <div ref={tableScrollRef} onScroll={syncTableToTop} className="overflow-x-auto">
           <table className="min-w-full text-sm border-collapse">
             <thead>
               <tr className="bg-gradient-to-b from-green-100 to-green-50 border-b border-gray-300">
@@ -280,6 +319,11 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                         >
                           {ticket.id}
                         </button>
+                        <div className="mt-1">
+                          <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-black ${ticket.customerId ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                            {ticket.customerId ? 'ONLINE' : 'CASHIER'}
+                          </span>
+                        </div>
                       </td>
 
                       {/* Race number */}
