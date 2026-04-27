@@ -8,7 +8,7 @@ interface RaceResultsManagementProps {
     races: Race[];
     tickets: Ticket[];
     effectiveTime: Date;
-    onSave?: (result: RaceResult) => void;
+    onSave?: (result: RaceResult) => Promise<boolean>;
     canEdit?: boolean;
 }
 
@@ -25,11 +25,12 @@ export const RaceResultsManagement: React.FC<RaceResultsManagementProps> = ({ ra
         return date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
     };
     
-    const handleSaveResult = (result: RaceResult) => {
-        if (!canEdit || !onSave) return;
-        onSave(result);
-        setEditingRace(null);
-    }
+    const handleSaveResult = async (result: RaceResult) => {
+        if (!canEdit || !onSave) return false;
+        const saved = await onSave(result);
+        if (saved) setEditingRace(null);
+        return saved;
+    };
 
     return (
         <>

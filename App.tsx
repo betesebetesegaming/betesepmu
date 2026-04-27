@@ -236,20 +236,30 @@ const AppContent: React.FC = () => {
       } catch (e: any) { alert("Failed to delete race: " + e.message); }
   };
 
-  const handleSaveRaceResult = async (result: RaceResult) => {
+  const handleSaveRaceResult = async (result: RaceResult): Promise<boolean> => {
       if (!currentUser || currentUser.role !== 'Admin') {
           alert("Only Admin can enter or edit race results.");
-          return;
+          return false;
       }
+
+      const nextRaces = (races || []).map(r => r.id === result.raceId ? { ...r, result } : r);
+
       try {
           if (supabase) {
               await dbSaveRaceResult(result);
-              await dbSettleRaceTickets(result, races);
+              setRaces(nextRaces);
+              await dbSettleRaceTickets(result, nextRaces);
               await loadLiveSystemData(currentUser);
+          } else {
+              setRaces(nextRaces);
           }
-          else { setRaces(prev => (prev || []).map(r => r.id === result.raceId ? { ...r, result } : r)); }
           alert("Result saved successfully.");
-      } catch (e: any) { alert("Failed to save result: " + e.message); }
+          return true;
+      } catch (e: any) {
+          await loadLiveSystemData(currentUser);
+          alert("Failed to save result: " + e.message);
+          return false;
+      }
   };
 
   const handleRecalculateAllTickets = async () => {

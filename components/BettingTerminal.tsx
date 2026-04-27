@@ -47,7 +47,7 @@ interface BettingTerminalProps {
   onRejectDepositRequest: (requestId: string) => void;
   manualBetOrders: ManualBetOrder[];
   onProcessManualBet: (orderId: string) => void;
-  onSaveRaceResult: (result: RaceResult) => void; 
+  onSaveRaceResult: (result: RaceResult) => Promise<boolean>; 
 }
 
 type View = 'DASHBOARD' | 'PLACE_BET' | 'SCAN_PAY' | 'FINANCE' | 'RAPPORTS' | 'UPDATE_RESULTS';

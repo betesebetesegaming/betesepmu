@@ -7,7 +7,7 @@ import { WinDividendReport } from './WinDividendReport';
 interface RaceResultModalProps {
   race: Race;
   onClose: () => void;
-  onSave: (result: RaceResult) => void;
+  onSave: (result: RaceResult) => Promise<boolean>;
   tickets: Ticket[];
 }
 
@@ -95,6 +95,7 @@ export const RaceResultModal: React.FC<RaceResultModalProps> = ({ race, onClose,
     const [primaryWinSummary, setPrimaryWinSummary] = useState<WinSummary | null>(null);
     const [bracket1WinSummary, setBracket1WinSummary] = useState<WinSummary | null>(null);
     const [bracket2WinSummary, setBracket2WinSummary] = useState<WinSummary | null>(null);
+    const [isSaving, setIsSaving] = useState(false);
 
     // Calc Primary Summary
     useEffect(() => {
@@ -128,8 +129,10 @@ export const RaceResultModal: React.FC<RaceResultModalProps> = ({ race, onClose,
         else if (tab === 'Bracket2') setBracket2Payouts(prev => ({ ...prev, [field]: value }));
     }
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (isSaving) return;
+
         const finalWinningNumbers = parseWinningNumbersFromString(primaryNumbersStr);
         
         if (finalWinningNumbers.length === 0) {
@@ -174,7 +177,12 @@ export const RaceResultModal: React.FC<RaceResultModalProps> = ({ race, onClose,
             result.bracket2Payouts = cleanPayouts(bracket2Payouts);
         }
 
-        onSave(result);
+        setIsSaving(true);
+        try {
+            await onSave(result);
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const getCurrentData = () => {
@@ -274,8 +282,8 @@ export const RaceResultModal: React.FC<RaceResultModalProps> = ({ race, onClose,
                 </div>
 
                 <div className="mt-6 flex justify-end gap-4 border-t pt-4 flex-shrink-0 bg-white">
-                    <button type="button" onClick={onClose} className="px-6 py-2 bg-gray-300 text-gray-800 font-semibold rounded-lg hover:bg-gray-400">Cancel</button>
-                    <button type="submit" className="px-8 py-2 bg-betese-green text-white font-bold rounded-lg hover:bg-green-700 shadow-md">Save All Results</button>
+                    <button type="button" onClick={onClose} disabled={isSaving} className="px-6 py-2 bg-gray-300 text-gray-800 font-semibold rounded-lg hover:bg-gray-400 disabled:cursor-not-allowed disabled:opacity-60">Cancel</button>
+                    <button type="submit" disabled={isSaving} className="px-8 py-2 bg-betese-green text-white font-bold rounded-lg hover:bg-green-700 shadow-md disabled:cursor-not-allowed disabled:opacity-60">{isSaving ? 'Saving...' : 'Save All Results'}</button>
                 </div>
             </form>
         </div>
