@@ -15,6 +15,12 @@ export const TicketCheckPanel: React.FC<TicketCheckPanelProps> = ({ allTickets, 
   const [message, setMessage] = useState('');
   const [scanMode, setScanMode] = useState(true);
 
+  const getPaidTicketNotice = (ticket: Ticket): string => {
+    const paidBy = ticket.paidByName || ticket.paidById || 'Unknown staff';
+    const paidTime = ticket.paidAt ? ` at ${ticket.paidAt.toLocaleString('en-GB')}` : '';
+    return `PAID TICKET ALREADY - Paid by ${paidBy}${paidTime}. Do not pay again.`;
+  };
+
   const lookupTicket = (rawRef: string): Ticket | null => {
     const normalized = (rawRef || '').replace(/[\r\n]/g, '').trim();
     if (!normalized) return null;
@@ -33,6 +39,9 @@ export const TicketCheckPanel: React.FC<TicketCheckPanelProps> = ({ allTickets, 
     const ticket = lookupTicket(normalized);
     if (ticket) {
         setFoundTicket(ticket);
+        if (ticket.status === 'Paid') {
+          setMessage(getPaidTicketNotice(ticket));
+        }
     } else {
       setMessage('Ticket not found in backoffice database.');
     }
@@ -51,7 +60,11 @@ export const TicketCheckPanel: React.FC<TicketCheckPanelProps> = ({ allTickets, 
       const ticket = lookupTicket(normalized);
       if (ticket) {
         setFoundTicket(ticket);
-        setMessage('');
+        if (ticket.status === 'Paid') {
+          setMessage(getPaidTicketNotice(ticket));
+        } else {
+          setMessage('');
+        }
       }
     }, 160);
 
@@ -172,6 +185,17 @@ export const TicketCheckPanel: React.FC<TicketCheckPanelProps> = ({ allTickets, 
                         <p className="text-4xl font-black leading-none my-1">{foundTicket.winnings?.toFixed(2)}</p>
                         <p className="text-[10px] font-bold uppercase mt-2">GMD</p>
                     </div>
+                )}
+
+                {foundTicket.status === 'Paid' && (
+                  <div className="p-3 bg-red-100 border-2 border-red-300 text-red-800 rounded-xl text-center shadow-inner">
+                    <p className="text-sm font-black uppercase tracking-wide">Paid Ticket Already</p>
+                    <p className="text-xs font-bold mt-1">
+                      Paid by {foundTicket.paidByName || foundTicket.paidById || 'Unknown staff'}
+                      {foundTicket.paidAt ? ` on ${foundTicket.paidAt.toLocaleString('en-GB')}` : ''}
+                    </p>
+                    <p className="text-[11px] font-black uppercase mt-1">Do Not Pay Again</p>
+                  </div>
                 )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
