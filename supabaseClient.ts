@@ -69,6 +69,20 @@ const isMissingBonusTrackingColumnError = (error: any): boolean => {
         || combined.includes('first_deposit_at');
 };
 
+const isMissingPaymentConfigColumnError = (error: any): boolean => {
+    if (!error) return false;
+    const code = String(error.code || '');
+    const combined = `${String(error.message || '')} ${String(error.details || '')} ${String(error.hint || '')}`.toLowerCase();
+    return code === 'PGRST204'
+        || combined.includes('payment_configs')
+        || combined.includes('environment')
+        || combined.includes('signature_secret')
+        || combined.includes('base_url')
+        || combined.includes('webhook_secret')
+        || combined.includes('callback_auth_token')
+        || combined.includes('request_timeout_ms');
+};
+
 /**
  * RACE MANAGEMENT OPERATIONS
  */
@@ -1173,16 +1187,51 @@ export const dbFetchPaymentConfigs = async (): Promise<PaymentIntegrationConfig[
     return (data || []).map((row: any) => ({
         provider: row.provider,
         isEnabled: !!row.is_enabled,
+        environment: row.environment === 'production' ? 'production' : 'sandbox',
         apiKey: row.api_key || '',
         apiSecret: row.api_secret || '',
+        signatureSecret: row.signature_secret || '',
         merchantId: row.merchant_id || '',
-        webhookUrl: row.webhook_url || ''
+        shortCode: row.short_code || '',
+        merchantMsisdn: row.merchant_msisdn || '',
+        merchantDisplayName: row.merchant_display_name || '',
+        currency: row.currency || 'GMD',
+        baseUrl: row.base_url || '',
+        webhookUrl: row.webhook_url || '',
+        webhookSecret: row.webhook_secret || '',
+        callbackAuthToken: row.callback_auth_token || '',
+        requestTimeoutMs: Number(row.request_timeout_ms || 30000)
     }));
 };
 
 export const dbSavePaymentConfig = async (config: PaymentIntegrationConfig) => {
     if (!supabase) throw new Error("Database not connected");
-    const { error } = await supabase.from('payment_configs').upsert({
+    const fullPayload = {
+        provider: config.provider,
+        is_enabled: config.isEnabled,
+        environment: config.environment,
+        api_key: config.apiKey,
+        api_secret: config.apiSecret,
+        signature_secret: config.signatureSecret,
+        merchant_id: config.merchantId,
+        short_code: config.shortCode,
+        merchant_msisdn: config.merchantMsisdn,
+        merchant_display_name: config.merchantDisplayName,
+        currency: config.currency || 'GMD',
+        base_url: config.baseUrl,
+        webhook_url: config.webhookUrl,
+        webhook_secret: config.webhookSecret,
+        callback_auth_token: config.callbackAuthToken,
+        request_timeout_ms: Math.max(1000, Number(config.requestTimeoutMs || 30000)),
+        updated_at: new Date().toISOString()
+    };
+
+    const { error } = await supabase.from('payment_configs').upsert(fullPayload);
+    if (!error) return;
+
+    if (!isMissingPaymentConfigColumnError(error)) throw error;
+
+    const { error: fallbackError } = await supabase.from('payment_configs').upsert({
         provider: config.provider,
         is_enabled: config.isEnabled,
         api_key: config.apiKey,
@@ -1191,7 +1240,7 @@ export const dbSavePaymentConfig = async (config: PaymentIntegrationConfig) => {
         webhook_url: config.webhookUrl,
         updated_at: new Date().toISOString()
     });
-    if (error) throw error;
+    if (fallbackError) throw fallbackError;
 };
 
 /**

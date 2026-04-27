@@ -233,10 +233,20 @@ export interface ManualBetOrder {
 export interface PaymentIntegrationConfig {
     provider: 'Wave' | 'AfriMoney';
     isEnabled: boolean;
+  environment: 'sandbox' | 'production';
     apiKey: string; 
     apiSecret: string; 
+  signatureSecret: string;
     merchantId: string; 
+  shortCode: string;
+  merchantMsisdn: string;
+  merchantDisplayName: string;
+  currency: string;
+  baseUrl: string;
     webhookUrl: string; 
+  webhookSecret: string;
+  callbackAuthToken: string;
+  requestTimeoutMs: number;
 }
 
 // MOVED HERE from App.tsx to prevent circular dependency

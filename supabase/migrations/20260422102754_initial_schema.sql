@@ -285,10 +285,20 @@ create table if not exists program_images (
 create table if not exists payment_configs (
   provider text primary key check (provider in ('Wave', 'AfriMoney')),
   is_enabled boolean not null default false,
+  environment text not null default 'sandbox' check (environment in ('sandbox', 'production')),
   api_key text not null default '',
   api_secret text not null default '',
+  signature_secret text not null default '',
   merchant_id text not null default '',
+  short_code text not null default '',
+  merchant_msisdn text not null default '',
+  merchant_display_name text not null default '',
+  currency text not null default 'GMD',
+  base_url text not null default '',
   webhook_url text not null default '',
+  webhook_secret text not null default '',
+  callback_auth_token text not null default '',
+  request_timeout_ms int not null default 30000,
   updated_at timestamptz not null default now()
 );
 
@@ -520,8 +530,8 @@ values
   ('CUST-001', 'Lamin', 'Customer', false, 'password')
 on conflict (id) do nothing;
 
-insert into payment_configs (provider, is_enabled, api_key, api_secret, merchant_id, webhook_url)
+insert into payment_configs (provider, is_enabled, environment, api_key, api_secret, signature_secret, merchant_id, short_code, merchant_msisdn, merchant_display_name, currency, base_url, webhook_url, webhook_secret, callback_auth_token, request_timeout_ms)
 values
-  ('Wave', false, '', '', '', 'https://api.betese.com/webhooks/wave'),
-  ('AfriMoney', false, '', '', '', 'https://api.betese.com/webhooks/afrimoney')
+  ('Wave', false, 'sandbox', '', '', '', '', '', '', '', 'GMD', '', 'https://api.betese.com/webhooks/wave', '', '', 30000),
+  ('AfriMoney', false, 'sandbox', '', '', '', '', '', '', '', 'GMD', '', 'https://api.betese.com/webhooks/afrimoney', '', '', 30000)
 on conflict (provider) do nothing;

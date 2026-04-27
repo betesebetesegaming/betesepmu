@@ -4,7 +4,7 @@ import { PaymentIntegrationConfig } from '../types';
 
 interface IntegrationSettingsPanelProps {
     configs: PaymentIntegrationConfig[];
-    onSave: (config: PaymentIntegrationConfig) => void;
+    onSave: (config: PaymentIntegrationConfig) => Promise<void>;
 }
 
 export const IntegrationSettingsPanel: React.FC<IntegrationSettingsPanelProps> = ({ configs, onSave }) => {
@@ -12,10 +12,20 @@ export const IntegrationSettingsPanel: React.FC<IntegrationSettingsPanelProps> =
     const [formData, setFormData] = useState<PaymentIntegrationConfig>({
         provider: 'Wave',
         isEnabled: false,
+        environment: 'sandbox',
         apiKey: '',
         apiSecret: '',
+        signatureSecret: '',
         merchantId: '',
+        shortCode: '',
+        merchantMsisdn: '',
+        merchantDisplayName: '',
+        currency: 'GMD',
+        baseUrl: '',
         webhookUrl: '',
+        webhookSecret: '',
+        callbackAuthToken: '',
+        requestTimeoutMs: 30000,
     });
 
     // Load initial data when provider switches or configs change
@@ -28,22 +38,76 @@ export const IntegrationSettingsPanel: React.FC<IntegrationSettingsPanelProps> =
             setFormData({
                 provider: activeProvider,
                 isEnabled: false,
+                environment: 'sandbox',
                 apiKey: '',
                 apiSecret: '',
+                signatureSecret: '',
                 merchantId: '',
+                shortCode: '',
+                merchantMsisdn: '',
+                merchantDisplayName: '',
+                currency: 'GMD',
+                baseUrl: '',
                 // Placeholder logic for what a webhook URL might look like in the future
                 webhookUrl: `https://api.betese.com/webhooks/${activeProvider.toLowerCase()}`, 
+                webhookSecret: '',
+                callbackAuthToken: '',
+                requestTimeoutMs: 30000,
             });
         }
     }, [activeProvider, configs]);
 
-    const handleChange = (field: keyof PaymentIntegrationConfig, value: string | boolean) => {
+    const handleChange = (field: keyof PaymentIntegrationConfig, value: string | boolean | number) => {
         setFormData(prev => ({ ...prev, [field]: value }));
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const isValidHttpUrl = (value: string) => /^https?:\/\//i.test((value || '').trim());
+
+    const validateBeforeSave = () => {
+        if (!formData.isEnabled) return null;
+
+        const requiredFields: Array<{ label: string; value: string }> = [
+            { label: 'API Key', value: formData.apiKey },
+            { label: 'Client Secret', value: formData.apiSecret },
+            { label: 'Signature Secret', value: formData.signatureSecret },
+            { label: 'Merchant ID', value: formData.merchantId },
+            { label: 'Merchant MSISDN', value: formData.merchantMsisdn },
+            { label: 'Base API URL', value: formData.baseUrl },
+            { label: 'Webhook URL', value: formData.webhookUrl },
+            { label: 'Webhook Secret', value: formData.webhookSecret },
+            { label: 'Callback Auth Token', value: formData.callbackAuthToken },
+        ];
+
+        const missing = requiredFields.filter(item => !item.value.trim()).map(item => item.label);
+        if (missing.length > 0) {
+            return `Missing required fields for enabled gateway: ${missing.join(', ')}`;
+        }
+        if (!isValidHttpUrl(formData.baseUrl)) {
+            return 'Base API URL must start with http:// or https://';
+        }
+        if (!isValidHttpUrl(formData.webhookUrl)) {
+            return 'Webhook URL must start with http:// or https://';
+        }
+        if (Number(formData.requestTimeoutMs) < 1000) {
+            return 'Request timeout must be at least 1000ms.';
+        }
+        return null;
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        onSave(formData);
+        const validationError = validateBeforeSave();
+        if (validationError) {
+            alert(validationError);
+            return;
+        }
+        await onSave({
+            ...formData,
+            baseUrl: formData.baseUrl.trim(),
+            webhookUrl: formData.webhookUrl.trim(),
+            currency: (formData.currency || 'GMD').trim().toUpperCase(),
+            requestTimeoutMs: Math.max(1000, Number(formData.requestTimeoutMs || 30000)),
+        });
         alert(`${activeProvider} settings saved locally. (Backend integration required for live payments).`);
     };
 
@@ -55,6 +119,17 @@ export const IntegrationSettingsPanel: React.FC<IntegrationSettingsPanelProps> =
                 <br />
                 <span className="text-red-600 font-bold">Note:</span> This is the interface for future backend integration. Do not enter real production keys until your secure server is ready.
             </p>
+
+            <div className="mb-6 p-4 border border-blue-200 bg-blue-50 rounded-lg">
+                <h3 className="text-sm font-black text-blue-900 uppercase tracking-wide mb-2">Provider Readiness Checklist</h3>
+                <ul className="text-xs text-blue-900 space-y-1">
+                    <li>API credentials: key, secret, signature secret.</li>
+                    <li>Merchant identity: merchant ID, shortcode, merchant MSISDN/display name.</li>
+                    <li>Connectivity: base API URL, webhook URL, callback auth token.</li>
+                    <li>Security: webhook secret and callback token generated per provider.</li>
+                    <li>Operational: environment mode, currency, request timeout configured.</li>
+                </ul>
+            </div>
 
             <div className="flex mb-6 border-b">
                 <button
@@ -96,6 +171,42 @@ export const IntegrationSettingsPanel: React.FC<IntegrationSettingsPanelProps> =
                     </label>
                 </div>
 
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Environment</label>
+                        <select
+                            className="w-full p-2 border border-gray-300 rounded text-sm"
+                            value={formData.environment}
+                            onChange={(e) => handleChange('environment', e.target.value as 'sandbox' | 'production')}
+                        >
+                            <option value="sandbox">Sandbox / Test</option>
+                            <option value="production">Production</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Currency</label>
+                        <input
+                            type="text"
+                            className="w-full p-2 border border-gray-300 rounded font-mono text-sm"
+                            placeholder="GMD"
+                            value={formData.currency}
+                            onChange={(e) => handleChange('currency', e.target.value.toUpperCase())}
+                            maxLength={6}
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Request Timeout (ms)</label>
+                        <input
+                            type="number"
+                            className="w-full p-2 border border-gray-300 rounded font-mono text-sm"
+                            min={1000}
+                            step={500}
+                            value={formData.requestTimeoutMs}
+                            onChange={(e) => handleChange('requestTimeoutMs', Number(e.target.value || 30000))}
+                        />
+                    </div>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-4">
                         <div>
@@ -118,6 +229,36 @@ export const IntegrationSettingsPanel: React.FC<IntegrationSettingsPanelProps> =
                                 onChange={(e) => handleChange('merchantId', e.target.value)}
                             />
                         </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Short Code / Service Code</label>
+                            <input
+                                type="text"
+                                className="w-full p-2 border border-gray-300 rounded font-mono text-sm"
+                                placeholder="e.g., 12345"
+                                value={formData.shortCode}
+                                onChange={(e) => handleChange('shortCode', e.target.value)}
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Merchant MSISDN</label>
+                            <input
+                                type="text"
+                                className="w-full p-2 border border-gray-300 rounded font-mono text-sm"
+                                placeholder="e.g., 2207xxxxxx"
+                                value={formData.merchantMsisdn}
+                                onChange={(e) => handleChange('merchantMsisdn', e.target.value)}
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Merchant Display Name</label>
+                            <input
+                                type="text"
+                                className="w-full p-2 border border-gray-300 rounded text-sm"
+                                placeholder="e.g., Betese PMU"
+                                value={formData.merchantDisplayName}
+                                onChange={(e) => handleChange('merchantDisplayName', e.target.value)}
+                            />
+                        </div>
                     </div>
                     
                     <div className="space-y-4">
@@ -132,6 +273,49 @@ export const IntegrationSettingsPanel: React.FC<IntegrationSettingsPanelProps> =
                             />
                             <p className="text-[10px] text-red-500 mt-1">Keep this secret! Never share it.</p>
                         </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Signature Secret</label>
+                            <input
+                                type="password"
+                                className="w-full p-2 border border-gray-300 rounded font-mono text-sm"
+                                placeholder="Used for request signing and verification"
+                                value={formData.signatureSecret}
+                                onChange={(e) => handleChange('signatureSecret', e.target.value)}
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Callback Auth Token</label>
+                            <input
+                                type="password"
+                                className="w-full p-2 border border-gray-300 rounded font-mono text-sm"
+                                placeholder="Bearer token expected from provider callback"
+                                value={formData.callbackAuthToken}
+                                onChange={(e) => handleChange('callbackAuthToken', e.target.value)}
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Base API URL</label>
+                        <input
+                            type="text"
+                            className="w-full p-2 border border-gray-300 rounded font-mono text-sm"
+                            placeholder={activeProvider === 'Wave' ? 'https://api.wave.com/...' : 'https://api.afrimoney.com/...'}
+                            value={formData.baseUrl}
+                            onChange={(e) => handleChange('baseUrl', e.target.value)}
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Webhook Secret</label>
+                        <input
+                            type="password"
+                            className="w-full p-2 border border-gray-300 rounded font-mono text-sm"
+                            placeholder="Secret used to validate webhook signature"
+                            value={formData.webhookSecret}
+                            onChange={(e) => handleChange('webhookSecret', e.target.value)}
+                        />
                     </div>
                 </div>
 

@@ -86,7 +86,7 @@ interface AdminDashboardProps {
     onApproveDepositRequest: (requestId: string) => void;
     onRejectDepositRequest: (requestId: string) => void;
     paymentConfigs: PaymentIntegrationConfig[];
-    onSavePaymentConfig: (config: PaymentIntegrationConfig) => void;
+    onSavePaymentConfig: (config: PaymentIntegrationConfig) => Promise<void>;
     manualBetOrders: ManualBetOrder[];
     onCreateManualBet: (selectionData: Omit<BetSelection, 'cost' | 'raceName'>, multiplier: number, totalCost: number, assignedVendorId: string) => void;
     onCancelManualBet: (orderId: string) => void;
