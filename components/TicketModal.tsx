@@ -34,6 +34,10 @@ export const TicketModal: React.FC<TicketModalProps> = ({ ticket, onClose, showP
         <span>REF:#{ticket.id}</span>
         <span>{ticket.timestamp.toLocaleDateString([], {day:'2-digit', month:'2-digit'})} {ticket.timestamp.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
       </div>
+      <div className="flex b text-[7px] my-0.5 justify-between px-0.5 uppercase">
+        <span>VENDOR:</span>
+        <span className="truncate ml-2">{ticket.vendorName || ticket.vendorId || 'N/A'}</span>
+      </div>
 
       <div className="border-t border-b border-black py-0.5">
         {ticket.selections.map((sel, i) => (
@@ -95,7 +99,7 @@ export const TicketModal: React.FC<TicketModalProps> = ({ ticket, onClose, showP
       </div>
 
       <div className="flex b text-[7px] mt-1 px-1 justify-between">
-        <span>VEND:{ticket.paidByName}</span>
+        <span>PAID BY:{ticket.paidByName || ticket.paidById || 'SYSTEM'}</span>
         <span>{ticket.paidAt?.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
       </div>
 

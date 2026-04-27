@@ -285,6 +285,10 @@ const AppContent: React.FC = () => {
       if(!currentUser) return;
       const ticket = (placedTickets || []).find(t => t.id === ticketId);
       if(!ticket || !ticket.winnings) return;
+      if (ticket.status === 'Paid' || ticket.paidAt) {
+          alert(`This ticket is already paid${ticket.paidByName ? ` by ${ticket.paidByName}` : ''}.`);
+          return;
+      }
       if (ticket.customerId) {
           alert('Online customer tickets are settled automatically by the system. Manual payment is only for vendor cashout tickets.');
           return;
@@ -294,6 +298,7 @@ const AppContent: React.FC = () => {
               const success = await dbPayoutTicket(ticketId, ticket.winnings, currentUser.id, currentUser.name);
               if(success) {
                   const paidTicket = { ...ticket, status: 'Paid' as const, paidAt: new Date(), paidById: currentUser.id, paidByName: currentUser.name };
+                  setPlacedTickets(prev => (prev || []).map(t => t.id === ticketId ? paidTicket : t));
                   setPaidTicketModal(paidTicket);
               } else { alert("Ticket already paid or invalid."); }
           } catch(e: any) { alert("Payout failed: " + e.message); }

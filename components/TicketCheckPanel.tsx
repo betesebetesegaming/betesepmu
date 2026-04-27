@@ -136,6 +136,8 @@ export const TicketCheckPanel: React.FC<TicketCheckPanelProps> = ({ allTickets, 
                     <p className="font-black text-right font-mono">{foundTicket.id}</p>
                   <p className="text-gray-500 font-bold uppercase text-[10px]">Booking Code:</p>
                   <p className="font-black text-right font-mono">{foundTicket.bookingCode || '---'}</p>
+                    <p className="text-gray-500 font-bold uppercase text-[10px]">Vendor:</p>
+                    <p className="font-black text-right">{foundTicket.vendorName || foundTicket.vendorId || '---'}</p>
                     <p className="text-gray-500 font-bold uppercase text-[10px]">Status:</p>
                     <p className={`font-black text-right uppercase ${foundTicket.status === 'Winning' ? 'text-blue-600' : foundTicket.status === 'Lost' ? 'text-red-600' : 'text-gray-800'}`}>{getStatusLabel(foundTicket.status)}</p>
                     <p className="text-gray-500 font-bold uppercase text-[10px]">Cost:</p>
