@@ -165,7 +165,7 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
 
   return (
     <>
-      {ledgerTicket && <TicketCombinationLedger tickets={tickets} onClose={() => setLedgerTicket(null)} />}
+      {ledgerTicket && <TicketCombinationLedger tickets={tickets} races={races} onClose={() => setLedgerTicket(null)} />}
 
       <div className="bg-white rounded-lg shadow-lg overflow-hidden">
         {/* Header bar */}
