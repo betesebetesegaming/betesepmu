@@ -247,6 +247,7 @@ export const RaceManagement: React.FC<RaceManagementProps> = ({ races, onAddRace
                             <th className="text-left py-2 px-3">Place</th>
                             <th className="text-left py-2 px-3">Start Date</th>
                             <th className="text-left py-2 px-3">End Date & Time</th>
+                            <th className="text-left py-2 px-3">Last Edited By</th>
                             <th className="text-left py-2 px-3">Jackpot</th>
                             <th className="text-left py-2 px-3">Horses</th>
                             <th className="text-left py-2 px-3">Non-Runners</th>
@@ -261,6 +262,16 @@ export const RaceManagement: React.FC<RaceManagementProps> = ({ races, onAddRace
                             <td className="py-2 px-3">{race.venue || '-'}</td>
                                 <td className="py-2 px-3">{formatDate(race.startDate)}</td>
                                 <td className="py-2 px-3">{formatDateTime(race.endDate)}</td>
+                                <td className="py-2 px-3 text-xs">
+                                    {race.updatedByName ? (
+                                        <div>
+                                            <div className="font-black text-indigo-700">{race.updatedByName}</div>
+                                            <div className="text-gray-500">{race.updatedAt ? formatDateTime(race.updatedAt) : '-'}</div>
+                                        </div>
+                                    ) : (
+                                        <span className="text-gray-400">-</span>
+                                    )}
+                                </td>
                                 <td className="py-2 px-3 text-yellow-700 font-bold">{race.jackpot ? race.jackpot.toLocaleString() : '-'}</td>
                                 <td className="py-2 px-3 text-center">{race.horseCount}</td>
                                 <td className="py-2 px-3 text-red-600 font-semibold">{race.nonRunners.join(', ')}</td>
@@ -274,7 +285,7 @@ export const RaceManagement: React.FC<RaceManagementProps> = ({ races, onAddRace
                             </tr>
                         ))}
                         {upcomingRaces.length === 0 && (
-                                <tr><td colSpan={9} className="text-center py-4 text-gray-500">No upcoming races found.</td></tr>
+                                <tr><td colSpan={10} className="text-center py-4 text-gray-500">No upcoming races found.</td></tr>
                         )}
                     </tbody>
                 </table>

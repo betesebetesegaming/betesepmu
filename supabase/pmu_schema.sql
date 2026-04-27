@@ -124,12 +124,16 @@ create table if not exists races (
   disabled_bet_types text[] not null default '{}',
   result jsonb,
   jackpot numeric(12,2) not null default 0,
+  updated_by_id text,
+  updated_by_name text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
 alter table races add column if not exists race_code text;
 alter table races add column if not exists venue text;
+alter table races add column if not exists updated_by_id text;
+alter table races add column if not exists updated_by_name text;
 
 create index if not exists idx_races_end_date on races (end_date desc);
 
@@ -138,6 +142,7 @@ create table if not exists tickets (
   timestamp timestamptz not null,
   vendor_id text references users(id) on delete set null,
   vendor_name text,
+  transaction_channel text not null default 'Terminal' check (transaction_channel in ('Online', 'Terminal')),
   customer_id text references users(id) on delete set null,
   status text not null check (status in ('Active', 'Winning', 'Lost', 'Canceled', 'Booked', 'Paid')),
   booking_code text unique,
@@ -153,6 +158,8 @@ create table if not exists tickets (
   canceled_by_name text,
   created_at timestamptz not null default now()
 );
+
+alter table tickets add column if not exists transaction_channel text not null default 'Terminal';
 
 create index if not exists idx_tickets_status on tickets (status);
 create index if not exists idx_tickets_vendor on tickets (vendor_id);

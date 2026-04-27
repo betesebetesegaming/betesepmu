@@ -26,22 +26,18 @@ const getStatusColor = (status: DisplayStatus) => {
   }
 };
 
-const getDisplayStatusLabel = (ticket: Ticket, status: DisplayStatus): string => {
-  if (status === 'Active') return 'Awaiting Result';
-  if (status === 'Winning') return 'Awaiting Cashier Payout';
-  if (status === 'Booked') return 'Booking Pending Payment';
-  if (status === 'Paid') return ticket.customerId ? 'Paid' : 'Paid';
+const getDisplayStatusLabel = (_ticket: Ticket, status: DisplayStatus): string => {
+  if (status === 'Winning' || status === 'Paid') return 'Win';
   if (status === 'Lost') return 'Lost';
   if (status === 'Canceled') return 'Canceled';
-  return status;
+  return 'Pending';
 };
 
 const getStatusChipClass = (status: DisplayStatus) => {
   switch (status) {
     case 'Winning':
-      return 'bg-blue-100 text-blue-700 border-blue-300';
     case 'Paid':
-      return 'bg-purple-100 text-purple-700 border-purple-300';
+      return 'bg-blue-100 text-blue-700 border-blue-300';
     case 'Lost':
       return 'bg-red-100 text-red-700 border-red-300';
     case 'Canceled':
@@ -346,9 +342,12 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                         >
                           {ticket.id}
                         </button>
+                        <div className="text-[10px] text-gray-600 font-semibold mt-0.5">
+                          Vendor: {ticket.vendorName || ticket.vendorId || '-'}
+                        </div>
                         <div className="mt-1">
-                          <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-black ${ticket.customerId ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                            {ticket.customerId ? 'ONLINE' : 'CASHIER'}
+                          <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-black ${ticket.transactionChannel === 'Online' || ticket.customerId ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                            {(ticket.transactionChannel === 'Online' || ticket.customerId) ? 'ONLINE' : 'TERMINAL'}
                           </span>
                         </div>
                       </td>
@@ -412,12 +411,10 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                           <span className={`inline-flex items-center rounded-full border px-2 py-0.5 font-black ${getStatusChipClass(displayStatus)}`}>
                             {getDisplayStatusLabel(ticket, displayStatus)}
                           </span>
-                          {displayStatus === 'Paid' && (
-                            ticket.customerId
-                              ? <div className="text-[10px] font-bold text-gray-400 uppercase">Auto Credit</div>
-                              : <div className="text-[10px] font-black text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded mt-0.5 whitespace-nowrap">
-                                  ✓ {ticket.paidByName || ticket.paidById || 'Unknown'}
-                                </div>
+                          {displayStatus === 'Paid' && (ticket.paidByName || ticket.paidById) && (
+                            <div className="text-[10px] font-black text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded mt-0.5 whitespace-nowrap">
+                              Paid By: {ticket.paidByName || ticket.paidById}
+                            </div>
                           )}
                         </div>
                       </td>

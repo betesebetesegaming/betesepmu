@@ -54,7 +54,7 @@ const isMissingRaceMetadataColumnError = (error: any): boolean => {
     const hint = String(error.hint || '').toLowerCase();
     const combined = `${message} ${details} ${hint}`;
 
-    const mentionsColumn = combined.includes('race_code') || combined.includes('venue');
+    const mentionsColumn = combined.includes('race_code') || combined.includes('venue') || combined.includes('updated_by_id') || combined.includes('updated_by_name');
     const mentionsSchemaCache = combined.includes('schema cache');
 
     return code === 'PGRST204' || (mentionsColumn && mentionsSchemaCache) || mentionsColumn;
@@ -67,6 +67,13 @@ const isMissingBonusTrackingColumnError = (error: any): boolean => {
     return code === 'PGRST204'
         || combined.includes('total_deposited_amount')
         || combined.includes('first_deposit_at');
+};
+
+const isMissingTicketChannelColumnError = (error: any): boolean => {
+    if (!error) return false;
+    const code = String(error.code || '');
+    const combined = `${String(error.message || '')} ${String(error.details || '')} ${String(error.hint || '')}`.toLowerCase();
+    return code === 'PGRST204' || combined.includes('transaction_channel');
 };
 
 const isMissingPaymentConfigColumnError = (error: any): boolean => {
@@ -98,7 +105,10 @@ export const dbSaveRace = async (race: Race) => {
         end_date: race.endDate.toISOString(),
         horse_count: race.horseCount,
         non_runners: race.nonRunners || [],
-        jackpot: race.jackpot || 0
+        jackpot: race.jackpot || 0,
+        updated_by_id: race.updatedById || null,
+        updated_by_name: race.updatedByName || null,
+        updated_at: race.updatedAt ? race.updatedAt.toISOString() : new Date().toISOString()
     };
 
     const { error } = await supabase.from('races').insert(payloadWithMetadata);
@@ -128,7 +138,10 @@ export const dbUpdateRace = async (race: Race) => {
         start_date: race.startDate.toISOString(),
         end_date: race.endDate.toISOString(),
         horse_count: race.horseCount,
-        jackpot: race.jackpot || 0
+        jackpot: race.jackpot || 0,
+        updated_by_id: race.updatedById || null,
+        updated_by_name: race.updatedByName || null,
+        updated_at: race.updatedAt ? race.updatedAt.toISOString() : new Date().toISOString()
     };
 
     const { error } = await supabase.from('races').update(payloadWithMetadata).eq('id', race.id);
@@ -174,6 +187,7 @@ const mapDbTicketRow = (t: any): Ticket => ({
     timestamp: new Date(t.timestamp),
     vendorId: t.vendor_id || '',
     vendorName: t.vendor_name,
+    transactionChannel: t.transaction_channel || (t.customer_id ? 'Online' : 'Terminal'),
     status: t.status,
     customerId: t.customer_id,
     bookingCode: t.booking_code,
@@ -475,6 +489,7 @@ export const dbPlaceBet = async (ticket: Ticket, user: User) => {
         timestamp: ticketToInsert.timestamp.toISOString(),
         vendor_id: isOnlineCustomer ? null : ticketToInsert.vendorId || user.id,
         vendor_name: ticketToInsert.vendorName || user.name,
+        transaction_channel: isOnlineCustomer ? 'Online' : 'Terminal',
         customer_id: isOnlineCustomer ? user.id : ticket.customerId || null,
         status: ticketToInsert.status,
         booking_code: ticketToInsert.bookingCode || null,
@@ -491,7 +506,13 @@ export const dbPlaceBet = async (ticket: Ticket, user: User) => {
     };
 
     const { error: insertError } = await supabase.from('tickets').insert(ticketInsertPayload);
-    if (insertError) throw new Error(insertError.message);
+    if (insertError) {
+        if (!isMissingTicketChannelColumnError(insertError)) throw new Error(insertError.message);
+        const fallbackPayload = { ...ticketInsertPayload } as any;
+        delete fallbackPayload.transaction_channel;
+        const { error: fallbackInsertError } = await supabase.from('tickets').insert(fallbackPayload);
+        if (fallbackInsertError) throw new Error(fallbackInsertError.message);
+    }
 
     if (isOnlineCustomer) {
         await maybeUnlockCustomerBonusBalance(user.id);
@@ -543,7 +564,10 @@ export const dbFetchRaces = async (): Promise<Race[]> => {
         startDate: new Date(r.start_date),
         endDate: new Date(r.end_date),
         horseCount: r.horse_count, nonRunners: r.non_runners || [], result: r.result,
-        disabledBetTypes: r.disabled_bet_types || [], jackpot: r.jackpot
+        disabledBetTypes: r.disabled_bet_types || [], jackpot: r.jackpot,
+        updatedById: r.updated_by_id || undefined,
+        updatedByName: r.updated_by_name || undefined,
+        updatedAt: r.updated_at ? new Date(r.updated_at) : undefined
     }));
 };
 

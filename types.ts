@@ -64,6 +64,9 @@ export interface Race {
   result?: RaceResult;
   disabledBetTypes?: BetTypeOption[];
   jackpot?: number; // Added Jackpot field
+  updatedById?: string;
+  updatedByName?: string;
+  updatedAt?: Date;
 }
 
 export interface BetSelection {
@@ -103,6 +106,7 @@ export interface Ticket extends BetSlip {
   timestamp: Date;
   vendorId: string;
   vendorName: string;
+  transactionChannel?: 'Online' | 'Terminal';
   status: 'Active' | 'Winning' | 'Lost' | 'Canceled' | 'Booked' | 'Paid';
   customerId?: string; // For online customers
   bookingCode?: string;

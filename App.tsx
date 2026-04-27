@@ -222,9 +222,15 @@ const AppContent: React.FC = () => {
   };
 
   const handleUpdateRace = async (race: Race) => {
+      const raceWithAudit: Race = {
+          ...race,
+          updatedById: currentUser?.id,
+          updatedByName: currentUser?.name,
+          updatedAt: effectiveTime,
+      };
       try {
-          if (supabase) { await dbUpdateRace(race); } 
-          else { setRaces(prev => (prev || []).map(r => r.id === race.id ? race : r)); }
+          if (supabase) { await dbUpdateRace(raceWithAudit); } 
+          else { setRaces(prev => (prev || []).map(r => r.id === race.id ? raceWithAudit : r)); }
       } catch (e: any) { alert("Failed to update race: " + e.message); }
   };
 
