@@ -170,6 +170,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
     const [view, setView] = useState<AdminView>('DASHBOARD');
     const [selectedRole, setSelectedRole] = useState<FilterRole>('All');
     const [rapportModalRace, setRapportModalRace] = useState<Race | null>(null);
+    const [adminCancelInput, setAdminCancelInput] = useState('');
+    const [adminCancelMsg, setAdminCancelMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
     const adminSales = (allTickets || []).reduce((sum, t) => sum + (t?.totalCost || 0), 0);
     const adminPayouts = (allTickets || []).filter(t => t?.status === 'Paid').reduce((sum, t) => sum + (t?.winnings || 0), 0);
@@ -192,6 +194,41 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
                         <div className="bg-white p-6 rounded-xl shadow-lg border-t-4 border-yellow-500">
                             <div className="mb-6">
                                 <h3 className="text-2xl font-black uppercase text-gray-800">Terminal Log</h3>
+                            </div>
+                            <div className="bg-orange-50 border-2 border-orange-300 rounded-2xl p-4 mb-6">
+                                <h4 className="text-sm font-black text-orange-700 uppercase mb-1">Backoffice: Cancel Ticket by Vendor Request</h4>
+                                <p className="text-[11px] text-orange-600 mb-3">Enter ticket ID or booking code from vendor call request, then cancel.</p>
+                                <div className="flex flex-wrap gap-2">
+                                    <input
+                                        type="text"
+                                        value={adminCancelInput}
+                                        onChange={e => { setAdminCancelInput(e.target.value); setAdminCancelMsg(null); }}
+                                        placeholder="Ticket ID or booking code"
+                                        className="flex-1 min-w-[220px] px-4 py-2 rounded-xl border-2 border-orange-300 text-sm font-mono focus:outline-none focus:border-orange-500"
+                                    />
+                                    <button
+                                        onClick={() => {
+                                            const id = adminCancelInput.trim();
+                                            if (!id) return;
+                                            const ticket = allTickets.find(t => t.id === id || t.bookingCode === id);
+                                            if (!ticket) { setAdminCancelMsg({ ok: false, text: `Ticket #${id} not found.` }); return; }
+                                            if (ticket.status !== 'Active' && ticket.status !== 'Booked') {
+                                                setAdminCancelMsg({ ok: false, text: `Cannot cancel - ticket is ${ticket.status}.` });
+                                                return;
+                                            }
+                                            if (!window.confirm(`Cancel ticket #${ticket.id}? This cannot be undone.`)) return;
+                                            onCancelTicket(ticket.id);
+                                            setAdminCancelInput('');
+                                            setAdminCancelMsg({ ok: true, text: `Ticket #${ticket.id} canceled successfully.` });
+                                        }}
+                                        className="px-5 py-2 bg-orange-600 text-white font-black text-sm rounded-xl hover:bg-orange-700 active:scale-95 transition-all border-b-2 border-orange-800"
+                                    >
+                                        Cancel Ticket
+                                    </button>
+                                </div>
+                                {adminCancelMsg && (
+                                    <p className={`mt-2 text-xs font-bold ${adminCancelMsg.ok ? 'text-green-600' : 'text-red-600'}`}>{adminCancelMsg.text}</p>
+                                )}
                             </div>
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
                                 <div className="p-4 bg-gray-50 rounded-lg border text-center"><span className="text-[10px] font-black text-gray-500 uppercase">Gross Sales</span><span className="block text-2xl font-black text-betese-green">GMD {adminSales.toFixed(0)}</span></div>
