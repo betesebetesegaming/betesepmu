@@ -434,8 +434,22 @@ const AppContent: React.FC = () => {
             firstDepositAt: nextFirstDepositAt
         };
 
-        setUsers(prev => (prev || []).map(u => u.id === customerId ? updated : u));
-        setCurrentUser(prev => prev && prev.id === customerId ? { ...prev, ...updated } : prev);
+                if (supabase) {
+                    const refreshedUsers = await dbFetchUsers();
+                    const normalizedUsers = (refreshedUsers || []).map(u => ({ ...u, role: normalizeRole(u.role) }));
+                    setUsers(normalizedUsers);
+                    setCurrentUser(prev => {
+                        if (!prev) return prev;
+                        const refreshedCurrent = normalizedUsers.find(user => user.id === prev.id);
+                        if (refreshedCurrent) return refreshedCurrent;
+                        if (prev.id === customerId) return { ...prev, ...updated };
+                        return prev;
+                    });
+                } else {
+                    setUsers(prev => (prev || []).map(u => u.id === customerId ? updated : u));
+                    setCurrentUser(prev => prev && prev.id === customerId ? { ...prev, ...updated } : prev);
+                }
+
     setDepositLogs(prev => [...prev, {
         id: `dl-${Date.now()}`,
         customerId,
