@@ -275,6 +275,28 @@ const NewPromotionForm: React.FC<{ onCreate: (name: string, type: 'first-deposit
 
 export const PromotionManagementPanel: React.FC<PromotionManagementPanelProps> = ({ promotions, onToggleStatus, onUpdatePromotion, onMovePromotion, onCreatePromotion, onDeletePromotion }) => {
     const [notice, setNotice] = useState<string>('');
+    const [simulatedDeposit, setSimulatedDeposit] = useState<number | ''>('');
+
+    const simulationResult = (() => {
+        if (typeof simulatedDeposit !== 'number' || !Number.isFinite(simulatedDeposit) || simulatedDeposit <= 0) {
+            return null;
+        }
+
+        const activePromotions = promotions.filter(p => p.isActive);
+        const matching = activePromotions
+            .map(promo => {
+                const normalizedRules = normalizeRules(promo.rules || []);
+                const matchedRule = [...normalizedRules]
+                    .sort((a, b) => b.depositAmount - a.depositAmount)
+                    .find(rule => simulatedDeposit >= rule.depositAmount);
+                return matchedRule ? { promo, rule: matchedRule } : null;
+            })
+            .filter(Boolean) as Array<{ promo: Promotion; rule: PromotionRule }>;
+
+        if (matching.length === 0) return { matches: [] as Array<{ promo: Promotion; rule: PromotionRule }> };
+
+        return { matches: matching };
+    })();
 
     const handleCreate = (name: string, type: 'first-deposit' | 'weekly' | 'special') => {
         const sameType = promotions.filter(p => p.type === type).length;
@@ -297,6 +319,47 @@ export const PromotionManagementPanel: React.FC<PromotionManagementPanelProps> =
         <div className="bg-white p-6 rounded-lg shadow-lg">
             <h2 className="text-xl font-bold text-betese-dark mb-4">Bonus Promotions Management</h2>
             <p className="text-sm text-gray-600 mb-4">Manage your promotions here. Click <strong>Edit</strong> to add deposit bonus rules (e.g., Deposit 100 &rarr; Get 10 Bonus).</p>
+            <div className="mb-6 rounded-xl border border-blue-200 bg-blue-50 p-4">
+                <div className="flex flex-col lg:flex-row lg:items-end gap-4">
+                    <div className="flex-1">
+                        <h3 className="text-sm font-black text-blue-800 uppercase mb-1">Bonus Simulation Preview</h3>
+                        <p className="text-xs text-blue-700">Enter a deposit amount to preview which active promotion rule will apply.</p>
+                    </div>
+                    <div className="w-full lg:w-56">
+                        <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Deposit Amount</label>
+                        <input
+                            type="number"
+                            min="1"
+                            value={simulatedDeposit}
+                            onChange={e => setSimulatedDeposit(e.target.value === '' ? '' : Number(e.target.value))}
+                            placeholder="e.g. 300"
+                            className="w-full p-2 border rounded-md bg-white"
+                        />
+                    </div>
+                </div>
+
+                <div className="mt-4">
+                    {simulationResult === null ? (
+                        <p className="text-xs text-gray-500">Enter an amount to preview matching promotion rules.</p>
+                    ) : simulationResult.matches.length === 0 ? (
+                        <p className="text-sm font-bold text-red-600">No active promotion rule matches this deposit amount.</p>
+                    ) : (
+                        <div className="space-y-2">
+                            {simulationResult.matches.map(({ promo, rule }) => (
+                                <div key={promo.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-lg border border-blue-200 bg-white p-3">
+                                    <div>
+                                        <p className="text-sm font-black text-betese-dark">{promo.name}</p>
+                                        <p className="text-xs text-gray-500 uppercase">{promo.type}</p>
+                                    </div>
+                                    <div className="text-sm font-bold text-blue-700">
+                                        Deposit {rule.depositAmount.toFixed(0)} GMD {'->'} Bonus {rule.bonusAmount.toFixed(0)} GMD
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
             {notice && (
                 <div className="mb-4 p-3 rounded-lg border border-amber-300 bg-amber-50 text-xs font-bold text-amber-700">
                     {notice}
