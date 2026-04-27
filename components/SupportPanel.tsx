@@ -9,8 +9,102 @@ export const SupportPanel: React.FC<SupportPanelProps> = ({ onRecalculateAllTick
     const [issueText, setIssueText] = useState('');
     const [isChecking, setIsChecking] = useState(false);
     const [isRecalculating, setIsRecalculating] = useState(false);
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [aiDiagnosis, setAiDiagnosis] = useState<{ summary: string; actions: string[] } | null>(null);
     const [updateStatus, setUpdateStatus] = useState<'up-to-date' | 'available'>('up-to-date');
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const collectLocalSnapshot = () => {
+        const dataDump: Record<string, any> = {};
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith('betese-')) {
+                dataDump[key] = JSON.parse(localStorage.getItem(key) || 'null');
+            }
+        }
+        return dataDump;
+    };
+
+    const localTriage = (issue: string, snapshot: Record<string, any>) => {
+        const text = String(issue || '').toLowerCase();
+        const actions: string[] = [];
+
+        if (text.includes('payout') || text.includes('paid') || text.includes('win')) {
+            actions.push('Check ticket status and Paid By in Ticket Information before any manual payout.');
+            actions.push('If result was edited recently, run Recalculate All Existing Tickets once.');
+        }
+
+        if (text.includes('deposit') || text.includes('wallet') || text.includes('balance')) {
+            actions.push('Review deposit history and verify processor name, method, and timestamp.');
+            actions.push('Use correction mode only for admin-approved wallet fixes.');
+        }
+
+        if (text.includes('phone') || text.includes('register') || text.includes('bonus')) {
+            actions.push('Verify phone normalization rule (+220 local/international, +221 international only).');
+            actions.push('Check duplicate-phone lock status before approving account access.');
+        }
+
+        if (text.includes('result') || text.includes('race')) {
+            actions.push('Confirm race result numbers and rerun settlement from admin tools.');
+            actions.push('Export support package to preserve evidence before changes.');
+        }
+
+        if (actions.length === 0) {
+            actions.push('Export support package and review recent transactions in Ticket Information.');
+            actions.push('Run a safe snapshot before corrective operations.');
+        }
+
+        const snapshotKeys = Object.keys(snapshot || {});
+        const summary = `AI triage complete. Analyzed issue text and ${snapshotKeys.length} local data blocks.`;
+
+        return { summary, actions };
+    };
+
+    const handleAiDiagnose = async () => {
+        if (!issueText.trim()) {
+            alert('Please describe the issue first.');
+            return;
+        }
+
+        setIsAnalyzing(true);
+        setAiDiagnosis(null);
+
+        const snapshot = collectLocalSnapshot();
+        const aiWebhookUrl = (import.meta as any)?.env?.VITE_SUPPORT_AI_WEBHOOK;
+
+        try {
+            if (aiWebhookUrl) {
+                const response = await fetch(aiWebhookUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        issueDescription: issueText,
+                        systemData: snapshot,
+                        timestamp: new Date().toISOString(),
+                    }),
+                });
+
+                if (!response.ok) {
+                    throw new Error(`AI service failed with status ${response.status}`);
+                }
+
+                const payload = await response.json();
+                const summary = String(payload?.summary || 'AI diagnosis completed.');
+                const actions = Array.isArray(payload?.actions)
+                    ? payload.actions.map((x: any) => String(x)).slice(0, 6)
+                    : ['No structured actions returned by AI service.'];
+
+                setAiDiagnosis({ summary, actions });
+            } else {
+                setAiDiagnosis(localTriage(issueText, snapshot));
+            }
+        } catch (err: any) {
+            setAiDiagnosis(localTriage(issueText, snapshot));
+            alert(`AI service unavailable. Used local triage instead. ${err?.message || ''}`.trim());
+        } finally {
+            setIsAnalyzing(false);
+        }
+    };
 
     // --- SAFETY SNAPSHOT LOGIC ---
     const handleQuickSnapshot = () => {
@@ -61,13 +155,7 @@ export const SupportPanel: React.FC<SupportPanelProps> = ({ onRecalculateAllTick
         }
         
         // Bundle data with the message
-        const dataDump: Record<string, any> = {};
-        for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (key && key.startsWith('betese-')) {
-                dataDump[key] = JSON.parse(localStorage.getItem(key) || 'null');
-            }
-        }
+        const dataDump = collectLocalSnapshot();
 
         const report = {
             timestamp: new Date(),
@@ -132,6 +220,24 @@ export const SupportPanel: React.FC<SupportPanelProps> = ({ onRecalculateAllTick
                     value={issueText}
                     onChange={(e) => setIssueText(e.target.value)}
                 ></textarea>
+                <button
+                    onClick={handleAiDiagnose}
+                    disabled={isAnalyzing}
+                    className={`w-full mb-3 py-3 font-bold rounded-lg transition-all shadow-md flex justify-center items-center gap-2 ${isAnalyzing ? 'bg-gray-300 text-gray-600' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
+                >
+                    {isAnalyzing ? 'AI Diagnosing...' : 'AI Diagnose Issue'}
+                </button>
+
+                {aiDiagnosis && (
+                    <div className="mb-4 bg-indigo-50 border border-indigo-200 rounded-lg p-3">
+                        <p className="text-sm font-bold text-indigo-900">{aiDiagnosis.summary}</p>
+                        <ul className="mt-2 space-y-1 text-sm text-indigo-800 list-disc list-inside">
+                            {aiDiagnosis.actions.map((action, idx) => (
+                                <li key={idx}>{action}</li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
                 <button 
                     onClick={handleCreateReport}
                     className="w-full py-4 bg-blue-600 text-white font-bold text-lg rounded-lg hover:bg-blue-700 transition-all shadow-md flex justify-center items-center gap-2"
