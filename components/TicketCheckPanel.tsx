@@ -171,7 +171,7 @@ export const TicketCheckPanel: React.FC<TicketCheckPanelProps> = ({ allTickets, 
                       View / Print
                     </button>
                   )}
-                  {foundTicket.status === 'Winning' ? (
+                  {foundTicket.status === 'Winning' && !foundTicket.customerId ? (
                     <button
                       onClick={handlePayout}
                       className="w-full py-4 bg-green-600 text-white font-black text-lg rounded-xl hover:bg-green-700 shadow-lg active:scale-95 transition-all uppercase"
@@ -180,7 +180,9 @@ export const TicketCheckPanel: React.FC<TicketCheckPanelProps> = ({ allTickets, 
                     </button>
                   ) : (
                     <div className="text-center p-2 bg-gray-200 rounded-lg text-xs font-bold text-gray-600 flex items-center justify-center">
-                      {foundTicket.status === 'Paid'
+                      {foundTicket.customerId
+                        ? 'ONLINE TICKET - AUTO PAID BY SYSTEM'
+                        : foundTicket.status === 'Paid'
                         ? `ALREADY PAID${(foundTicket.paidByName || foundTicket.paidById) ? ` BY ${String(foundTicket.paidByName || foundTicket.paidById).toUpperCase()}` : ''}`
                         : 'NOT A WINNING TICKET'}
                     </div>

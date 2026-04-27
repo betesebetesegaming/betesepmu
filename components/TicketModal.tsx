@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Ticket, Race } from '../types';
-import { triggerPrint } from '../utils';
+import { triggerPrint, formatWinningNumbersForDisplay } from '../utils';
 
 interface TicketModalProps {
   ticket: Ticket;
@@ -18,6 +18,12 @@ export const TicketModal: React.FC<TicketModalProps> = ({ ticket, onClose, showP
 
   const isPaid = ticket.status === 'Paid';
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${ticket.id}`;
+  const raceResultLines = Array.from(new Set(ticket.selections.map(sel => sel.raceId))).map((raceId) => {
+    const race = races?.find(r => r.id === raceId);
+    if (!race) return `${raceId}: Pending`;
+    const numbers = formatWinningNumbersForDisplay(race.result?.winningNumbers);
+    return `${race.name}: ${numbers === 'N/A' ? 'Pending' : numbers}`;
+  });
 
   const renderStandardTicket = () => (
     <div className="text-black bg-white font-mono leading-[0.85] overflow-hidden">
@@ -77,8 +83,15 @@ export const TicketModal: React.FC<TicketModalProps> = ({ ticket, onClose, showP
       <p className="b text-[8px] my-0.5">REF: #{ticket.id}</p>
       
       <div className="my-1 border border-black p-1 bg-gray-50">
-        <p className="b text-[7px] uppercase">Cash Paid Out:</p>
+        <p className="b text-[7px] uppercase">Winning Amount Paid:</p>
         <p className="text-xl b">GMD {(ticket.winnings || 0).toFixed(0)}</p>
+      </div>
+
+      <div className="text-left text-[7px] border border-black p-1 bg-white">
+        <p className="b uppercase mb-0.5 text-center">Result Numbers</p>
+        {raceResultLines.map((line, idx) => (
+          <p key={idx} className="truncate">{line}</p>
+        ))}
       </div>
 
       <div className="flex b text-[7px] mt-1 px-1 justify-between">

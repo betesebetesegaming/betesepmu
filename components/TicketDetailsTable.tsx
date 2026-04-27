@@ -2,6 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { Ticket, Race } from '../types';
 import { TicketCombinationLedger } from './TicketCombinationLedger';
+import { calculateTicketWinnings, formatWinningNumbersForDisplay } from '../utils';
 
 interface TicketDetailsTableProps {
   title: string;
@@ -25,13 +26,6 @@ const getStatusColor = (status: DisplayStatus) => {
   }
 };
 
-const getResultLabel = (status: DisplayStatus): string => {
-  if (status === 'Winning' || status === 'Paid') return 'Win';
-  if (status === 'Lost') return 'Loss';
-  if (status === 'Canceled') return 'Canceled';
-  return 'Pending';
-};
-
 const getFundingMeta = (ticket: Ticket) => {
   const firstSelection = ticket.selections?.[0];
   const bonusStake = Number(firstSelection?.bonusStakeAmount || 0);
@@ -45,11 +39,17 @@ const getFundingMeta = (ticket: Ticket) => {
   } as const;
 };
 
-const getWalletFlowLabel = (ticket: Ticket): string => {
-  if (ticket.status !== 'Paid') return 'Pending';
-  if (!ticket.customerId) return 'Cash Desk Payout';
-  if (ticket.paidByName === 'System Bonus Credit') return 'Bonus Wallet (Locked)';
-  return 'Real Wallet';
+const getWalletFlowLabel = (ticket: Ticket, displayStatus: DisplayStatus): string => {
+  if (ticket.customerId) {
+    if (displayStatus === 'Paid') {
+      if (ticket.paidByName === 'System Bonus Credit') return 'Bonus Wallet (Locked)';
+      return 'Real Wallet (Auto)';
+    }
+    if (displayStatus === 'Lost') return 'Auto Settled';
+    return 'Auto Settlement Pending';
+  }
+  if (displayStatus === 'Paid') return 'Cash Desk Payout';
+  return 'Pending';
 };
 
 const formatBetNumbers = (sel: Ticket['selections'][number]): string => {
@@ -89,8 +89,17 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
     return new Map(races.map(r => [r.id, r]));
   }, [races]);
 
+  const recalculatedWinningsByTicket = useMemo(() => {
+    const map = new Map<string, number>();
+    tickets.forEach(ticket => {
+      const recalculated = calculateTicketWinnings(ticket, races);
+      map.set(ticket.id, Number(recalculated.totalWinnings || 0));
+    });
+    return map;
+  }, [tickets, races]);
+
   const getDisplayStatus = (ticket: Ticket): DisplayStatus => {
-    if (ticket.status !== 'Active') return ticket.status;
+    if (ticket.status === 'Paid' || ticket.status === 'Canceled' || ticket.status === 'Booked') return ticket.status;
 
     const now = new Date();
     const ticketRaces = ticket.selections
@@ -102,9 +111,21 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
     const allRacesEnded = ticketRaces.every(r => now >= r.endDate);
     if (!allRacesEnded) return 'Active';
 
-    const anyWin = ticket.winningsBreakdown?.some(b => b.status === 'Win') || (ticket.winnings || 0) > 0;
-    if (anyWin) return 'Winning';
+    const resolvedWinnings = Number(recalculatedWinningsByTicket.get(ticket.id) ?? ticket.winnings ?? 0);
+    if (resolvedWinnings > 0) {
+      return ticket.customerId ? 'Paid' : 'Winning';
+    }
     return 'Lost';
+  };
+
+  const getTicketResultNumbers = (ticket: Ticket): string => {
+    const byRace = Array.from(new Set(ticket.selections.map(sel => sel.raceId))).map(raceId => {
+      const race = raceById.get(raceId);
+      if (!race) return `${raceId}: Pending`;
+      const numbers = formatWinningNumbersForDisplay(race.result?.winningNumbers);
+      return `${race.name}: ${numbers === 'N/A' ? 'Pending' : numbers}`;
+    });
+    return byRace.join(' | ');
   };
 
   const matchesStatusFilter = (ticket: Ticket): boolean => {
@@ -234,8 +255,8 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                 <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Race number</th>
                 <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Bet time</th>
                 <th className="text-center py-1.5 px-3 font-semibold text-gray-700 border-r border-gray-300">Bet</th>
-                <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Funding</th>
-                <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Amount</th>
+                <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Funding Source</th>
+                <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Winnings Amount</th>
                 <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Result</th>
                 <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Wallet Flow</th>
                 <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Status</th>
@@ -246,9 +267,12 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
               {filteredTickets.length > 0 ? (
                 filteredTickets.map((ticket, rowIdx) => {
                   const funding = getFundingMeta(ticket);
-                  const hasWinnings = ticket.winnings !== undefined && ticket.winnings > 0;
                   const displayStatus = getDisplayStatus(ticket);
-                  const canPayout = hasWinnings && displayStatus === 'Winning' && typeof onPayoutTicket === 'function';
+                  const recalculatedWinnings = Number(recalculatedWinningsByTicket.get(ticket.id) ?? ticket.winnings ?? 0);
+                  const hasWinnings = recalculatedWinnings > 0;
+                  const isOnlineTicket = Boolean(ticket.customerId);
+                  const canPayout = hasWinnings && displayStatus === 'Winning' && !isOnlineTicket && typeof onPayoutTicket === 'function';
+                  const resultNumbers = getTicketResultNumbers(ticket);
                   const raceInfo = Array.from(new Set(ticket.selections.map(sel => sel.raceId))).map((raceId) => {
                     const race = raceById.get(raceId);
                     if (!race) return { label: raceId, time: '' };
@@ -314,24 +338,26 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
 
                       {/* Amount */}
                       <td className="py-3 px-4 align-top text-xs font-semibold whitespace-nowrap border-r border-gray-200">
-                        {hasWinnings ? (
-                          <span className="text-blue-700">{ticket.winnings!.toFixed(2)} GMD</span>
+                        {displayStatus === 'Winning' || displayStatus === 'Paid' ? (
+                          <span className="text-blue-700">{recalculatedWinnings.toFixed(2)} GMD</span>
+                        ) : displayStatus === 'Lost' ? (
+                          <span className="text-red-600">0.00 GMD</span>
                         ) : (
                           <span className="text-gray-400">-</span>
                         )}
                       </td>
 
                       {/* Result */}
-                      <td className="py-3 px-4 align-top text-xs font-semibold whitespace-nowrap border-r border-gray-200">
+                      <td className="py-3 px-4 align-top text-xs font-semibold border-r border-gray-200 min-w-[220px]">
                         <span className={`${displayStatus === 'Winning' || displayStatus === 'Paid' ? 'text-blue-700' : displayStatus === 'Lost' ? 'text-red-600' : 'text-gray-500'}`}>
-                          {getResultLabel(displayStatus)}
+                          {resultNumbers}
                         </span>
                       </td>
 
                       {/* Wallet flow */}
                       <td className="py-3 px-4 align-top text-xs font-semibold whitespace-nowrap border-r border-gray-200">
-                        <span className={`${ticket.status === 'Paid' ? (ticket.customerId && ticket.paidByName === 'System Bonus Credit' ? 'text-amber-700' : 'text-blue-700') : 'text-gray-500'}`}>
-                          {getWalletFlowLabel(ticket)}
+                        <span className={`${displayStatus === 'Paid' ? (ticket.customerId && ticket.paidByName === 'System Bonus Credit' ? 'text-amber-700' : 'text-blue-700') : 'text-gray-500'}`}>
+                          {getWalletFlowLabel(ticket, displayStatus)}
                         </span>
                       </td>
 
@@ -366,11 +392,11 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                                 onPayoutTicket(ticket.id);
                               }
                             }}
-                            title={canPayout ? 'Pay winning ticket' : 'Payment available for winning tickets only'}
+                            title={isOnlineTicket ? 'Online ticket is auto-paid by system' : (canPayout ? 'Pay winning ticket' : 'Payment available for vendor winning tickets only')}
                             disabled={!canPayout}
                             className={`px-2 py-1 rounded border text-[10px] font-bold leading-none transition-colors ${canPayout ? 'border-emerald-500 bg-emerald-50 hover:bg-emerald-100 text-emerald-700' : 'border-gray-300 bg-gray-100 text-gray-400 cursor-not-allowed'}`}
                           >
-                            Payment
+                            {isOnlineTicket ? 'Auto' : 'Payment'}
                           </button>
                           </div>
                         </div>

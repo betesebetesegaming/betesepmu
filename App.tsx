@@ -279,6 +279,10 @@ const AppContent: React.FC = () => {
       if(!currentUser) return;
       const ticket = (placedTickets || []).find(t => t.id === ticketId);
       if(!ticket || !ticket.winnings) return;
+      if (ticket.customerId) {
+          alert('Online customer tickets are settled automatically by the system. Manual payment is only for vendor cashout tickets.');
+          return;
+      }
       if(supabase) {
           try {
               const success = await dbPayoutTicket(ticketId, ticket.winnings, currentUser.id, currentUser.name);
