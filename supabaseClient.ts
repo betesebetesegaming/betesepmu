@@ -610,7 +610,7 @@ export const dbAddUser = async (user: User) => {
         : null;
 
     if (user.role === 'Customer' && !normalizedCustomerPhone) {
-        throw new Error('Customer phone must be valid: +220XXXXXXX or +221XXXXXXXX(X), or local 7/8/9-digit number.');
+        throw new Error('Customer phone must be valid: Gambia local 7 digits or +220XXXXXXX; Senegal must be +221XXXXXXXXX only.');
     }
 
     if (normalizedCustomerPhone) {

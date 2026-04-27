@@ -85,7 +85,7 @@ export const UserAccountManagement: React.FC<UserAccountManagementProps> = ({ us
             : null;
 
         if (newUserRole === 'Customer' && !normalizedCustomerPhone) {
-            setError('Use +220XXXXXXX or +221XXXXXXXX(X), or local 7/8/9-digit number.');
+            setError('Gambia: local 7 digits or +220XXXXXXX. Senegal: +221XXXXXXXXX only.');
             return;
         }
 
@@ -146,7 +146,7 @@ export const UserAccountManagement: React.FC<UserAccountManagementProps> = ({ us
                      {newUserRole === 'Customer' && (
                         <input
                             type="tel"
-                            placeholder="Phone (+220XXXXXXX / +221XXXXXXXX(X) / local)"
+                            placeholder="Gambia local or +220 / Senegal +221 only"
                             value={newUserPhone}
                             onChange={e => setNewUserPhone(e.target.value)}
                             className="p-2 border rounded md:col-span-3"
