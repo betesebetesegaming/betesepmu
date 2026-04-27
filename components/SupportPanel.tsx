@@ -70,7 +70,7 @@ export const SupportPanel: React.FC<SupportPanelProps> = ({ onRecalculateAllTick
         setAiDiagnosis(null);
 
         const snapshot = collectLocalSnapshot();
-        const aiWebhookUrl = (import.meta as any)?.env?.VITE_SUPPORT_AI_WEBHOOK;
+        const aiWebhookUrl = (import.meta as any)?.env?.VITE_SUPPORT_AI_WEBHOOK || '/.netlify/functions/support-ai';
 
         try {
             if (aiWebhookUrl) {
@@ -99,8 +99,12 @@ export const SupportPanel: React.FC<SupportPanelProps> = ({ onRecalculateAllTick
                 setAiDiagnosis(localTriage(issueText, snapshot));
             }
         } catch (err: any) {
-            setAiDiagnosis(localTriage(issueText, snapshot));
-            alert(`AI service unavailable. Used local triage instead. ${err?.message || ''}`.trim());
+            const fallback = localTriage(issueText, snapshot);
+            setAiDiagnosis({
+                summary: `${fallback.summary} AI service unavailable, fallback mode active.`,
+                actions: fallback.actions,
+            });
+            console.warn('AI service unavailable, using local fallback.', err);
         } finally {
             setIsAnalyzing(false);
         }

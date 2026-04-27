@@ -68,10 +68,20 @@ Serverless function path:
 
 `netlify/functions/calculate-pmu-payouts.js`
 
+AI support function path:
+
+`netlify/functions/support-ai.js`
+
 Required Netlify environment variables:
 
 - `SUPABASE_URL` (or `VITE_SUPABASE_URL`)
 - `SUPABASE_SERVICE_ROLE_KEY`
+- `OPENAI_API_KEY` (required for AI diagnosis in Support panel)
+- `OPENAI_MODEL` (optional, default: `gpt-4o-mini`)
+
+Optional frontend override:
+
+- `VITE_SUPPORT_AI_WEBHOOK` (defaults to `/.netlify/functions/support-ai` if not set)
 
 ### 3) Admin back-office payout box
 
