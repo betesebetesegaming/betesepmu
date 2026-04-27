@@ -31,7 +31,8 @@ import {
     dbCancelManualBetOrder, dbMarkManualBetOrderCompleted, dbPayForBooking,
     dbProcessWithdrawalRequest, dbFetchChatThreads, dbFetchChatMessages,
     dbSendChatMessage, dbMarkThreadAsRead, dbSettleRaceTickets, dbCancelTicket,
-    dbToggleUserLock, dbAdminResetPassword, dbRecalculateAllTicketsSafely
+    dbToggleUserLock, dbAdminResetPassword, dbRecalculateAllTicketsSafely,
+    dbApplyCustomerDeposit
 } from './supabaseClient';
 
 const normalizeRole = (role: unknown): Role => {
@@ -169,6 +170,8 @@ const AppContent: React.FC = () => {
               password: (payload.new as any)?.password ?? prev.password,
               walletBalance: Number((payload.new as any)?.wallet_balance ?? prev.walletBalance ?? 0),
               bonusBalance: Number((payload.new as any)?.bonus_balance ?? prev.bonusBalance ?? 0),
+              totalDepositedAmount: Number((payload.new as any)?.total_deposited_amount ?? prev.totalDepositedAmount ?? 0),
+              firstDepositAt: (payload.new as any)?.first_deposit_at ? new Date((payload.new as any).first_deposit_at) : prev.firstDepositAt,
               createdById: (payload.new as any)?.created_by_id ?? prev.createdById,
               createdByName: (payload.new as any)?.created_by_name ?? prev.createdByName
           } : null);
@@ -285,10 +288,10 @@ const AppContent: React.FC = () => {
 
     // ONLINE CUSTOMER WALLET CHECK
     if (currentUser.role === 'Customer') {
-        const balance = currentUser.walletBalance || 0;
-        if (balance < betSlip.totalCost) {
+        const totalAvailable = (currentUser.walletBalance || 0) + (currentUser.bonusBalance || 0);
+        if (totalAvailable < betSlip.totalCost) {
             setWalletFlash(true);
-            alert("INSUFFICIENT BALANCE: Please deposit funds to place this bet.");
+            alert("INSUFFICIENT BALANCE: Your actual wallet and bonus wallet do not cover this bet.");
             return;
         }
     }
@@ -322,7 +325,13 @@ const AppContent: React.FC = () => {
         } else { 
             // LOCAL MOCK WALLET DEDUCTION
             if (currentUser.role === 'Customer') {
-                const updatedUser = { ...currentUser, walletBalance: (currentUser.walletBalance || 0) - betSlip.totalCost };
+                const bonusUsed = Math.min(currentUser.bonusBalance || 0, betSlip.totalCost);
+                const cashUsed = betSlip.totalCost - bonusUsed;
+                const updatedUser = {
+                    ...currentUser,
+                    walletBalance: Number(((currentUser.walletBalance || 0) - cashUsed).toFixed(2)),
+                    bonusBalance: Number(((currentUser.bonusBalance || 0) - bonusUsed).toFixed(2))
+                };
                 setCurrentUser(updatedUser);
                 setUsers(prev => prev.map(u => u.id === currentUser.id ? updatedUser : u));
             }
@@ -371,23 +380,75 @@ const AppContent: React.FC = () => {
       alert("BOOKING CREATED SUCCESSFULLY: Ticket has been added to your history.");
   };
 
-  const handleDeposit = (customerId: string, amount: number, method: string = 'Cash', transactionId?: string) => {
+    const handleDeposit = async (customerId: string, amount: number, method: string = 'Cash', transactionId?: string) => {
     const cust = (users || []).find(u => u.id === customerId);
     if (!cust || !currentUser) return { success: false, bonusApplied: 0 };
-    const updated = { ...cust, walletBalance: (cust.walletBalance || 0) + amount };
-    setUsers(prev => (prev || []).map(u => u.id === customerId ? updated : u));
+
+        const normalizedAmount = Number(Number(amount).toFixed(2));
+        if (!Number.isFinite(normalizedAmount) || normalizedAmount === 0) {
+            return { success: false, bonusApplied: 0 };
+        }
+
+        if (normalizedAmount < 0 && (cust.walletBalance || 0) < Math.abs(normalizedAmount)) {
+            return { success: false, bonusApplied: 0 };
+        }
+
+        const firstDepositPromo = promotions
+            .filter(p => p.isActive && p.type === 'first-deposit')
+            .flatMap(p => p.rules || [])
+            .filter(rule => normalizedAmount > 0 && normalizedAmount >= Number(rule.depositAmount || 0))
+            .sort((a, b) => Number(b.depositAmount || 0) - Number(a.depositAmount || 0))[0];
+
+        const isFirstDeposit = normalizedAmount > 0 && Number(cust.totalDepositedAmount || 0) <= 0;
+        const bonusApplied = isFirstDeposit ? Number(Number(firstDepositPromo?.bonusAmount || 0).toFixed(2)) : 0;
+
+        let nextWalletBalance = Number(((cust.walletBalance || 0) + normalizedAmount).toFixed(2));
+        let nextBonusBalance = Number((cust.bonusBalance || 0).toFixed(2));
+        let nextTotalDeposited = Number(cust.totalDepositedAmount || 0);
+        let nextFirstDepositAt = cust.firstDepositAt;
+
+        try {
+            if (supabase) {
+                const dbResult = await dbApplyCustomerDeposit(customerId, normalizedAmount, bonusApplied, effectiveTime);
+                nextWalletBalance = dbResult.walletBalance;
+                nextBonusBalance = dbResult.bonusBalance;
+                nextTotalDeposited = dbResult.totalDepositedAmount;
+                nextFirstDepositAt = dbResult.firstDepositAt ? new Date(dbResult.firstDepositAt) : cust.firstDepositAt;
+            } else {
+                nextBonusBalance = Number(((cust.bonusBalance || 0) + bonusApplied).toFixed(2));
+                nextTotalDeposited = normalizedAmount > 0
+                    ? Number(((cust.totalDepositedAmount || 0) + normalizedAmount).toFixed(2))
+                    : Number(cust.totalDepositedAmount || 0);
+                nextFirstDepositAt = !cust.firstDepositAt && normalizedAmount > 0 ? effectiveTime : cust.firstDepositAt;
+            }
+        } catch (e: any) {
+            alert(`Deposit Error: ${e.message}`);
+            return { success: false, bonusApplied: 0 };
+        }
+
+        const updated = {
+            ...cust,
+            walletBalance: nextWalletBalance,
+            bonusBalance: nextBonusBalance,
+            totalDepositedAmount: nextTotalDeposited,
+            firstDepositAt: nextFirstDepositAt
+        };
+
+        setUsers(prev => (prev || []).map(u => u.id === customerId ? updated : u));
+        setCurrentUser(prev => prev && prev.id === customerId ? { ...prev, ...updated } : prev);
     setDepositLogs(prev => [...prev, {
         id: `dl-${Date.now()}`,
         customerId,
         customerName: cust.name,
         amount,
+                bonusAwarded: bonusApplied || undefined,
         processedById: currentUser.id,
         processedByName: currentUser.name,
         timestamp: effectiveTime,
         method: method as any,
         transactionId
     }]);
-    return { success: true, bonusApplied: 0 };
+        return { success: true, bonusApplied };
   };
 
   const handleCreateDepositRequest = async (amount: number, method: 'Wave' | 'AfriMoney', phone: string) => {

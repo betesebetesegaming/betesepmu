@@ -75,6 +75,9 @@ export interface BetSelection {
   cost: number; // This is the base cost for one unit
   multiplier: number; // Individual multiplier for this selection
   pattern?: string[]; // Stores the ordered sequence, e.g., ["10", "X", "9"]
+  fundingSource?: 'cash' | 'bonus' | 'mixed';
+  bonusStakeAmount?: number;
+  cashStakeAmount?: number;
 }
 
 export interface BetSlip {
@@ -135,6 +138,8 @@ export interface User {
   password?: string;
   walletBalance?: number;
   bonusBalance?: number;
+  totalDepositedAmount?: number;
+  firstDepositAt?: Date;
   createdById?: string;
   createdByName?: string;
 }

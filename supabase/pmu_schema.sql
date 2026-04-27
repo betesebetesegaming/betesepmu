@@ -118,6 +118,8 @@ create table if not exists races (
   start_date timestamptz not null,
   end_date timestamptz not null,
   horse_count int not null check (horse_count > 0),
+  total_deposited_amount numeric(12,2) not null default 0,
+  first_deposit_at timestamptz,
   non_runners int[] not null default '{}',
   disabled_bet_types text[] not null default '{}',
   result jsonb,

@@ -4,7 +4,7 @@ import { User, DepositLog, DepositRequest, Role } from '../types';
 
 interface CustomerDepositPanelProps {
   customers: User[];
-  onDeposit: (customerId: string, amount: number, method: 'Cash' | 'Wave' | 'AfriMoney' | 'Correction', transactionId?: string) => { success: boolean; bonusApplied: number | null };
+    onDeposit: (customerId: string, amount: number, method: 'Cash' | 'Wave' | 'AfriMoney' | 'Correction', transactionId?: string) => Promise<{ success: boolean; bonusApplied: number | null }>;
   depositLogs: DepositLog[];
   depositRequests?: DepositRequest[];
   onApproveDepositRequest?: (requestId: string) => void;
@@ -67,7 +67,7 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
   }, [customers, selectedCustomer?.id]);
 
 
-  const handleDeposit = (e: React.FormEvent) => {
+    const handleDeposit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSuccessMessage('');
     const numericAmount = Number(amount);
@@ -77,7 +77,7 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
       const finalAmount = isCorrectionMode ? -numericAmount : numericAmount;
       const method = isCorrectionMode ? 'Correction' : 'Cash';
 
-      const result = onDeposit(selectedCustomer.id, finalAmount, method);
+    const result = await onDeposit(selectedCustomer.id, finalAmount, method);
       
       if (result.success) {
         let message = '';

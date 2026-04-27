@@ -23,7 +23,7 @@ interface SupervisorDashboardProps {
     users: User[];
     onToggleLock: (userId: string) => void;
     onAddUser: (name: string, role: Role, phone?: string, password?: string) => void;
-    onDeposit: (customerId: string, amount: number) => { success: boolean; bonusApplied: number | null };
+    onDeposit: (customerId: string, amount: number) => Promise<{ success: boolean; bonusApplied: number | null }>;
     races: Race[];
     onSaveRaceResult: (result: RaceResult) => void;
     onUpdateNonRunners: (raceId: string, nonRunners: number[]) => void;

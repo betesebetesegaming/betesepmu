@@ -60,6 +60,15 @@ const isMissingRaceMetadataColumnError = (error: any): boolean => {
     return code === 'PGRST204' || (mentionsColumn && mentionsSchemaCache) || mentionsColumn;
 };
 
+const isMissingBonusTrackingColumnError = (error: any): boolean => {
+    if (!error) return false;
+    const code = String(error.code || '');
+    const combined = `${String(error.message || '')} ${String(error.details || '')} ${String(error.hint || '')}`.toLowerCase();
+    return code === 'PGRST204'
+        || combined.includes('total_deposited_amount')
+        || combined.includes('first_deposit_at');
+};
+
 /**
  * RACE MANAGEMENT OPERATIONS
  */
@@ -166,6 +175,90 @@ const mapDbTicketRow = (t: any): Ticket => ({
     canceledByName: t.canceled_by_name || undefined
 });
 
+const getTicketFunding = (ticket: Pick<Ticket, 'selections' | 'totalCost'>) => {
+    const metadata = Array.isArray(ticket.selections) && ticket.selections.length > 0 ? ticket.selections[0] : null;
+    const bonusStake = Number(metadata?.bonusStakeAmount || 0);
+    const cashStake = Number(metadata?.cashStakeAmount ?? Math.max(0, Number(ticket.totalCost || 0) - bonusStake));
+    const fundingSource = metadata?.fundingSource || (bonusStake > 0 ? (cashStake > 0 ? 'mixed' : 'bonus') : 'cash');
+    return {
+        bonusStake: Number(bonusStake.toFixed(2)),
+        cashStake: Number(cashStake.toFixed(2)),
+        fundingSource
+    } as const;
+};
+
+const addFundingMetadataToSelections = (ticket: Ticket, walletBalance: number, bonusBalance: number): Ticket => {
+    const totalCost = Number(ticket.totalCost || 0);
+    const bonusStake = Number(Math.min(totalCost, Math.max(0, bonusBalance)).toFixed(2));
+    const cashStake = Number((totalCost - bonusStake).toFixed(2));
+    const fundingSource: 'cash' | 'bonus' | 'mixed' = bonusStake <= 0 ? 'cash' : cashStake > 0 ? 'mixed' : 'bonus';
+
+    return {
+        ...ticket,
+        selections: ticket.selections.map((selection, index) => index === 0
+            ? {
+                ...selection,
+                fundingSource,
+                bonusStakeAmount: bonusStake,
+                cashStakeAmount: cashStake,
+            }
+            : selection)
+    };
+};
+
+const evaluateBonusUnlockProgress = (tickets: Ticket[]) => {
+    const eligibleTickets = tickets.filter(ticket => {
+        if (ticket.status === 'Canceled' || ticket.status === 'Booked') return false;
+        return getTicketFunding(ticket).bonusStake > 0;
+    });
+
+    const distinctRaceIds = new Set<string>();
+    const raceDayMap = new Map<string, Set<string>>();
+
+    eligibleTickets.forEach(ticket => {
+        const ticketDay = ticket.timestamp.toISOString().slice(0, 10);
+        const uniqueRaceIds = Array.from(new Set(ticket.selections.map(selection => selection.raceId)));
+        uniqueRaceIds.forEach(raceId => {
+            distinctRaceIds.add(raceId);
+            if (!raceDayMap.has(raceId)) raceDayMap.set(raceId, new Set<string>());
+            raceDayMap.get(raceId)!.add(ticketDay);
+        });
+    });
+
+    const sameRaceBestCount = Math.max(0, ...Array.from(raceDayMap.values()).map(days => days.size));
+    return {
+        distinctRaceCount: distinctRaceIds.size,
+        sameRaceBestCount,
+        qualified: distinctRaceIds.size >= 3 || sameRaceBestCount >= 3,
+    };
+};
+
+const maybeUnlockCustomerBonusBalance = async (customerId: string) => {
+    if (!supabase) return;
+
+    const [{ data: userRow, error: userError }, { data: ticketRows, error: ticketError }] = await Promise.all([
+        supabase.from('users').select('wallet_balance, bonus_balance').eq('id', customerId).single(),
+        supabase.from('tickets').select('*').eq('customer_id', customerId).neq('status', 'Canceled')
+    ]);
+
+    if (userError) throw userError;
+    if (ticketError) throw ticketError;
+
+    const bonusBalance = Number(userRow?.bonus_balance || 0);
+    if (bonusBalance <= 0) return;
+
+    const progress = evaluateBonusUnlockProgress((ticketRows || []).map(mapDbTicketRow));
+    if (!progress.qualified) return;
+
+    const nextWallet = Number((Number(userRow?.wallet_balance || 0) + bonusBalance).toFixed(2));
+    const { error: unlockError } = await supabase
+        .from('users')
+        .update({ wallet_balance: nextWallet, bonus_balance: 0 })
+        .eq('id', customerId);
+
+    if (unlockError) throw unlockError;
+};
+
 export const dbSettleRaceTickets = async (result: RaceResult, allRaces: Race[]) => {
     if (!supabase) throw new Error("Database not connected");
 
@@ -182,15 +275,19 @@ export const dbSettleRaceTickets = async (result: RaceResult, allRaces: Race[]) 
     const relevantTickets = (ticketRows || []).map(mapDbTicketRow);
 
     const customerIds = Array.from(new Set(relevantTickets.map((ticket) => ticket.customerId).filter(Boolean))) as string[];
-    const balanceMap = new Map<string, number>();
+    const walletBalanceMap = new Map<string, number>();
+    const bonusBalanceMap = new Map<string, number>();
 
     if (customerIds.length > 0) {
         const { data: userRows, error: userError } = await supabase
             .from('users')
-            .select('id,wallet_balance')
+            .select('id,wallet_balance,bonus_balance')
             .in('id', customerIds);
         if (userError) throw userError;
-        (userRows || []).forEach((row: any) => balanceMap.set(row.id, Number(row.wallet_balance || 0)));
+        (userRows || []).forEach((row: any) => {
+            walletBalanceMap.set(row.id, Number(row.wallet_balance || 0));
+            bonusBalanceMap.set(row.id, Number(row.bonus_balance || 0));
+        });
     }
 
     for (const ticket of relevantTickets) {
@@ -204,6 +301,8 @@ export const dbSettleRaceTickets = async (result: RaceResult, allRaces: Race[]) 
         const previousWinnings = Number(ticket.winnings || 0);
         const isOnlineCustomer = Boolean(ticket.customerId);
         const wasPaidOnline = isOnlineCustomer && ticket.status === 'Paid';
+        const funding = getTicketFunding(ticket);
+        const creditsBonusWallet = isOnlineCustomer && funding.bonusStake > 0;
 
         let nextStatus = ticket.status;
         let paidAt = ticket.paidAt;
@@ -217,7 +316,7 @@ export const dbSettleRaceTickets = async (result: RaceResult, allRaces: Race[]) 
                     nextStatus = 'Paid';
                     paidAt = paidAt || new Date();
                     paidById = paidById || 'SYSTEM';
-                    paidByName = paidByName || 'System Auto Credit';
+                    paidByName = paidByName || (creditsBonusWallet ? 'System Bonus Credit' : 'System Auto Credit');
                 } else {
                     // Keep paid tickets paid after re-settlement.
                     nextStatus = ticket.status === 'Paid' ? 'Paid' : 'Winning';
@@ -237,7 +336,7 @@ export const dbSettleRaceTickets = async (result: RaceResult, allRaces: Race[]) 
             settledWinnings = previousWinnings;
             paidAt = paidAt || new Date();
             paidById = paidById || 'SYSTEM';
-            paidByName = paidByName || 'System Auto Credit';
+            paidByName = paidByName || (creditsBonusWallet ? 'System Bonus Credit' : 'System Auto Credit');
         }
 
         if (isOnlineCustomer) {
@@ -245,8 +344,13 @@ export const dbSettleRaceTickets = async (result: RaceResult, allRaces: Race[]) 
             const nextCredited = nextStatus === 'Paid' ? settledWinnings : 0;
             const delta = Number((nextCredited - previousCredited).toFixed(2));
             if (delta !== 0 && ticket.customerId) {
-                const currentBalance = Number(balanceMap.get(ticket.customerId) || 0);
-                balanceMap.set(ticket.customerId, Number((currentBalance + delta).toFixed(2)));
+                if (creditsBonusWallet) {
+                    const currentBonus = Number(bonusBalanceMap.get(ticket.customerId) || 0);
+                    bonusBalanceMap.set(ticket.customerId, Number((currentBonus + delta).toFixed(2)));
+                } else {
+                    const currentBalance = Number(walletBalanceMap.get(ticket.customerId) || 0);
+                    walletBalanceMap.set(ticket.customerId, Number((currentBalance + delta).toFixed(2)));
+                }
             }
         }
 
@@ -265,12 +369,16 @@ export const dbSettleRaceTickets = async (result: RaceResult, allRaces: Race[]) 
         if (updateError) throw updateError;
     }
 
-    for (const [customerId, walletBalance] of balanceMap.entries()) {
+    for (const customerId of customerIds) {
+        const walletBalance = Number(walletBalanceMap.get(customerId) || 0);
+        const bonusBalance = Number(bonusBalanceMap.get(customerId) || 0);
         const { error: walletError } = await supabase
             .from('users')
-            .update({ wallet_balance: walletBalance })
+            .update({ wallet_balance: walletBalance, bonus_balance: bonusBalance })
             .eq('id', customerId);
         if (walletError) throw walletError;
+
+        await maybeUnlockCustomerBonusBalance(customerId);
     }
 };
 
@@ -319,52 +427,61 @@ export const dbPlaceBet = async (ticket: Ticket, user: User) => {
 
     const isOnlineCustomer = user.role === 'Customer';
     const shouldChargeWallet = isOnlineCustomer && ticket.status !== 'Booked';
+    let ticketToInsert = ticket;
     if (shouldChargeWallet) {
         const { data: userRow, error: walletFetchError } = await supabase
             .from('users')
-            .select('wallet_balance')
+            .select('wallet_balance, bonus_balance')
             .eq('id', user.id)
             .single();
 
         if (walletFetchError) throw new Error(walletFetchError.message);
 
         const currentBalance = Number(userRow?.wallet_balance || 0);
+        const currentBonusBalance = Number(userRow?.bonus_balance || 0);
         const betCost = Number(ticket.totalCost || 0);
-        if (currentBalance < betCost) {
-            throw new Error('Insufficient wallet balance');
+        if ((currentBalance + currentBonusBalance) < betCost) {
+            throw new Error('Insufficient wallet and bonus balance');
         }
 
-        const nextBalance = Number((currentBalance - betCost).toFixed(2));
+        ticketToInsert = addFundingMetadataToSelections(ticket, currentBalance, currentBonusBalance);
+        const funding = getTicketFunding(ticketToInsert);
+        const nextBalance = Number((currentBalance - funding.cashStake).toFixed(2));
+        const nextBonusBalance = Number((currentBonusBalance - funding.bonusStake).toFixed(2));
         const { error: walletUpdateError } = await supabase
             .from('users')
-            .update({ wallet_balance: nextBalance })
+            .update({ wallet_balance: nextBalance, bonus_balance: nextBonusBalance })
             .eq('id', user.id);
 
         if (walletUpdateError) throw new Error(walletUpdateError.message);
     }
 
     const ticketInsertPayload = {
-        id: ticket.id,
-        timestamp: ticket.timestamp.toISOString(),
-        vendor_id: isOnlineCustomer ? null : ticket.vendorId || user.id,
-        vendor_name: ticket.vendorName || user.name,
+        id: ticketToInsert.id,
+        timestamp: ticketToInsert.timestamp.toISOString(),
+        vendor_id: isOnlineCustomer ? null : ticketToInsert.vendorId || user.id,
+        vendor_name: ticketToInsert.vendorName || user.name,
         customer_id: isOnlineCustomer ? user.id : ticket.customerId || null,
-        status: ticket.status,
-        booking_code: ticket.bookingCode || null,
-        selections: ticket.selections,
-        total_cost: ticket.totalCost,
-        winnings: ticket.winnings || null,
-        winnings_breakdown: ticket.winningsBreakdown || null,
-        paid_at: ticket.paidAt ? ticket.paidAt.toISOString() : null,
-        paid_by_id: ticket.paidById || null,
-        paid_by_name: ticket.paidByName || null,
-        canceled_at: ticket.canceledAt ? ticket.canceledAt.toISOString() : null,
-        canceled_by_id: ticket.canceledById || null,
-        canceled_by_name: ticket.canceledByName || null
+        status: ticketToInsert.status,
+        booking_code: ticketToInsert.bookingCode || null,
+        selections: ticketToInsert.selections,
+        total_cost: ticketToInsert.totalCost,
+        winnings: ticketToInsert.winnings || null,
+        winnings_breakdown: ticketToInsert.winningsBreakdown || null,
+        paid_at: ticketToInsert.paidAt ? ticketToInsert.paidAt.toISOString() : null,
+        paid_by_id: ticketToInsert.paidById || null,
+        paid_by_name: ticketToInsert.paidByName || null,
+        canceled_at: ticketToInsert.canceledAt ? ticketToInsert.canceledAt.toISOString() : null,
+        canceled_by_id: ticketToInsert.canceledById || null,
+        canceled_by_name: ticketToInsert.canceledByName || null
     };
 
     const { error: insertError } = await supabase.from('tickets').insert(ticketInsertPayload);
     if (insertError) throw new Error(insertError.message);
+
+    if (isOnlineCustomer) {
+        await maybeUnlockCustomerBonusBalance(user.id);
+    }
 
     return { success: true };
 };
@@ -392,6 +509,8 @@ export const dbFetchUsers = async (): Promise<User[]> => {
     return data.map((u: any) => ({
         id: u.id, name: u.name, role: u.role, isLocked: u.is_locked, phone: u.phone,
         password: u.password, walletBalance: u.wallet_balance, bonusBalance: u.bonus_balance,
+        totalDepositedAmount: Number(u.total_deposited_amount || 0),
+        firstDepositAt: u.first_deposit_at ? new Date(u.first_deposit_at) : undefined,
         createdById: u.created_by_id, createdByName: u.created_by_name
     }));
 };
@@ -485,6 +604,77 @@ export const dbAdminResetPassword = async (userId: string, newPassword: string) 
 /**
  * FINANCE OPERATIONS
  */
+
+export const dbApplyCustomerDeposit = async (
+    customerId: string,
+    amount: number,
+    bonusAmount: number,
+    processedAt: Date
+) => {
+    if (!supabase) throw new Error("Database not connected");
+
+    const normalizedAmount = Number(Number(amount).toFixed(2));
+    const normalizedBonus = Number(Number(bonusAmount).toFixed(2));
+
+    let userRow: any = null;
+    let supportsBonusTrackingColumns = true;
+
+    const { data: extendedUserRow, error: userError } = await supabase
+        .from('users')
+        .select('wallet_balance, bonus_balance, total_deposited_amount, first_deposit_at')
+        .eq('id', customerId)
+        .single();
+
+    if (userError && !isMissingBonusTrackingColumnError(userError)) throw userError;
+
+    if (userError && isMissingBonusTrackingColumnError(userError)) {
+        supportsBonusTrackingColumns = false;
+        const { data: fallbackUserRow, error: fallbackError } = await supabase
+            .from('users')
+            .select('wallet_balance, bonus_balance')
+            .eq('id', customerId)
+            .single();
+        if (fallbackError) throw fallbackError;
+        userRow = fallbackUserRow;
+    } else {
+        userRow = extendedUserRow;
+    }
+
+    const currentWallet = Number(userRow?.wallet_balance || 0);
+    const currentBonus = Number(userRow?.bonus_balance || 0);
+    const currentDeposited = Number(userRow?.total_deposited_amount || 0);
+    const nextWallet = Number((currentWallet + normalizedAmount).toFixed(2));
+    const nextBonus = Number((currentBonus + normalizedBonus).toFixed(2));
+    const nextDeposited = normalizedAmount > 0
+        ? Number((currentDeposited + normalizedAmount).toFixed(2))
+        : currentDeposited;
+
+    const updatePayload: Record<string, any> = {
+        wallet_balance: nextWallet,
+        bonus_balance: nextBonus,
+    };
+
+    if (supportsBonusTrackingColumns) {
+        updatePayload.total_deposited_amount = nextDeposited;
+        if (!userRow?.first_deposit_at && normalizedAmount > 0) {
+            updatePayload.first_deposit_at = processedAt.toISOString();
+        }
+    }
+
+    const { error: updateError } = await supabase
+        .from('users')
+        .update(updatePayload)
+        .eq('id', customerId);
+
+    if (updateError) throw updateError;
+
+    return {
+        walletBalance: nextWallet,
+        bonusBalance: nextBonus,
+        totalDepositedAmount: nextDeposited,
+        firstDepositAt: updatePayload.first_deposit_at || userRow?.first_deposit_at || null,
+    };
+};
 
 export const dbFetchDepositRequests = async (): Promise<any[]> => {
     if (!supabase) return [];
@@ -686,19 +876,23 @@ export const dbCancelTicket = async (
         return { success: false, refundedAmount: 0, ticketId: ticketRow.id, message: `Ticket cannot be canceled while status is ${ticketRow.status}.` };
     }
 
-    const refundAmount = ticketRow.status === 'Active' && ticketRow.customer_id ? Number(ticketRow.total_cost || 0) : 0;
-    if (refundAmount > 0 && ticketRow.customer_id) {
+    const mappedTicket = mapDbTicketRow(ticketRow);
+    const funding = getTicketFunding(mappedTicket);
+    const refundCashAmount = ticketRow.status === 'Active' && ticketRow.customer_id ? funding.cashStake : 0;
+    const refundBonusAmount = ticketRow.status === 'Active' && ticketRow.customer_id ? funding.bonusStake : 0;
+    if ((refundCashAmount > 0 || refundBonusAmount > 0) && ticketRow.customer_id) {
         const { data: userRow, error: userError } = await supabase
             .from('users')
-            .select('wallet_balance')
+            .select('wallet_balance, bonus_balance')
             .eq('id', ticketRow.customer_id)
             .single();
         if (userError) throw userError;
 
-        const nextBalance = Number((Number(userRow?.wallet_balance || 0) + refundAmount).toFixed(2));
+        const nextBalance = Number((Number(userRow?.wallet_balance || 0) + refundCashAmount).toFixed(2));
+        const nextBonusBalance = Number((Number(userRow?.bonus_balance || 0) + refundBonusAmount).toFixed(2));
         const { error: walletError } = await supabase
             .from('users')
-            .update({ wallet_balance: nextBalance })
+            .update({ wallet_balance: nextBalance, bonus_balance: nextBonusBalance })
             .eq('id', ticketRow.customer_id);
         if (walletError) throw walletError;
     }
@@ -718,7 +912,7 @@ export const dbCancelTicket = async (
 
     return {
         success: true,
-        refundedAmount: refundAmount,
+        refundedAmount: Number((refundCashAmount + refundBonusAmount).toFixed(2)),
         ticketId: ticketRow.id
     };
 };

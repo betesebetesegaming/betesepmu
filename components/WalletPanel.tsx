@@ -49,12 +49,44 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
     }, [latestWithdrawalRequest]);
 
     const actualBalance = Number(user.walletBalance || 0);
+    const bonusBalance = Number(user.bonusBalance || 0);
     const pendingWinningMoney = (tickets || [])
         .filter((ticket) => ticket.status === 'Winning')
         .reduce((sum, ticket) => sum + Number(ticket.winnings || 0), 0);
     const paidWinningMoney = (tickets || [])
         .filter((ticket) => ticket.status === 'Paid')
         .reduce((sum, ticket) => sum + Number(ticket.winnings || 0), 0);
+
+    const bonusPlayTickets = useMemo(() => {
+        return (tickets || []).filter(ticket => {
+            if (ticket.status === 'Canceled' || ticket.status === 'Booked') return false;
+            const firstSelection = ticket.selections?.[0];
+            return Number(firstSelection?.bonusStakeAmount || 0) > 0;
+        });
+    }, [tickets]);
+
+    const bonusUnlockProgress = useMemo(() => {
+        const distinctRaceIds = new Set<string>();
+        const raceDayMap = new Map<string, Set<string>>();
+
+        bonusPlayTickets.forEach(ticket => {
+            const ticketDay = ticket.timestamp.toISOString().slice(0, 10);
+            const uniqueRaceIds = Array.from(new Set(ticket.selections.map(selection => selection.raceId)));
+            uniqueRaceIds.forEach(raceId => {
+                distinctRaceIds.add(raceId);
+                if (!raceDayMap.has(raceId)) raceDayMap.set(raceId, new Set<string>());
+                raceDayMap.get(raceId)!.add(ticketDay);
+            });
+        });
+
+        const sameRaceBestCount = Math.max(0, ...Array.from(raceDayMap.values()).map(days => days.size));
+        return {
+            distinctRaceCount: distinctRaceIds.size,
+            sameRaceBestCount,
+            optionAQualified: distinctRaceIds.size >= 3,
+            optionBQualified: sameRaceBestCount >= 3,
+        };
+    }, [bonusPlayTickets]);
 
   const handleDepositSubmit = (e: React.FormEvent) => {
       e.preventDefault();
@@ -123,6 +155,11 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
                     <p className="text-2xl font-black text-betese-green">{actualBalance.toFixed(2)} GMD</p>
                     <p className="text-xs text-gray-500 mt-1">Available for betting and withdrawal</p>
                 </div>
+                <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                    <p className="text-xs uppercase font-bold text-gray-600">Bonus Wallet</p>
+                    <p className="text-2xl font-black text-yellow-700">{bonusBalance.toFixed(2)} GMD</p>
+                    <p className="text-xs text-gray-500 mt-1">Locked until bonus play rules are completed</p>
+                </div>
                 <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
                     <p className="text-xs uppercase font-bold text-gray-600">Winning Money (Pending)</p>
                     <p className="text-2xl font-black text-blue-700">{pendingWinningMoney.toFixed(2)} GMD</p>
@@ -133,10 +170,52 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
                     <p className="text-2xl font-black text-purple-700">{paidWinningMoney.toFixed(2)} GMD</p>
                     <p className="text-xs text-gray-500 mt-1">Total winnings already credited/paid</p>
                 </div>
-                {(user.bonusBalance ?? 0) > 0 && (
-                    <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200 md:col-span-3">
-                        <p className="text-sm text-yellow-800">{t('bonus_money')}</p>
-                        <p className="text-2xl font-bold text-yellow-700">{user.bonusBalance?.toFixed(2)} GMD</p>
+                {bonusBalance > 0 && (
+                    <div className="p-4 bg-amber-50 rounded-lg border border-amber-200 md:col-span-3 space-y-3">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                                <p className="text-sm font-black text-amber-800 uppercase">Welcome Bonus Unlock Progress</p>
+                                <p className="text-xs text-amber-700 mt-1">Bonus bets unlock into your real wallet through either of the two paths below.</p>
+                            </div>
+                            <div className="px-3 py-2 rounded-xl bg-white border border-amber-200 text-right">
+                                <p className="text-[10px] font-black text-gray-500 uppercase">Current Bonus</p>
+                                <p className="text-lg font-black text-amber-700">{bonusBalance.toFixed(2)} GMD</p>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div className={`rounded-xl border p-4 ${bonusUnlockProgress.optionAQualified ? 'bg-green-50 border-green-300' : 'bg-white border-amber-200'}`}>
+                                <p className="text-sm font-black text-gray-800 uppercase">Option A: 3 Different Games</p>
+                                <p className="text-xs text-gray-600 mt-1">Play bonus across 3 different races to unlock fast.</p>
+                                <p className="mt-3 text-2xl font-black text-betese-dark">{Math.min(bonusUnlockProgress.distinctRaceCount, 3)}/3</p>
+                                <p className={`text-xs font-bold mt-1 ${bonusUnlockProgress.optionAQualified ? 'text-green-700' : 'text-amber-700'}`}>
+                                    {bonusUnlockProgress.optionAQualified ? 'Qualified: bonus should move to actual wallet.' : 'Not yet qualified'}
+                                </p>
+                            </div>
+
+                            <div className={`rounded-xl border p-4 ${bonusUnlockProgress.optionBQualified ? 'bg-green-50 border-green-300' : 'bg-white border-amber-200'}`}>
+                                <p className="text-sm font-black text-gray-800 uppercase">Option B: Same Game 3 Days</p>
+                                <p className="text-xs text-gray-600 mt-1">Play one race with bonus on 3 different days.</p>
+                                <p className="mt-3 text-2xl font-black text-betese-dark">{Math.min(bonusUnlockProgress.sameRaceBestCount, 3)}/3</p>
+                                <p className={`text-xs font-bold mt-1 ${bonusUnlockProgress.optionBQualified ? 'text-green-700' : 'text-amber-700'}`}>
+                                    {bonusUnlockProgress.optionBQualified ? 'Qualified: bonus should move to actual wallet.' : 'Not yet qualified'}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                            <div className="rounded-xl bg-white border border-amber-200 p-3">
+                                <p className="font-black text-gray-800 uppercase mb-1">Strict Rule Summary</p>
+                                <p className="text-gray-600">Fast unlock = play all 3 races once.</p>
+                                <p className="text-gray-600">Slow unlock = play one race on 3 different days.</p>
+                                <p className="text-gray-600">Repeating the same race 3 times in one day does not qualify.</p>
+                            </div>
+                            <div className="rounded-xl bg-white border border-amber-200 p-3">
+                                <p className="font-black text-gray-800 uppercase mb-1">How Bonus Is Used</p>
+                                <p className="text-gray-600">When you place a bet online, bonus money is used first before actual cash.</p>
+                                <p className="text-gray-600">Winning from bonus-funded tickets stays in Bonus Wallet until one unlock path is completed.</p>
+                            </div>
+                        </div>
                     </div>
                 )}
       </div>

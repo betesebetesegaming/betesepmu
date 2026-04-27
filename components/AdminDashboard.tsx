@@ -60,7 +60,7 @@ interface AdminDashboardProps {
     onToggleLock: (userId: string) => void;
     onLockAllVendors: () => void;
     onAddUser: (name: string, role: Role, phone?: string, password?: string) => void;
-    onDeposit: (customerId: string, amount: number, method: string) => { success: boolean; bonusApplied: number | null };
+    onDeposit: (customerId: string, amount: number, method: string) => Promise<{ success: boolean; bonusApplied: number | null }>;
     onSaveRaceResult: (result: RaceResult) => void;
     onUpdateNonRunners: (raceId: string, nonRunners: number[]) => void;
     depositLogs: DepositLog[];

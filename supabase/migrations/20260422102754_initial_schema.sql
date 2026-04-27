@@ -114,6 +114,8 @@ alter table users add column if not exists phone text;
 alter table users add column if not exists password text;
 alter table users add column if not exists wallet_balance numeric(12,2) not null default 0;
 alter table users add column if not exists bonus_balance numeric(12,2) not null default 0;
+alter table users add column if not exists total_deposited_amount numeric(12,2) not null default 0;
+alter table users add column if not exists first_deposit_at timestamptz;
 alter table users add column if not exists created_by_id text;
 alter table users add column if not exists created_by_name text;
 alter table users add column if not exists created_at timestamptz not null default now();
