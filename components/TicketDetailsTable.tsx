@@ -92,6 +92,7 @@ const formatBetLabel = (betType: string): string => {
 };
 
 type FilterStatus = Ticket['status'] | 'All';
+type FilterChannel = 'All' | 'Online' | 'Terminal';
 
 export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets, races, onCancelTicket, onPayoutTicket }) => {
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('All');
@@ -99,6 +100,7 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
   // Keep date empty by default so agent filter can show all vendor transactions.
   const [filterDate, setFilterDate] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [filterChannel, setFilterChannel] = useState<FilterChannel>('All');
   const [ledgerTicket, setLedgerTicket] = useState<Ticket | null>(null);
   const topScrollRef = useRef<HTMLDivElement | null>(null);
   const tableScrollRef = useRef<HTMLDivElement | null>(null);
@@ -166,6 +168,12 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
     }
     if (filterStatus !== 'All') result = result.filter(matchesStatusFilter);
     if (filterAgent !== 'All') result = result.filter(t => (t.vendorName || '').toLowerCase() === filterAgent.toLowerCase());
+    if (filterChannel !== 'All') {
+      result = result.filter((t) => {
+        const channel = (t.transactionChannel === 'Online' || t.customerId) ? 'Online' : 'Terminal';
+        return channel === filterChannel;
+      });
+    }
     if (filterDate) {
       result = result.filter(t => {
         const yyyy = t.timestamp.getFullYear();
@@ -175,7 +183,7 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
       });
     }
     return result;
-  }, [tickets, filterStatus, filterAgent, filterDate, searchTerm, races]);
+  }, [tickets, filterStatus, filterAgent, filterChannel, filterDate, searchTerm, races]);
 
   const filteredSummary = useMemo(() => {
     const totalStake = filteredTickets.reduce((sum, t) => sum + Number(t.totalCost || 0), 0);
@@ -193,6 +201,8 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
     }, 0);
     return {
       count: filteredTickets.length,
+      onlineCount: filteredTickets.filter(t => t.transactionChannel === 'Online' || t.customerId).length,
+      terminalCount: filteredTickets.filter(t => !(t.transactionChannel === 'Online' || t.customerId)).length,
       totalStake,
       totalWinnings,
       realMoneyPaidOut,
@@ -278,10 +288,22 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
             <option value="Canceled">Canceled</option>
             <option value="Booked">Booked</option>
           </select>
+
+          <select
+            value={filterChannel}
+            onChange={e => setFilterChannel(e.target.value as FilterChannel)}
+            className="flex-1 min-w-[140px] px-3 py-1.5 rounded-full border-2 border-white/60 bg-white/90 text-sm font-semibold text-gray-800 focus:outline-none focus:border-white"
+          >
+            <option value="All">All Channels</option>
+            <option value="Online">Online</option>
+            <option value="Terminal">Terminal</option>
+          </select>
         </div>
 
         <div className="px-4 py-2 border-b bg-slate-50 text-xs text-gray-700 flex flex-wrap gap-4">
           <span className="font-semibold">Transactions: <span className="font-black text-betese-dark">{filteredSummary.count}</span></span>
+          <span className="font-semibold">Online: <span className="font-black text-blue-700">{filteredSummary.onlineCount}</span></span>
+          <span className="font-semibold">Terminal: <span className="font-black text-emerald-700">{filteredSummary.terminalCount}</span></span>
           <span className="font-semibold">Total Stake: <span className="font-black text-betese-dark">{filteredSummary.totalStake.toFixed(2)} GMD</span></span>
           <span className="font-semibold">Total Winnings: <span className="font-black text-betese-dark">{filteredSummary.totalWinnings.toFixed(2)} GMD</span></span>
           <span className="font-semibold">Real Paid Out: <span className="font-black text-blue-700">{filteredSummary.realMoneyPaidOut.toFixed(2)} GMD</span></span>
@@ -307,6 +329,7 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                 <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Winnings Amount</th>
                 <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Result</th>
                 <th className="hidden md:table-cell text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Wallet Flow</th>
+                <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Paid By</th>
                 <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Status</th>
                 <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap">Options</th>
               </tr>
@@ -406,6 +429,17 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                       </td>
 
                       {/* Status */}
+                      <td className="py-3 px-4 align-top text-xs font-semibold whitespace-nowrap border-r border-gray-200">
+                        {displayStatus === 'Paid' ? (
+                          <span className="inline-flex items-center rounded-full border border-purple-300 bg-purple-50 px-2 py-0.5 font-black text-purple-700">
+                            {ticket.paidByName || ticket.paidById || (isOnlineTicket ? 'System Auto Credit' : 'Cashier')}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </td>
+
+                      {/* Status */}
                       <td className={`py-3 px-4 align-top text-xs font-semibold whitespace-nowrap border-r border-gray-200 ${getStatusColor(displayStatus)}`}>
                         <div className="space-y-0.5">
                           <span className={`inline-flex items-center rounded-full border px-2 py-0.5 font-black ${getStatusChipClass(displayStatus)}`}>
@@ -450,7 +484,7 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                 })
               ) : (
                 <tr>
-                  <td colSpan={9} className="py-8 px-4 text-center text-gray-400 text-sm">
+                  <td colSpan={10} className="py-8 px-4 text-center text-gray-400 text-sm">
                     No tickets match the current filter.
                   </td>
                 </tr>
