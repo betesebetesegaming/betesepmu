@@ -26,19 +26,6 @@ const getStatusColor = (status: DisplayStatus) => {
   }
 };
 
-const getFundingMeta = (ticket: Ticket) => {
-  const firstSelection = ticket.selections?.[0];
-  const bonusStake = Number(firstSelection?.bonusStakeAmount || 0);
-  const cashStake = Number(firstSelection?.cashStakeAmount ?? Math.max(0, Number(ticket.totalCost || 0) - bonusStake));
-  const source = firstSelection?.fundingSource || (bonusStake > 0 ? (cashStake > 0 ? 'mixed' : 'bonus') : 'cash');
-  return {
-    bonusStake,
-    cashStake,
-    source,
-    label: source === 'bonus' ? 'Bonus' : source === 'mixed' ? 'Mixed' : 'Cash',
-  } as const;
-};
-
 const getWalletFlowLabel = (ticket: Ticket, displayStatus: DisplayStatus): string => {
   if (ticket.customerId) {
     if (displayStatus === 'Paid') {
@@ -255,7 +242,6 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                 <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Race number</th>
                 <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Bet time</th>
                 <th className="text-center py-1.5 px-3 font-semibold text-gray-700 border-r border-gray-300">Bet</th>
-                <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Funding Source</th>
                 <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Winnings Amount</th>
                 <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Result</th>
                 <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Wallet Flow</th>
@@ -266,7 +252,6 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
             <tbody>
               {filteredTickets.length > 0 ? (
                 filteredTickets.map((ticket, rowIdx) => {
-                  const funding = getFundingMeta(ticket);
                   const displayStatus = getDisplayStatus(ticket);
                   const recalculatedWinnings = Number(recalculatedWinningsByTicket.get(ticket.id) ?? ticket.winnings ?? 0);
                   const hasWinnings = recalculatedWinnings > 0;
@@ -322,17 +307,6 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                               {formatBetLabel(sel.betType)} - {formatBetNumbers(sel)} - {sel.multiplier} ticket(s) {(sel.cost * sel.multiplier).toFixed(0)} GMD
                             </div>
                           ))}
-                        </div>
-                      </td>
-
-                      {/* Funding */}
-                      <td className="py-3 px-4 align-top text-xs whitespace-nowrap border-r border-gray-200">
-                        <div className="space-y-0.5">
-                          <span className={`inline-block px-2 py-0.5 rounded-full font-black ${funding.source === 'bonus' ? 'bg-amber-100 text-amber-700' : funding.source === 'mixed' ? 'bg-indigo-100 text-indigo-700' : 'bg-green-100 text-green-700'}`}>
-                            {funding.label}
-                          </span>
-                          {funding.bonusStake > 0 && <div className="text-[10px] text-amber-700 font-bold">Bonus: {funding.bonusStake.toFixed(2)}</div>}
-                          {funding.cashStake > 0 && <div className="text-[10px] text-green-700 font-bold">Cash: {funding.cashStake.toFixed(2)}</div>}
                         </div>
                       </td>
 
@@ -406,7 +380,7 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                 })
               ) : (
                 <tr>
-                  <td colSpan={10} className="py-8 px-4 text-center text-gray-400 text-sm">
+                  <td colSpan={9} className="py-8 px-4 text-center text-gray-400 text-sm">
                     No tickets match the current filter.
                   </td>
                 </tr>
