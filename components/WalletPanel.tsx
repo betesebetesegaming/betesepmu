@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { User, WithdrawalRequest, DepositRequest, Ticket } from '../types';
 import { useLanguage } from '../LanguageContext';
 import { WithdrawalCodeModal } from './WithdrawalCodeModal';
+import { normalizeGambiaPhone } from '../utils';
 
 interface WalletPanelProps {
   user: User;
@@ -101,11 +102,17 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
           setDepositMessage('Please enter the phone number you sent the payment from.');
           return;
       }
+
+      const normalizedSenderPhone = normalizeGambiaPhone(depositPhone);
+      if (!normalizedSenderPhone) {
+          setDepositMessage('Phone must be in this format: +220XXXXXXX (7 digits after +220).');
+          return;
+      }
       
       // Passing phone number as transactionId for now as per requirements
-      onDepositRequest(depositAmount, depositMethod, depositPhone);
+      onDepositRequest(depositAmount, depositMethod, normalizedSenderPhone);
       
-      setLastDepositData({ amount: depositAmount, method: depositMethod, phone: depositPhone });
+      setLastDepositData({ amount: depositAmount, method: depositMethod, phone: normalizedSenderPhone });
       setDepositMessage(t('success_deposit'));
       setDepositAmount('');
       setDepositPhone('');
@@ -287,7 +294,7 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
                         value={depositPhone} 
                         onChange={e => setDepositPhone(e.target.value)} 
                         className="w-full p-2 border border-gray-300 rounded-md"
-                        placeholder="e.g., 77....."
+                                                placeholder="e.g., +2207793854"
                         required
                       />
                   </div>

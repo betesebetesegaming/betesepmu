@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, Role } from '../types';
 import { PasswordResetModal } from './PasswordResetModal';
+import { normalizeGambiaPhone } from '../utils';
 
 type FilterRole = Role | 'All';
 
@@ -79,7 +80,16 @@ export const UserAccountManagement: React.FC<UserAccountManagementProps> = ({ us
             return;
         }
 
-        onAddUser(newUserName, newUserRole, newUserRole === 'Customer' ? newUserPhone : undefined, newUserPassword);
+        const normalizedCustomerPhone = newUserRole === 'Customer'
+            ? normalizeGambiaPhone(newUserPhone)
+            : null;
+
+        if (newUserRole === 'Customer' && !normalizedCustomerPhone) {
+            setError('Phone format must be +220XXXXXXX (7 digits after +220).');
+            return;
+        }
+
+        onAddUser(newUserName, newUserRole, newUserRole === 'Customer' ? normalizedCustomerPhone || undefined : undefined, newUserPassword);
         setNewUserName('');
         setNewUserRole(availableRoles[0]);
         setNewUserPhone('');
@@ -136,7 +146,7 @@ export const UserAccountManagement: React.FC<UserAccountManagementProps> = ({ us
                      {newUserRole === 'Customer' && (
                         <input
                             type="tel"
-                            placeholder="Phone Number (required for Customers)"
+                            placeholder="Phone Number (+220XXXXXXX)"
                             value={newUserPhone}
                             onChange={e => setNewUserPhone(e.target.value)}
                             className="p-2 border rounded md:col-span-3"

@@ -14,7 +14,7 @@ import {
     BetSelection,
     WithdrawalRequest
 } from './types';
-import { calculateTicketWinnings, validateTicketForPlacement } from './utils';
+import { calculateTicketWinnings, validateTicketForPlacement, normalizeGambiaPhone } from './utils';
 
 // Safely retrieve environment variables
 const getEnvVar = (key: string): string | undefined => {
@@ -604,11 +604,33 @@ export const dbFetchLiveTickets = async (user: User): Promise<Ticket[]> => {
 
 export const dbAddUser = async (user: User) => {
     if (!supabase) throw new Error("Database not connected");
+
+    const normalizedCustomerPhone = user.role === 'Customer'
+        ? normalizeGambiaPhone(user.phone || '')
+        : null;
+
+    if (user.role === 'Customer' && !normalizedCustomerPhone) {
+        throw new Error('Customer phone must be valid: +220XXXXXXX (7 digits after +220).');
+    }
+
+    if (normalizedCustomerPhone) {
+        const { data: existingRows, error: duplicateCheckError } = await supabase
+            .from('users')
+            .select('id')
+            .eq('phone', normalizedCustomerPhone)
+            .limit(1);
+
+        if (duplicateCheckError) throw duplicateCheckError;
+        if ((existingRows || []).length > 0) {
+            throw new Error('Phone number already exists. Duplicate customer accounts are blocked.');
+        }
+    }
+
     const { error } = await supabase.from('users').insert({
-        id: user.id,
+        id: user.role === 'Customer' ? (normalizedCustomerPhone || user.id) : user.id,
         name: user.name,
         role: user.role,
-        phone: user.phone || null,
+        phone: normalizedCustomerPhone,
         password: user.password,
         wallet_balance: user.walletBalance || 0,
         bonus_balance: user.bonusBalance || 0,

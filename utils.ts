@@ -25,6 +25,29 @@ export const parseWinningNumbersFromString = (str: string): number[] => {
         .filter(n => !isNaN(n));
 };
 
+export const normalizeGambiaPhone = (input: string): string | null => {
+    const raw = String(input || '').trim();
+    if (!raw) return null;
+
+    const digits = raw.replace(/\D/g, '');
+    let local = '';
+
+    if (digits.startsWith('220') && digits.length === 10) {
+        local = digits.slice(3);
+    } else if (digits.length === 7) {
+        local = digits;
+    } else {
+        return null;
+    }
+
+    if (!/^\d{7}$/.test(local)) return null;
+    return `+220${local}`;
+};
+
+export const isValidGambiaPhone = (input: string): boolean => {
+    return normalizeGambiaPhone(input) !== null;
+};
+
 export const SEVEN_DAYS_IN_MS = 7 * 24 * 60 * 60 * 1000;
 export const BETTING_CUTOFF_MS = 120000; // Strict 2 Minutes
 

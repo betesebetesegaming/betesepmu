@@ -1,5 +1,5 @@
 
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { BetSlip, BetTypeOption, Ticket, BetSelection, User, Role, WithdrawalRequest, Race, RaceResult, DepositLog, ChatMessage, ChatThread, Promotion, PromotionRule, DepositRequest, PaymentIntegrationConfig, ProgramImage, ManualBetOrder } from './types';
 import { BET_PRICING } from './constants';
 import { LoginScreen } from './components/LoginScreen';
@@ -14,7 +14,7 @@ import { WithdrawalCodeModal } from './components/WithdrawalCodeModal';
 import { TicketModal } from './components/TicketModal';
 import { ChatPanel } from './components/ChatSystem';
 import { EmergencyRecover } from './components/EmergencyRecover';
-import { SEVEN_DAYS_IN_MS, BETTING_CUTOFF_MS, validateTicketForPlacement } from './utils';
+import { SEVEN_DAYS_IN_MS, BETTING_CUTOFF_MS, validateTicketForPlacement, normalizeGambiaPhone } from './utils';
 import { LanguageProvider } from './LanguageContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { 
@@ -79,6 +79,7 @@ const AppContent: React.FC = () => {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [seenWinningTickets, setSeenWinningTickets] = useState<Set<string>>(new Set());
   const [paymentConfigs, setPaymentConfigs] = useState<PaymentIntegrationConfig[]>([]);
+    const duplicatePhoneLockInFlightRef = useRef(false);
 
   const [betSlip, setBetSlip] = useState<BetSlip>({ selections: [], totalCost: 0 });
   const [lastTicket, setLastTicket] = useState<Ticket | null>(null);
@@ -210,6 +211,38 @@ const AppContent: React.FC = () => {
       }).subscribe();
       return () => { supabase?.removeChannel(userSub); supabase?.removeChannel(ticketSub); supabase?.removeChannel(raceSub); };
   }, [currentUser?.id]);
+
+  useEffect(() => {
+      if (!supabase || duplicatePhoneLockInFlightRef.current) return;
+
+      const byPhone = new Map<string, User[]>();
+      (users || [])
+          .filter(u => u.role === 'Customer')
+          .forEach(u => {
+              const normalizedPhone = normalizeGambiaPhone(u.phone || '');
+              if (!normalizedPhone) return;
+              const bucket = byPhone.get(normalizedPhone) || [];
+              bucket.push(u);
+              byPhone.set(normalizedPhone, bucket);
+          });
+
+      const duplicateUsers = Array.from(byPhone.values())
+          .filter(group => group.length > 1)
+          .flat();
+
+      const idsToLock = duplicateUsers.filter(u => !u.isLocked).map(u => u.id);
+      if (idsToLock.length === 0) return;
+
+      duplicatePhoneLockInFlightRef.current = true;
+
+      // Immediately block duplicate-phone customers in UI while persisting lock in DB.
+      setUsers(prev => (prev || []).map(u => idsToLock.includes(u.id) ? { ...u, isLocked: true } : u));
+      setCurrentUser(prev => prev && idsToLock.includes(prev.id) ? { ...prev, isLocked: true } : prev);
+
+      void Promise.all(idsToLock.map((id) => dbToggleUserLock(id, true).catch(() => null))).finally(() => {
+          duplicatePhoneLockInFlightRef.current = false;
+      });
+  }, [users]);
 
   useEffect(() => { const interval = setInterval(() => setEffectiveTime(new Date()), 1000); return () => clearInterval(interval); }, []);
 
@@ -456,7 +489,33 @@ const AppContent: React.FC = () => {
             return { success: false, bonusApplied: 0 };
         }
 
+        if (normalizedAmount < 0 && currentUser.role !== 'Admin') {
+            alert('Only Admin can remove money from customer wallet.');
+            return { success: false, bonusApplied: 0 };
+        }
+
         if (normalizedAmount < 0 && (cust.walletBalance || 0) < Math.abs(normalizedAmount)) {
+            return { success: false, bonusApplied: 0 };
+        }
+
+        const customerPhone = normalizeGambiaPhone(cust.phone || '');
+        const hasDuplicatePhone = !!customerPhone && (users || []).some(u =>
+            u.role === 'Customer' &&
+            u.id !== cust.id &&
+            normalizeGambiaPhone(u.phone || '') === customerPhone
+        );
+
+        if (hasDuplicatePhone) {
+            if (supabase && !cust.isLocked) {
+                try {
+                    await dbToggleUserLock(cust.id, true);
+                } catch (e) {
+                    console.error('Failed to auto-lock duplicate phone account', e);
+                }
+            }
+            setUsers(prev => (prev || []).map(u => u.id === cust.id ? { ...u, isLocked: true } : u));
+            if (currentUser.id === cust.id) setCurrentUser(prev => prev ? { ...prev, isLocked: true } : prev);
+            alert('This customer is blocked: phone number is duplicated across accounts.');
             return { success: false, bonusApplied: 0 };
         }
 
@@ -534,6 +593,11 @@ const AppContent: React.FC = () => {
 
   const handleCreateDepositRequest = async (amount: number, method: 'Wave' | 'AfriMoney', phone: string) => {
     if (!currentUser) return;
+        const normalizedPhone = normalizeGambiaPhone(phone || '');
+        if (!normalizedPhone) {
+                alert('Use a valid sender phone in this format: +220XXXXXXX (7 digits after +220).');
+                return;
+        }
     const normalizedAmount = Number(amount.toFixed(2));
     const newRequest: DepositRequest = {
         id: Math.floor(10000000 + Math.random() * 90000000).toString(),
@@ -541,7 +605,7 @@ const AppContent: React.FC = () => {
         customerName: currentUser.name, // Added missing property
         amount: normalizedAmount,
         method,
-        transactionId: phone,
+        transactionId: normalizedPhone,
         status: 'Pending',
         timestamp: effectiveTime
     };
@@ -836,12 +900,37 @@ const AppContent: React.FC = () => {
   };
 
   const addUser = async (name: string, role: Role, phone?: string, password?: string) => {
+    const normalizedPhone = role === 'Customer' ? normalizeGambiaPhone(phone || '') : undefined;
+    if (role === 'Customer' && !normalizedPhone) {
+        alert('Customer phone must be valid: +220XXXXXXX (7 digits after +220).');
+        return null;
+    }
+
+    if (role === 'Customer' && normalizedPhone) {
+        const duplicate = (users || []).find(u =>
+            u.role === 'Customer' && normalizeGambiaPhone(u.phone || '') === normalizedPhone
+        );
+
+        if (duplicate) {
+            if (supabase && !duplicate.isLocked) {
+                try {
+                    await dbToggleUserLock(duplicate.id, true);
+                } catch (e) {
+                    console.error('Failed to lock duplicate phone account', e);
+                }
+            }
+            setUsers(prev => (prev || []).map(u => u.id === duplicate.id ? { ...u, isLocked: true } : u));
+            alert('Duplicate phone detected. Account creation blocked and duplicate account locked for review.');
+            return null;
+        }
+    }
+
     const newUser: User = {
-      id: role === 'Customer' ? (phone || Math.floor(10000000 + Math.random() * 90000000).toString()) : (role.toUpperCase().slice(0, 3) + '-' + name.toUpperCase()),
+      id: role === 'Customer' ? (normalizedPhone || Math.floor(10000000 + Math.random() * 90000000).toString()) : (role.toUpperCase().slice(0, 3) + '-' + name.toUpperCase()),
       name,
       role,
       isLocked: false,
-      phone,
+      phone: normalizedPhone,
       password: password || 'password',
       walletBalance: 0,
       bonusBalance: 0,

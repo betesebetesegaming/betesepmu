@@ -27,6 +27,7 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
   
   // Correction Mode Toggle
   const [isCorrectionMode, setIsCorrectionMode] = useState(false);
+    const canUseCorrection = currentUserRole === 'Admin';
 
   // Ensure Vendors never see the requests tab even if state drifts
   useEffect(() => {
@@ -34,6 +35,12 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
           setActiveTab('manual');
       }
   }, [currentUserRole, activeTab]);
+
+  useEffect(() => {
+      if (!canUseCorrection && isCorrectionMode) {
+          setIsCorrectionMode(false);
+      }
+  }, [canUseCorrection, isCorrectionMode]);
 
   const filteredCustomers = useMemo(() => {
     if (!searchTerm) return [];
@@ -71,6 +78,11 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
     e.preventDefault();
     setSuccessMessage('');
     const numericAmount = Number(amount);
+
+        if (isCorrectionMode && !canUseCorrection) {
+            setSuccessMessage('Error: only Admin can remove money from customer wallet.');
+            return;
+        }
     
     if (selectedCustomer && numericAmount > 0) {
       // If correction mode, flip amount to negative and set method to 'Correction'
@@ -216,13 +228,15 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
                             >
                                 + DEPOSIT
                             </button>
-                            <button
-                                type="button"
-                                onClick={() => setIsCorrectionMode(true)}
-                                className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${isCorrectionMode ? 'bg-red-600 text-white shadow' : 'text-gray-500 hover:bg-gray-100'}`}
-                            >
-                                - CORRECTION
-                            </button>
+                            {canUseCorrection && (
+                                <button
+                                    type="button"
+                                    onClick={() => setIsCorrectionMode(true)}
+                                    className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${isCorrectionMode ? 'bg-red-600 text-white shadow' : 'text-gray-500 hover:bg-gray-100'}`}
+                                >
+                                    - CORRECTION (ADMIN)
+                                </button>
+                            )}
                         </div>
                     </div>
 
