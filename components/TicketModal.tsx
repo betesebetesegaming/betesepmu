@@ -85,6 +85,10 @@ export const TicketModal: React.FC<TicketModalProps> = ({ ticket, onClose, showP
     <div className="text-black bg-white c font-mono leading-tight text-center">
       <div className="text-base b border-y border-black py-0.5 uppercase">Paid Receipt</div>
       <p className="b text-[8px] my-0.5">REF: #{ticket.id}</p>
+      <div className="my-1 border-2 border-red-700 bg-red-50 text-red-800 py-1">
+        <p className="text-2xl b tracking-widest leading-none">PAID</p>
+        <p className="text-[8px] font-bold uppercase">Do Not Pay Again</p>
+      </div>
       
       <div className="my-1 border border-black p-1 bg-gray-50">
         <p className="b text-[7px] uppercase">Winning Amount Paid:</p>
@@ -101,6 +105,9 @@ export const TicketModal: React.FC<TicketModalProps> = ({ ticket, onClose, showP
       <div className="flex b text-[7px] mt-1 px-1 justify-between">
         <span>PAID BY:{ticket.paidByName || ticket.paidById || 'SYSTEM'}</span>
         <span>{ticket.paidAt?.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+      </div>
+      <div className="b text-[7px] px-1 text-left uppercase">
+        Date: {ticket.paidAt?.toLocaleDateString([], { day: '2-digit', month: '2-digit', year: 'numeric' }) || 'N/A'}
       </div>
 
       <div className="border-b border-dashed border-black mt-1 mb-1"></div>
