@@ -85,6 +85,25 @@ export const TicketCombinationLedger: React.FC<TicketCombinationLedgerProps> = (
   const [filterTicketNumber, setFilterTicketNumber] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<LedgerFilterStatus>('All');
 
+  const getTicketStatusLabel = (status: Ticket['status']) => {
+    if (status === 'Active') return 'Awaiting Result';
+    if (status === 'Winning') return 'Awaiting Cashier Payout';
+    if (status === 'Booked') return 'Booking Pending Payment';
+    if (status === 'Paid') return 'Paid';
+    if (status === 'Lost') return 'Lost';
+    if (status === 'Canceled') return 'Canceled';
+    return status;
+  };
+
+  const getSelectionOutcomeLabel = (row: LedgerRow) => {
+    if (row.selectionStatus === 'Win') return 'Winning';
+    if (row.selectionStatus === 'Loss') return 'Lost';
+    if (row.selectionStatus === 'Pending') return 'Awaiting Result';
+    if (row.selectionStatus === 'Booked') return 'Booking Pending Payment';
+    if (row.selectionStatus === 'Canceled') return 'Canceled';
+    return getTicketStatusLabel(row.status);
+  };
+
   const raceById = useMemo(() => new Map(races.map(race => [race.id, race])), [races]);
   const now = new Date();
 
@@ -275,10 +294,10 @@ export const TicketCombinationLedger: React.FC<TicketCombinationLedgerProps> = (
               className="w-full p-2 border rounded bg-white text-sm"
             >
               <option value="All">All</option>
-              <option value="Active">Active</option>
-              <option value="Winning">Winning</option>
+              <option value="Active">Awaiting Result</option>
+              <option value="Winning">Awaiting Cashier Payout</option>
               <option value="Lost">Lost</option>
-              <option value="Booked">Booked</option>
+              <option value="Booked">Booking Pending Payment</option>
               <option value="Paid">Paid</option>
               <option value="Canceled">Canceled</option>
             </select>
@@ -397,7 +416,7 @@ export const TicketCombinationLedger: React.FC<TicketCombinationLedgerProps> = (
                                         ? 'bg-gray-100 text-gray-600'
                                         : 'bg-amber-100 text-amber-700'
                               }`}>
-                                {row.selectionStatus === 'Pending' ? 'Pending' : row.selectionStatus === 'Booked' ? 'Booked' : row.selectionStatus === 'Canceled' ? 'Canceled' : row.selectionStatus === 'Win' ? 'Winning' : 'Lost'}
+                                {getSelectionOutcomeLabel(row)}
                               </span>
                             </td>
                             <td className="py-3 px-3 text-right text-xs font-semibold text-gray-700 align-top">

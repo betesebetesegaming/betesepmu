@@ -79,6 +79,24 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
     const [raceDateSearch, setRaceDateSearch] = useState<string>('');
     const [selectedRaceDate, setSelectedRaceDate] = useState<string>('');
     const [expandedRaceId, setExpandedRaceId] = useState<string | null>(null);
+
+    const getStatusLabel = (status: Ticket['status']): string => {
+        if (status === 'Active') return 'Awaiting Result';
+        if (status === 'Winning') return 'Awaiting Cashier Payout';
+        if (status === 'Booked') return 'Booking Pending Payment';
+        if (status === 'Paid') return 'Paid';
+        if (status === 'Lost') return 'Lost';
+        if (status === 'Canceled') return 'Canceled';
+        return status;
+    };
+
+    const getSelectionOutcomeLabel = (row: CombinationLedgerRow): string => {
+        if (row.selectionStatus === 'Win') return 'Winning';
+        if (row.selectionStatus === 'Loss') return 'Lost';
+        if (row.status === 'Active') return 'Awaiting Result';
+        if (row.status === 'Booked') return 'Booking Pending Payment';
+        return getStatusLabel(row.status);
+    };
     
     const raceNameMap = useMemo(() => new Map(races.map(r => [r.id, r.name])), [races]);
 
@@ -627,10 +645,10 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
                         <select value={ledgerFilterStatus} onChange={e => setLedgerFilterStatus(e.target.value as Ticket['status'] | 'All')}
                             className="w-full p-2 border rounded bg-white text-sm">
                             <option value="All">All</option>
-                            <option value="Active">Active</option>
-                            <option value="Winning">Winning</option>
+                            <option value="Active">Awaiting Result</option>
+                            <option value="Winning">Awaiting Cashier Payout</option>
                             <option value="Lost">Lost</option>
-                            <option value="Booked">Booked</option>
+                            <option value="Booked">Booking Pending Payment</option>
                             <option value="Paid">Paid</option>
                             <option value="Canceled">Canceled</option>
                         </select>
@@ -731,7 +749,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
                                                                         ? 'bg-amber-100 text-amber-700'
                                                                         : 'bg-gray-100 text-gray-700'
                                                         }`}>
-                                                            {row.selectionStatus === 'Win' ? 'Winning' : row.selectionStatus === 'Loss' ? 'Lost' : row.status}
+                                                            {getSelectionOutcomeLabel(row)}
                                                         </span>
                                                     </div>
                                                 ))}</div>

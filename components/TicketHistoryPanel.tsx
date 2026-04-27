@@ -17,6 +17,17 @@ const TicketItem: React.FC<{ ticket: Ticket; isCancellable: boolean; onCancel: (
     
     const effectiveStatus = getEffectiveTicketStatus(ticket, effectiveTime);
 
+    const getStatusLabel = (status: typeof effectiveStatus) => {
+        if (status === 'Active') return 'Awaiting Result';
+        if (status === 'Winning') return 'Awaiting Cashier Payout';
+        if (status === 'Booked') return 'Booking Pending Payment';
+        if (status === 'Paid') return 'Paid';
+        if (status === 'Lost') return 'Lost';
+        if (status === 'Canceled') return 'Canceled';
+        if (status === 'Expired') return 'Expired';
+        return status;
+    };
+
     const getStatusStyles = () => {
         switch(effectiveStatus) {
             case 'Winning': return 'bg-blue-50 border-blue-200 text-blue-800';
@@ -36,7 +47,7 @@ const TicketItem: React.FC<{ ticket: Ticket; isCancellable: boolean; onCancel: (
                 <div>
                     <p className="text-xs">{ticket.id}{ticket.bookingCode && ` (${ticket.bookingCode})`}</p>
                     <p className="font-bold text-lg">{ticket.totalCost.toFixed(2)} GMD</p>
-                    <p className={`text-sm font-semibold`}>{effectiveStatus}</p>
+                    <p className={`text-sm font-semibold`}>{getStatusLabel(effectiveStatus)}</p>
                     {ticket.winnings !== undefined && ticket.winnings > 0 && (
                         <p className="text-sm font-bold text-blue-600">Won: {ticket.winnings.toFixed(2)} GMD</p>
                     )}
@@ -167,7 +178,7 @@ export const TicketHistoryPanel: React.FC<TicketHistoryPanelProps> = ({ tickets,
                     <p className="text-lg font-black text-betese-dark">{tickets.length}</p>
                 </div>
                 <div className="p-3 rounded-lg border bg-green-50">
-                    <p className="text-[10px] uppercase font-bold text-gray-500">Active</p>
+                    <p className="text-[10px] uppercase font-bold text-gray-500">Awaiting Result</p>
                     <p className="text-lg font-black text-green-700">{historySummary.activeCount}</p>
                 </div>
                 <div className="p-3 rounded-lg border bg-blue-50">
