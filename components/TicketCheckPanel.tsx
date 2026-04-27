@@ -80,6 +80,16 @@ export const TicketCheckPanel: React.FC<TicketCheckPanelProps> = ({ allTickets, 
     onReprintTicket(foundTicket);
   };
 
+  const getStatusLabel = (status: Ticket['status']) => {
+    if (status === 'Active') return 'Awaiting Result';
+    if (status === 'Winning') return 'Awaiting Cashier Payout';
+    if (status === 'Booked') return 'Booking Pending Payment';
+    if (status === 'Paid') return 'Paid';
+    if (status === 'Lost') return 'Lost';
+    if (status === 'Canceled') return 'Canceled';
+    return status;
+  };
+
   return (
     <div className="bg-white p-6 rounded-2xl shadow-lg border-t-4 border-orange-500">
       <h3 className="text-xl font-black text-gray-800 uppercase mb-4 flex items-center gap-2">
@@ -127,7 +137,7 @@ export const TicketCheckPanel: React.FC<TicketCheckPanelProps> = ({ allTickets, 
                   <p className="text-gray-500 font-bold uppercase text-[10px]">Booking Code:</p>
                   <p className="font-black text-right font-mono">{foundTicket.bookingCode || '---'}</p>
                     <p className="text-gray-500 font-bold uppercase text-[10px]">Status:</p>
-                    <p className={`font-black text-right uppercase ${foundTicket.status === 'Winning' ? 'text-blue-600' : 'text-gray-800'}`}>{foundTicket.status}</p>
+                    <p className={`font-black text-right uppercase ${foundTicket.status === 'Winning' ? 'text-blue-600' : foundTicket.status === 'Lost' ? 'text-red-600' : 'text-gray-800'}`}>{getStatusLabel(foundTicket.status)}</p>
                     <p className="text-gray-500 font-bold uppercase text-[10px]">Cost:</p>
                     <p className="font-black text-right">{foundTicket.totalCost.toFixed(2)}</p>
                     {foundTicket.status === 'Paid' && (foundTicket.paidByName || foundTicket.paidById) && (

@@ -26,6 +26,33 @@ const getStatusColor = (status: DisplayStatus) => {
   }
 };
 
+const getDisplayStatusLabel = (ticket: Ticket, status: DisplayStatus): string => {
+  if (status === 'Active') return 'Awaiting Result';
+  if (status === 'Winning') return 'Awaiting Cashier Payout';
+  if (status === 'Booked') return 'Booking Pending Payment';
+  if (status === 'Paid') return ticket.customerId ? 'Paid' : 'Paid';
+  if (status === 'Lost') return 'Lost';
+  if (status === 'Canceled') return 'Canceled';
+  return status;
+};
+
+const getStatusChipClass = (status: DisplayStatus) => {
+  switch (status) {
+    case 'Winning':
+      return 'bg-blue-100 text-blue-700 border-blue-300';
+    case 'Paid':
+      return 'bg-purple-100 text-purple-700 border-purple-300';
+    case 'Lost':
+      return 'bg-red-100 text-red-700 border-red-300';
+    case 'Canceled':
+      return 'bg-gray-100 text-gray-600 border-gray-300';
+    case 'Booked':
+      return 'bg-yellow-100 text-yellow-700 border-yellow-300';
+    default:
+      return 'bg-slate-100 text-slate-700 border-slate-300';
+  }
+};
+
 const getWalletFlowLabel = (ticket: Ticket, displayStatus: DisplayStatus): string => {
   if (ticket.customerId) {
     if (displayStatus === 'Paid') {
@@ -279,11 +306,11 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
               <tr className="bg-gradient-to-b from-green-100 to-green-50 border-b border-gray-300">
                 <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Ticket number</th>
                 <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Race number</th>
-                <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Bet time</th>
+                <th className="hidden lg:table-cell text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Bet time</th>
                 <th className="text-center py-1.5 px-3 font-semibold text-gray-700 border-r border-gray-300">Bet</th>
                 <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Winnings Amount</th>
                 <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Result</th>
-                <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Wallet Flow</th>
+                <th className="hidden md:table-cell text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Wallet Flow</th>
                 <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Status</th>
                 <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap">Options</th>
               </tr>
@@ -327,7 +354,7 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                       </td>
 
                       {/* Race number */}
-                      <td className="py-3 px-4 align-top text-xs text-gray-700 whitespace-nowrap border-r border-gray-200">
+                      <td className="py-3 px-4 align-top text-xs text-gray-700 border-r border-gray-200 min-w-[170px]">
                         {raceInfo.map((item, i) => (
                           <div key={i} className="mb-1 last:mb-0">
                             <div className="font-semibold">{item.time ? `${item.label} (${item.time})` : item.label}</div>
@@ -336,17 +363,17 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                       </td>
 
                       {/* Bet time */}
-                      <td className="py-3 px-4 align-top text-xs text-gray-600 whitespace-nowrap border-r border-gray-200">
+                      <td className="hidden lg:table-cell py-3 px-4 align-top text-xs text-gray-600 whitespace-nowrap border-r border-gray-200">
                         {formatDate(ticket.timestamp)}
                       </td>
 
                       {/* Bet combinations — full-width inline boxes */}
-                      <td className="py-1.5 px-2 align-top border-r border-gray-200">
+                      <td className="py-1.5 px-2 align-top border-r border-gray-200 min-w-[220px]">
                         <div className="">
                           {ticket.selections.map((sel, i) => (
                             <div
                               key={i}
-                              className="text-xs text-gray-700 border border-gray-300 px-2 py-1 bg-white leading-snug w-full"
+                              className="text-xs text-gray-700 border border-gray-300 px-2 py-1 bg-white leading-snug w-full break-words"
                             >
                               {formatBetLabel(sel.betType)} - {formatBetNumbers(sel)} - {sel.multiplier} ticket(s) {(sel.cost * sel.multiplier).toFixed(0)} GMD
                             </div>
@@ -366,14 +393,14 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                       </td>
 
                       {/* Result */}
-                      <td className="py-3 px-4 align-top text-xs font-semibold border-r border-gray-200 min-w-[220px]">
+                      <td className="py-3 px-4 align-top text-xs font-semibold border-r border-gray-200 min-w-[200px] max-w-[260px]">
                         <span className={`${displayStatus === 'Winning' || displayStatus === 'Paid' ? 'text-blue-700' : displayStatus === 'Lost' ? 'text-red-600' : 'text-gray-500'}`}>
                           {resultNumbers}
                         </span>
                       </td>
 
                       {/* Wallet flow */}
-                      <td className="py-3 px-4 align-top text-xs font-semibold whitespace-nowrap border-r border-gray-200">
+                      <td className="hidden md:table-cell py-3 px-4 align-top text-xs font-semibold whitespace-nowrap border-r border-gray-200">
                         <span className={`${displayStatus === 'Paid' ? (ticket.customerId && ticket.paidByName === 'System Bonus Credit' ? 'text-amber-700' : 'text-blue-700') : 'text-gray-500'}`}>
                           {getWalletFlowLabel(ticket, displayStatus)}
                         </span>
@@ -382,10 +409,12 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                       {/* Status */}
                       <td className={`py-3 px-4 align-top text-xs font-semibold whitespace-nowrap border-r border-gray-200 ${getStatusColor(displayStatus)}`}>
                         <div className="space-y-0.5">
-                          <span>{displayStatus}</span>
+                          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 font-black ${getStatusChipClass(displayStatus)}`}>
+                            {getDisplayStatusLabel(ticket, displayStatus)}
+                          </span>
                           {displayStatus === 'Paid' && (
                             ticket.customerId
-                              ? <div className="text-[10px] font-bold text-gray-400 uppercase">Auto</div>
+                              ? <div className="text-[10px] font-bold text-gray-400 uppercase">Auto Credit</div>
                               : <div className="text-[10px] font-black text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded mt-0.5 whitespace-nowrap">
                                   ✓ {ticket.paidByName || ticket.paidById || 'Unknown'}
                                 </div>
