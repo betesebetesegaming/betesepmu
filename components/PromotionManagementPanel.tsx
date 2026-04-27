@@ -11,6 +11,25 @@ interface PromotionManagementPanelProps {
     onDeletePromotion: (id: string) => void;
 }
 
+const normalizeRules = (rules: PromotionRule[]): PromotionRule[] => {
+    const cleaned = rules
+        .map(rule => ({
+            depositAmount: Number(Number(rule.depositAmount || 0).toFixed(2)),
+            bonusAmount: Number(Number(rule.bonusAmount || 0).toFixed(2)),
+        }))
+        .filter(rule => rule.depositAmount > 0 && rule.bonusAmount > 0);
+
+    const byDeposit = new Map<number, number>();
+    cleaned.forEach(rule => {
+        const prev = byDeposit.get(rule.depositAmount) || 0;
+        if (rule.bonusAmount > prev) byDeposit.set(rule.depositAmount, rule.bonusAmount);
+    });
+
+    return Array.from(byDeposit.entries())
+        .sort((a, b) => a[0] - b[0])
+        .map(([depositAmount, bonusAmount]) => ({ depositAmount, bonusAmount }));
+};
+
 const PromotionEditor: React.FC<{ 
     promotion: Promotion; 
     index: number;
@@ -23,36 +42,59 @@ const PromotionEditor: React.FC<{
     const [isEditing, setIsEditing] = useState(false);
     const [name, setName] = useState<string>(promotion.name);
     const [rules, setRules] = useState<PromotionRule[]>(promotion.rules);
+    const [error, setError] = useState<string>('');
 
     useEffect(() => {
         setRules(promotion.rules);
         setName(promotion.name);
+        setError('');
     }, [promotion.rules, promotion.name]);
 
     const handleRuleChange = (index: number, field: keyof PromotionRule, value: string) => {
-        const numericValue = parseInt(value, 10) || 0;
+        const numericValue = Number(value);
         const newRules = [...rules];
-        newRules[index] = { ...newRules[index], [field]: numericValue };
+        newRules[index] = { ...newRules[index], [field]: Number.isFinite(numericValue) ? numericValue : 0 };
         setRules(newRules);
+        if (error) setError('');
     };
 
     const handleAddRule = () => {
         setRules([...rules, { depositAmount: 0, bonusAmount: 0 }]);
+        if (error) setError('');
     };
 
     const handleDeleteRule = (index: number) => {
         setRules(rules.filter((_, i) => i !== index));
+        if (error) setError('');
     };
 
     const handleSave = () => {
-        onUpdatePromotion(promotion.id, name, rules);
+        const trimmedName = name.trim();
+        if (!trimmedName) {
+            setError('Promotion name cannot be empty.');
+            return;
+        }
+
+        const normalized = normalizeRules(rules);
+        if (rules.length > 0 && normalized.length === 0) {
+            setError('Rules must have deposit and bonus greater than 0.');
+            return;
+        }
+        if (promotion.type === 'first-deposit' && normalized.length === 0) {
+            setError('First-deposit promotion requires at least one bonus rule.');
+            return;
+        }
+
+        onUpdatePromotion(promotion.id, trimmedName, normalized);
         setIsEditing(false);
+        setError('');
     };
 
     const handleCancel = () => {
         setRules(promotion.rules);
         setName(promotion.name);
         setIsEditing(false);
+        setError('');
     }
 
     return (
@@ -106,7 +148,11 @@ const PromotionEditor: React.FC<{
                         {!isEditing ? (
                             <div className="flex gap-2">
                                 <button onClick={() => setIsEditing(true)} className="px-4 py-2 text-sm bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700">Edit</button>
-                                <button onClick={() => onDelete(promotion.id)} className="p-2 text-red-600 hover:bg-red-100 rounded-lg" title="Delete Promotion">
+                                <button onClick={() => {
+                                    if (window.confirm(`Delete promotion "${promotion.name}"? This cannot be undone.`)) {
+                                        onDelete(promotion.id);
+                                    }
+                                }} className="p-2 text-red-600 hover:bg-red-100 rounded-lg" title="Delete Promotion">
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
                                 </button>
                             </div>
@@ -156,6 +202,14 @@ const PromotionEditor: React.FC<{
                             <span>+</span> Add New Rule
                         </button>
                     )}
+                    {error && (
+                        <div className="mt-2 p-2 rounded border border-red-200 bg-red-50 text-xs font-bold text-red-700">
+                            {error}
+                        </div>
+                    )}
+                    {!isEditing && rules.length > 1 && (
+                        <p className="text-[11px] text-gray-500">Rules are applied by highest matching deposit threshold.</p>
+                    )}
                 </div>
             </div>
         </div>
@@ -165,13 +219,19 @@ const PromotionEditor: React.FC<{
 const NewPromotionForm: React.FC<{ onCreate: (name: string, type: 'first-deposit' | 'weekly' | 'special') => void }> = ({ onCreate }) => {
     const [name, setName] = useState('');
     const [type, setType] = useState<'first-deposit' | 'weekly' | 'special'>('weekly');
+    const [error, setError] = useState('');
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if(!name.trim()) return;
-        onCreate(name, type);
+        const trimmedName = name.trim();
+        if(!trimmedName) {
+            setError('Promotion name is required.');
+            return;
+        }
+        onCreate(trimmedName, type);
         setName('');
         setType('weekly');
+        setError('');
     }
 
     return (
@@ -183,7 +243,7 @@ const NewPromotionForm: React.FC<{ onCreate: (name: string, type: 'first-deposit
                     <input 
                         type="text" 
                         value={name} 
-                        onChange={e => setName(e.target.value)}
+                        onChange={e => { setName(e.target.value); if (error) setError(''); }}
                         placeholder="e.g., Tuesday Special"
                         className="w-full p-2 border rounded"
                         required
@@ -205,16 +265,43 @@ const NewPromotionForm: React.FC<{ onCreate: (name: string, type: 'first-deposit
                     Add
                 </button>
             </div>
+            {error && (
+                <p className="mt-3 text-xs font-bold text-red-600">{error}</p>
+            )}
         </form>
     )
 }
 
 
 export const PromotionManagementPanel: React.FC<PromotionManagementPanelProps> = ({ promotions, onToggleStatus, onUpdatePromotion, onMovePromotion, onCreatePromotion, onDeletePromotion }) => {
+    const [notice, setNotice] = useState<string>('');
+
+    const handleCreate = (name: string, type: 'first-deposit' | 'weekly' | 'special') => {
+        const sameType = promotions.filter(p => p.type === type).length;
+        const duplicateName = promotions.some(p => p.name.trim().toLowerCase() === name.trim().toLowerCase());
+
+        if (duplicateName) {
+            setNotice('Promotion name already exists. Please use a different name.');
+            return;
+        }
+        if (type === 'first-deposit' && sameType > 0) {
+            setNotice('Only one first-deposit promotion is allowed. Edit the existing one instead.');
+            return;
+        }
+
+        onCreatePromotion(name.trim(), type);
+        setNotice('');
+    };
+
     return (
         <div className="bg-white p-6 rounded-lg shadow-lg">
             <h2 className="text-xl font-bold text-betese-dark mb-4">Bonus Promotions Management</h2>
             <p className="text-sm text-gray-600 mb-4">Manage your promotions here. Click <strong>Edit</strong> to add deposit bonus rules (e.g., Deposit 100 &rarr; Get 10 Bonus).</p>
+            {notice && (
+                <div className="mb-4 p-3 rounded-lg border border-amber-300 bg-amber-50 text-xs font-bold text-amber-700">
+                    {notice}
+                </div>
+            )}
             <div className="space-y-4">
                 {promotions.map((promo, index) => (
                     <PromotionEditor 
@@ -229,7 +316,7 @@ export const PromotionManagementPanel: React.FC<PromotionManagementPanelProps> =
                     />
                 ))}
             </div>
-            <NewPromotionForm onCreate={onCreatePromotion} />
+            <NewPromotionForm onCreate={handleCreate} />
         </div>
     );
 };

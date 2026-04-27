@@ -43,6 +43,25 @@ const normalizeRole = (role: unknown): Role => {
     return 'Customer';
 };
 
+const normalizePromotionRules = (rules: PromotionRule[]): PromotionRule[] => {
+    const cleaned = (rules || [])
+        .map(rule => ({
+            depositAmount: Number(Number(rule.depositAmount || 0).toFixed(2)),
+            bonusAmount: Number(Number(rule.bonusAmount || 0).toFixed(2)),
+        }))
+        .filter(rule => rule.depositAmount > 0 && rule.bonusAmount > 0);
+
+    const byDeposit = new Map<number, number>();
+    cleaned.forEach(rule => {
+        const prev = byDeposit.get(rule.depositAmount) || 0;
+        if (rule.bonusAmount > prev) byDeposit.set(rule.depositAmount, rule.bonusAmount);
+    });
+
+    return Array.from(byDeposit.entries())
+        .sort((a, b) => a[0] - b[0])
+        .map(([depositAmount, bonusAmount]) => ({ depositAmount, bonusAmount }));
+};
+
 const AppContent: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [users, setUsers] = useState<User[]>([]);
@@ -857,15 +876,28 @@ const AppContent: React.FC = () => {
   };
 
   const handleUpdatePromotion = async (promoId: string, newName: string, newRules: PromotionRule[]) => {
+      const trimmedName = (newName || '').trim();
+      if (!trimmedName) {
+          alert('Promotion name cannot be empty.');
+          return;
+      }
+
+      const currentPromo = promotions.find(p => p.id === promoId);
+      const normalizedRules = normalizePromotionRules(newRules);
+      if (currentPromo?.type === 'first-deposit' && normalizedRules.length === 0) {
+          alert('First-deposit promotion requires at least one valid bonus rule.');
+          return;
+      }
+
       if (supabase) {
           try {
-              await dbUpdatePromotion(promoId, newName, newRules);
+              await dbUpdatePromotion(promoId, trimmedName, normalizedRules);
           } catch (e: any) {
               alert("Failed to update promotion: " + e.message);
               return;
           }
       }
-      setPromotions(prev => prev.map(p => p.id === promoId ? { ...p, name: newName, rules: newRules } : p));
+      setPromotions(prev => prev.map(p => p.id === promoId ? { ...p, name: trimmedName, rules: normalizedRules } : p));
   };
 
   const handleMovePromotion = async (id: string, direction: 'up' | 'down') => {
@@ -893,9 +925,24 @@ const AppContent: React.FC = () => {
   };
 
   const handleCreatePromotion = async (name: string, type: 'first-deposit' | 'weekly' | 'special') => {
+      const trimmedName = (name || '').trim();
+      if (!trimmedName) {
+          alert('Promotion name is required.');
+          return;
+      }
+      const duplicateName = promotions.some(p => p.name.trim().toLowerCase() === trimmedName.toLowerCase());
+      if (duplicateName) {
+          alert('Promotion name already exists.');
+          return;
+      }
+      if (type === 'first-deposit' && promotions.some(p => p.type === 'first-deposit')) {
+          alert('Only one first-deposit promotion is allowed. Edit the existing one instead.');
+          return;
+      }
+
       const promo: Promotion = {
           id: `promo-${Date.now()}`,
-          name,
+          name: trimmedName,
           type,
           isActive: true,
           rules: []
