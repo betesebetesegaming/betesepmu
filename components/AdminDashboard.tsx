@@ -61,7 +61,7 @@ interface AdminDashboardProps {
     onLockAllVendors: () => void;
     onAddUser: (name: string, role: Role, phone?: string, password?: string) => void;
     onDeposit: (customerId: string, amount: number, method: string) => Promise<{ success: boolean; bonusApplied: number | null }>;
-    onAdminAdjustBalance: (customerId: string, walletDelta: number, bonusDelta: number, note: string) => Promise<{ success: boolean; message: string }>;
+    onAdminAdjustBalance: (customerId: string, walletDelta: number, bonusDelta: number, note: string, approvalPin: string) => Promise<{ success: boolean; message: string }>;
     onSaveRaceResult: (result: RaceResult) => Promise<boolean>;
     onUpdateNonRunners: (raceId: string, nonRunners: number[]) => void;
     depositLogs: DepositLog[];

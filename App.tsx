@@ -707,9 +707,15 @@ const AppContent: React.FC = () => {
       }
   };
 
-  const handleAdminBalanceAdjustment = async (customerId: string, walletDelta: number, bonusDelta: number, note: string) => {
+  const handleAdminBalanceAdjustment = async (customerId: string, walletDelta: number, bonusDelta: number, note: string, approvalPin: string) => {
       if (!currentUser || currentUser.role !== 'Admin') {
           return { success: false, message: 'Only admin can adjust wallet or bonus balances.' };
+      }
+
+      const expectedPin = String(currentUser.password || '').trim();
+      const providedPin = String(approvalPin || '').trim();
+      if (!expectedPin || providedPin !== expectedPin) {
+          return { success: false, message: 'Approval PIN is invalid.' };
       }
 
       const customer = (users || []).find(u => u.id === customerId && u.role === 'Customer');

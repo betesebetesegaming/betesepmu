@@ -29,6 +29,7 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
     const [walletAdjustment, setWalletAdjustment] = useState<number | ''>('');
     const [bonusAdjustment, setBonusAdjustment] = useState<number | ''>('');
     const [adjustmentNote, setAdjustmentNote] = useState('');
+    const [approvalPin, setApprovalPin] = useState('');
     const [adjustmentMessage, setAdjustmentMessage] = useState<{ ok: boolean; text: string } | null>(null);
   
   // Correction Mode Toggle
@@ -91,6 +92,15 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
           .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
           .slice(0, 20);
   }, [depositRequests]);
+
+  const correctionRisk = useMemo(() => {
+      const cutoff = Date.now() - (24 * 60 * 60 * 1000);
+      const recent = (depositLogs || []).filter(log => log.method === 'Correction' && log.timestamp.getTime() >= cutoff);
+      const walletAbs = recent.reduce((sum, log) => sum + Math.abs(Number(log.amount || 0)), 0);
+      const bonusAbs = recent.reduce((sum, log) => sum + Math.abs(Number(log.bonusAdjustment || 0)), 0);
+      const isHigh = recent.length >= 5 || walletAbs >= 5000 || bonusAbs >= 3000;
+      return { count: recent.length, walletAbs, bonusAbs, isHigh };
+  }, [depositLogs]);
 
   const trackingCustomer = useMemo(
       () => (customers || []).find(c => c.id === trackingCustomerId) || null,
@@ -173,7 +183,7 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
           return;
       }
 
-      const result = await onAdminAdjustBalance(trackingCustomerId, walletDelta, bonusDelta, adjustmentNote.trim());
+      const result = await onAdminAdjustBalance(trackingCustomerId, walletDelta, bonusDelta, adjustmentNote.trim(), approvalPin);
       if (!result.success) {
           setAdjustmentMessage({ ok: false, text: result.message });
           return;
@@ -183,6 +193,31 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
       setWalletAdjustment('');
       setBonusAdjustment('');
       setAdjustmentNote('');
+      setApprovalPin('');
+  };
+
+  const exportHistoryCsv = () => {
+      const headers = ['Time', 'Customer', 'Amount', 'BonusAdjustment', 'Method', 'ProcessedBy', 'Note'];
+      const escape = (val: string) => `"${String(val || '').replace(/"/g, '""')}"`;
+      const rows = fullHistory.map(log => [
+          log.timestamp.toISOString(),
+          log.customerName,
+          Number(log.amount || 0).toFixed(2),
+          Number(log.bonusAdjustment || 0).toFixed(2),
+          log.method,
+          log.processedByName,
+          log.note || ''
+      ]);
+      const csv = [headers, ...rows].map(row => row.map(cell => escape(String(cell))).join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `deposit-tracking-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
   };
 
   return (
@@ -379,6 +414,13 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
                   </div>
               </div>
 
+              {correctionRisk.isHigh && (
+                  <div className="bg-red-50 border-2 border-red-300 rounded-xl p-3">
+                      <p className="text-sm font-black text-red-800 uppercase">Correction Risk Alert</p>
+                      <p className="text-xs text-red-700">Last 24h: {correctionRisk.count} corrections | Wallet impact {correctionRisk.walletAbs.toFixed(2)} GMD | Bonus impact {correctionRisk.bonusAbs.toFixed(2)} GMD</p>
+                  </div>
+              )}
+
               {currentUserRole === 'Admin' && (
                   <form onSubmit={handleBalanceAdjustment} className="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4 space-y-3">
                       <h4 className="text-sm font-black text-yellow-800 uppercase">Tracking Box: Fix Wallet/Bonus</h4>
@@ -408,6 +450,17 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
                                   onChange={(e) => setAdjustmentNote(e.target.value)}
                                   placeholder="ex: wrong bonus fixed"
                                   className="w-full p-2 border rounded"
+                              />
+                          </div>
+                          <div>
+                              <label className="block text-xs font-bold text-gray-700 mb-1">Approval PIN</label>
+                              <input
+                                  type="password"
+                                  value={approvalPin}
+                                  onChange={(e) => setApprovalPin(e.target.value)}
+                                  placeholder="Admin PIN"
+                                  className="w-full p-2 border rounded"
+                                  required
                               />
                           </div>
                       </div>
@@ -475,18 +528,27 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
               </div>
 
               <div className="flex items-center justify-between bg-gray-50 p-3 rounded-lg border">
-                  <span className="text-sm font-bold text-gray-700">Filter Type:</span>
-                  <select 
-                    value={methodFilter} 
-                    onChange={(e) => setMethodFilter(e.target.value as any)}
-                    className="p-2 border rounded bg-white text-sm font-medium"
-                  >
-                      <option value="All">All Types</option>
-                      <option value="Cash">Cash Deposits</option>
-                      <option value="Wave">Wave</option>
-                      <option value="AfriMoney">AfriMoney</option>
-                      <option value="Correction">Corrections (Debits)</option>
-                  </select>
+                                    <span className="text-sm font-bold text-gray-700">Filter Type:</span>
+                                    <div className="flex items-center gap-2">
+                                            <select 
+                                                value={methodFilter} 
+                                                onChange={(e) => setMethodFilter(e.target.value as any)}
+                                                className="p-2 border rounded bg-white text-sm font-medium"
+                                            >
+                                                    <option value="All">All Types</option>
+                                                    <option value="Cash">Cash Deposits</option>
+                                                    <option value="Wave">Wave</option>
+                                                    <option value="AfriMoney">AfriMoney</option>
+                                                    <option value="Correction">Corrections (Debits)</option>
+                                            </select>
+                                            <button
+                                                type="button"
+                                                onClick={exportHistoryCsv}
+                                                className="px-3 py-2 bg-slate-700 text-white rounded text-xs font-bold hover:bg-slate-800"
+                                            >
+                                                Export CSV
+                                            </button>
+                                    </div>
               </div>
 
               <div className="overflow-x-auto">
