@@ -95,9 +95,11 @@ export interface WinningsBreakdown {
   winType?: string;
   winningCombinations?: number;
   winningCombinationList?: number[][];
-  payoutPerCombination?: number;
+  payoutPerCombination?: number;  // The rapport value entered by admin
+  basePrice?: number;             // Base price per unit (e.g. 25 GMD for Simple Gagnant)
+  multiplier?: number;            // How many times the bet was played
   totalPayout?: number;
-  source?: 'Primary' | 'Bracket 1' | 'Bracket 2'; // Indicates which result triggered the win
+  source?: 'Primary' | 'Bracket 1' | 'Bracket 2';
 }
 
 

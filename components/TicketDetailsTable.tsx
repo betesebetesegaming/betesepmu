@@ -419,14 +419,27 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                                   'border-gray-300 bg-white text-gray-700'
                                 }`}
                               >
-                                <span className="font-semibold">{formatBetLabel(sel.betType)} - {formatBetNumbers(sel)} - {sel.multiplier} ticket(s) {(sel.cost * sel.multiplier).toFixed(0)} GMD</span>
-                                {isWin && (
-                                  <span className="ml-1 inline-flex items-center gap-1 font-black text-green-700">
-                                    ✓ WIN {selBreakdown.totalPayout ? `+${selBreakdown.totalPayout.toFixed(0)} GMD` : ''}
-                                    {selBreakdown.winType ? <span className="text-[9px] font-normal opacity-75">({selBreakdown.winType})</span> : null}
-                                  </span>
+                                {/* Bet description line */}
+                                <div className="font-semibold">
+                                  {formatBetLabel(sel.betType)} — horses: <span className="font-black">{formatBetNumbers(sel)}</span>
+                                  <span className="ml-2 text-[10px] font-bold px-1 py-0.5 rounded bg-gray-200 text-gray-700">× {sel.multiplier} ticket{sel.multiplier > 1 ? 's' : ''}</span>
+                                  <span className="ml-1 text-[10px] text-gray-500">stake: {(sel.cost * sel.multiplier).toFixed(0)} GMD</span>
+                                </div>
+                                {/* Win formula breakdown */}
+                                {isWin && selBreakdown && (
+                                  <div className="mt-0.5 text-[11px] font-black text-green-700 bg-green-100 border border-green-300 rounded px-1.5 py-0.5">
+                                    ✓ WIN — Rapport <span className="underline">{selBreakdown.payoutPerCombination?.toFixed(0)}</span>
+                                    {' × '}{selBreakdown.basePrice?.toFixed(0)} GMD (base)
+                                    {' × '}{selBreakdown.multiplier} ticket{(selBreakdown.multiplier || 1) > 1 ? 's' : ''}
+                                    {' = '}<span className="text-green-900">+{selBreakdown.totalPayout?.toFixed(0)} GMD</span>
+                                    {selBreakdown.winType ? <span className="ml-1 font-normal text-[9px] opacity-75">({selBreakdown.winType})</span> : null}
+                                  </div>
                                 )}
-                                {isLoss && <span className="ml-1 font-bold text-red-500">✗ LOST</span>}
+                                {isLoss && (
+                                  <div className="mt-0.5 text-[11px] font-bold text-red-600 bg-red-50 border border-red-200 rounded px-1.5 py-0.5">
+                                    ✗ LOST — horses {formatBetNumbers(sel)} not in winning result
+                                  </div>
+                                )}
                               </div>
                             );
                           })}

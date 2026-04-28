@@ -340,6 +340,7 @@ export function calculateTicketWinnings(ticket: Ticket, allRaces: Race[]): { tot
         const winningCombinationList: number[][] = [];
         let winType: string | undefined;
         let payoutPerCombination = 0;
+        let winningBasePrice = 0;
         let source: 'Primary' | 'Bracket 1' | 'Bracket 2' | undefined;
 
         for (const resultSource of sourceList(race)) {
@@ -488,6 +489,7 @@ export function calculateTicketWinnings(ticket: Ticket, allRaces: Race[]): { tot
                 selectionTotal += totalForSource;
                 winningCombinationList.push(...matchedCombos);
                 payoutPerCombination = unitPayout;
+                winningBasePrice = basePrice || sel.cost;
                 winType = matchedType;
                 source = resultSource.source;
             }
@@ -503,6 +505,8 @@ export function calculateTicketWinnings(ticket: Ticket, allRaces: Race[]): { tot
                 winningCombinations: winningCombinationList.length,
                 winningCombinationList,
                 payoutPerCombination,
+                basePrice: winningBasePrice,
+                multiplier: sel.multiplier,
                 source
             });
         } else {
