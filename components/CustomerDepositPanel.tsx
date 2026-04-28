@@ -223,6 +223,29 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
   return (
     <div className="bg-white p-6 rounded-lg shadow-lg">
       <h3 className="text-xl font-bold text-betese-dark mb-4">Customer Deposits</h3>
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <p className="text-xs font-bold text-blue-700 uppercase">Online Total</p>
+              <p className="text-lg font-black text-blue-900">{trackingStats.onlineAmount.toFixed(2)} GMD</p>
+              <p className="text-xs text-blue-700">{trackingStats.onlineCount} approved</p>
+          </div>
+          <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+              <p className="text-xs font-bold text-green-700 uppercase">Terminal Total</p>
+              <p className="text-lg font-black text-green-900">{trackingStats.terminalAmount.toFixed(2)} GMD</p>
+              <p className="text-xs text-green-700">{trackingStats.terminalCount} cash deposits</p>
+          </div>
+          <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+              <p className="text-xs font-bold text-orange-700 uppercase">Corrections</p>
+              <p className="text-sm font-black text-orange-900">Wallet {trackingStats.correctionWalletImpact >= 0 ? '+' : ''}{trackingStats.correctionWalletImpact.toFixed(2)} GMD</p>
+              <p className="text-sm font-black text-orange-900">Bonus {trackingStats.correctionBonusImpact >= 0 ? '+' : ''}{trackingStats.correctionBonusImpact.toFixed(2)} GMD</p>
+          </div>
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+              <p className="text-xs font-bold text-red-700 uppercase">Pending Online</p>
+              <p className="text-lg font-black text-red-900">{pendingRequests.length}</p>
+              <p className="text-xs text-red-700">needs approval/reject</p>
+          </div>
+      </div>
       
       <div className="flex mb-4 border-b">
           {/* HIDE ONLINE REQUESTS FOR VENDORS */}
