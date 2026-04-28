@@ -32,7 +32,7 @@ import {
     dbProcessWithdrawalRequest, dbFetchChatThreads, dbFetchChatMessages,
     dbSendChatMessage, dbMarkThreadAsRead, dbSettleRaceTickets, dbCancelTicket,
     dbToggleUserLock, dbAdminResetPassword, dbRecalculateAllTicketsSafely,
-    dbApplyCustomerDeposit, dbFreshStart
+    dbApplyCustomerDeposit, dbFreshStart, dbFetchUserBalance
 } from './supabaseClient';
 
 const normalizeRole = (role: unknown): Role => {
@@ -418,10 +418,34 @@ const AppContent: React.FC = () => {
 
     // ONLINE CUSTOMER WALLET CHECK
     if (currentUser.role === 'Customer') {
-        const totalAvailable = (currentUser.walletBalance || 0) + (currentUser.bonusBalance || 0);
+        let liveWalletBalance = Number(currentUser.walletBalance || 0);
+        let liveBonusBalance = Number(currentUser.bonusBalance || 0);
+
+        if (supabase) {
+            try {
+                const liveBalance = await dbFetchUserBalance(currentUser.id);
+                liveWalletBalance = liveBalance.walletBalance;
+                liveBonusBalance = liveBalance.bonusBalance;
+
+                setCurrentUser(prev => prev ? {
+                    ...prev,
+                    walletBalance: liveBalance.walletBalance,
+                    bonusBalance: liveBalance.bonusBalance,
+                } : prev);
+                setUsers(prev => prev.map(user => user.id === currentUser.id
+                    ? { ...user, walletBalance: liveBalance.walletBalance, bonusBalance: liveBalance.bonusBalance }
+                    : user
+                ));
+            } catch (balanceError: any) {
+                alert(`Unable to verify wallet balance: ${balanceError.message}`);
+                return;
+            }
+        }
+
+        const totalAvailable = Number((liveWalletBalance + liveBonusBalance).toFixed(2));
         if (totalAvailable < betSlip.totalCost) {
             setWalletFlash(true);
-            alert("INSUFFICIENT BALANCE: Your actual wallet and bonus wallet do not cover this bet.");
+            alert(`INSUFFICIENT BALANCE: Available GMD ${totalAvailable.toFixed(2)} (Cash ${liveWalletBalance.toFixed(2)}, Bonus ${liveBonusBalance.toFixed(2)}), but this bet needs GMD ${betSlip.totalCost.toFixed(2)}.`);
             return;
         }
     }

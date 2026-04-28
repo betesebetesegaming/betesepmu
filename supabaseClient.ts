@@ -287,6 +287,27 @@ const maybeUnlockCustomerBonusBalance = async (customerId: string) => {
     if (unlockError) throw unlockError;
 };
 
+export const dbFetchUserBalance = async (userId: string) => {
+    if (!supabase) throw new Error("Supabase not connected");
+
+    const { data, error } = await supabase
+        .from('users')
+        .select('wallet_balance, bonus_balance')
+        .eq('id', userId)
+        .single();
+
+    if (error) throw new Error(error.message);
+
+    const walletBalance = Number(data?.wallet_balance || 0);
+    const bonusBalance = Number(data?.bonus_balance || 0);
+
+    return {
+        walletBalance,
+        bonusBalance,
+        totalAvailable: Number((walletBalance + bonusBalance).toFixed(2))
+    };
+};
+
 export const dbSettleRaceTickets = async (result: RaceResult, allRaces: Race[]) => {
     if (!supabase) throw new Error("Database not connected");
 
@@ -490,7 +511,7 @@ export const dbPlaceBet = async (ticket: Ticket, user: User) => {
         const currentBonusBalance = Number(userRow?.bonus_balance || 0);
         const betCost = Number(ticket.totalCost || 0);
         if ((currentBalance + currentBonusBalance) < betCost) {
-            throw new Error('Insufficient wallet and bonus balance');
+            throw new Error(`Insufficient wallet and bonus balance. Available GMD ${(currentBalance + currentBonusBalance).toFixed(2)} (cash ${currentBalance.toFixed(2)}, bonus ${currentBonusBalance.toFixed(2)}), required GMD ${betCost.toFixed(2)}.`);
         }
 
         ticketToInsert = addFundingMetadataToSelections(ticket, currentBalance, currentBonusBalance);
