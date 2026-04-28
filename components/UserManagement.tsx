@@ -37,7 +37,7 @@ export const RoleFilter: React.FC<RoleFilterProps> = ({ selectedRole, onSelectRo
 interface UserManagementProps {
     users: User[];
     onToggleLock: (userId: string) => void;
-    onAddUser?: (name: string, role: Role, phone?: string, password?: string) => void;
+    onAddUser?: (name: string, role: Role, phone?: string, password?: string, correctionPin?: string) => void;
 }
 
 export const UserManagement: React.FC<UserManagementProps> = ({ users, onToggleLock, onAddUser }) => {

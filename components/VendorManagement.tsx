@@ -40,7 +40,7 @@ export const RoleFilter: React.FC<RoleFilterProps> = ({ selectedRole, onSelectRo
 interface UserAccountManagementProps {
     users: User[];
     onToggleLock: (userId: string) => void;
-    onAddUser?: (name: string, role: Role, phone?: string, password?: string) => void;
+    onAddUser?: (name: string, role: Role, phone?: string, password?: string, correctionPin?: string) => void;
     onAdminResetPassword?: (userId: string, newPass: string) => { success: boolean, message: string };
     creatableRoles?: Role[];
 }
@@ -51,6 +51,7 @@ export const UserAccountManagement: React.FC<UserAccountManagementProps> = ({ us
     const [newUserRole, setNewUserRole] = useState<Role>(availableRoles[0]);
     const [newUserPhone, setNewUserPhone] = useState('');
     const [newUserPassword, setNewUserPassword] = useState('');
+    const [newCorrectionPin, setNewCorrectionPin] = useState('');
     const [error, setError] = useState('');
     const [userToReset, setUserToReset] = useState<User | null>(null);
 
@@ -75,6 +76,10 @@ export const UserAccountManagement: React.FC<UserAccountManagementProps> = ({ us
             setError('Password must be at least 6 characters long.');
             return;
         }
+        if (newUserRole === 'Admin' && newCorrectionPin.trim().length < 4) {
+            setError('Admin correction PIN must be at least 4 digits/characters.');
+            return;
+        }
         if (newUserRole === 'Customer' && !newUserPhone) {
             setError('Please provide a phone number for the customer.');
             return;
@@ -89,11 +94,18 @@ export const UserAccountManagement: React.FC<UserAccountManagementProps> = ({ us
             return;
         }
 
-        onAddUser(newUserName, newUserRole, newUserRole === 'Customer' ? normalizedCustomerPhone || undefined : undefined, newUserPassword);
+        onAddUser(
+            newUserName,
+            newUserRole,
+            newUserRole === 'Customer' ? normalizedCustomerPhone || undefined : undefined,
+            newUserPassword,
+            newUserRole === 'Admin' ? newCorrectionPin.trim() : undefined
+        );
         setNewUserName('');
         setNewUserRole(availableRoles[0]);
         setNewUserPhone('');
         setNewUserPassword('');
+        setNewCorrectionPin('');
     };
     
     const handleResetPassword = (newPassword: string) => {
@@ -143,6 +155,16 @@ export const UserAccountManagement: React.FC<UserAccountManagementProps> = ({ us
                         className="p-2 border rounded"
                         required
                     />
+                    {newUserRole === 'Admin' && (
+                        <input
+                            type="password"
+                            placeholder="Correction PIN (required for wallet/bonus fixes)"
+                            value={newCorrectionPin}
+                            onChange={e => setNewCorrectionPin(e.target.value)}
+                            className="p-2 border rounded md:col-span-3"
+                            required
+                        />
+                    )}
                      {newUserRole === 'Customer' && (
                         <input
                             type="tel"

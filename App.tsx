@@ -712,7 +712,7 @@ const AppContent: React.FC = () => {
           return { success: false, message: 'Only admin can adjust wallet or bonus balances.' };
       }
 
-      const expectedPin = String(currentUser.password || '').trim();
+      const expectedPin = String(currentUser.correctionPin || currentUser.password || '').trim();
       const providedPin = String(approvalPin || '').trim();
       if (!expectedPin || providedPin !== expectedPin) {
           return { success: false, message: 'Approval PIN is invalid.' };
@@ -1011,7 +1011,32 @@ const AppContent: React.FC = () => {
       }
   };
 
-  const addUser = async (name: string, role: Role, phone?: string, password?: string) => {
+  const addUser = async (name: string, role: Role, phone?: string, password?: string, correctionPin?: string) => {
+    if (!currentUser) {
+        alert('You must be logged in to create users.');
+        return null;
+    }
+
+    if (role === 'Admin') {
+        if (currentUser.role !== 'Admin') {
+            alert('Only Admin can create another Admin account.');
+            return null;
+        }
+
+        const expectedPin = String(currentUser.correctionPin || currentUser.password || '').trim();
+        const approvalPin = window.prompt('Security check: enter your Admin correction PIN to create a new Admin account.');
+        if (!expectedPin || String(approvalPin || '').trim() !== expectedPin) {
+            alert('Invalid PIN. Admin account creation canceled.');
+            return null;
+        }
+
+        const confirmation = window.prompt('Type CREATE ADMIN to confirm this high-privilege action.');
+        if (String(confirmation || '').trim().toUpperCase() !== 'CREATE ADMIN') {
+            alert('Confirmation phrase mismatch. Admin account creation canceled.');
+            return null;
+        }
+    }
+
     const normalizedPhone = role === 'Customer' ? normalizeGambiaPhone(phone || '') : undefined;
     if (role === 'Customer' && !normalizedPhone) {
         alert('Customer phone must be valid: Gambia local 7 digits or +220XXXXXXX; Senegal must be +221XXXXXXXXX only.');
@@ -1044,6 +1069,7 @@ const AppContent: React.FC = () => {
       isLocked: false,
       phone: normalizedPhone,
       password: password || 'password',
+    correctionPin: role === 'Admin' ? (correctionPin || password || 'password') : undefined,
       walletBalance: 0,
       bonusBalance: 0,
       createdById: currentUser?.id,
@@ -1431,7 +1457,7 @@ const AppContent: React.FC = () => {
                     users={users}
                     onToggleLock={handleToggleLock}
                     onLockAllVendors={() => {}}
-                    onAddUser={() => {}}
+                    onAddUser={addUser}
                     onDeposit={handleDeposit}
                     onAdminAdjustBalance={handleAdminBalanceAdjustment}
                     depositLogs={depositLogs}
@@ -1467,7 +1493,7 @@ const AppContent: React.FC = () => {
                     tickets={placedTickets}
                     users={users}
                     onToggleLock={handleToggleLock}
-                    onAddUser={() => {}}
+                    onAddUser={addUser}
                     onDeposit={handleDeposit}
                     races={races}
                     onSaveRaceResult={handleSaveRaceResult}

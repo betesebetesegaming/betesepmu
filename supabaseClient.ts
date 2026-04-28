@@ -90,6 +90,13 @@ const isMissingPaymentConfigColumnError = (error: any): boolean => {
         || combined.includes('request_timeout_ms');
 };
 
+const isMissingCorrectionPinColumnError = (error: any): boolean => {
+    if (!error) return false;
+    const code = String(error.code || '');
+    const combined = `${String(error.message || '')} ${String(error.details || '')} ${String(error.hint || '')}`.toLowerCase();
+    return code === 'PGRST204' || combined.includes('correction_pin');
+};
+
 /**
  * RACE MANAGEMENT OPERATIONS
  */
@@ -585,7 +592,7 @@ export const dbFetchUsers = async (): Promise<User[]> => {
     if(error) return [];
     return data.map((u: any) => ({
         id: u.id, name: u.name, role: u.role, isLocked: u.is_locked, phone: u.phone,
-        password: u.password, walletBalance: u.wallet_balance, bonusBalance: u.bonus_balance,
+        password: u.password, correctionPin: u.correction_pin || undefined, walletBalance: u.wallet_balance, bonusBalance: u.bonus_balance,
         totalDepositedAmount: Number(u.total_deposited_amount || 0),
         firstDepositAt: u.first_deposit_at ? new Date(u.first_deposit_at) : undefined,
         createdById: u.created_by_id, createdByName: u.created_by_name
@@ -668,19 +675,28 @@ export const dbAddUser = async (user: User) => {
         }
     }
 
-    const { error } = await supabase.from('users').insert({
+    const insertPayload = {
         id: user.role === 'Customer' ? (normalizedCustomerPhone || user.id) : user.id,
         name: user.name,
         role: user.role,
         phone: normalizedCustomerPhone,
         password: user.password,
+        correction_pin: user.correctionPin || null,
         wallet_balance: user.walletBalance || 0,
         bonus_balance: user.bonusBalance || 0,
         is_locked: user.isLocked || false,
         created_by_id: user.createdById || null,
         created_by_name: user.createdByName || null
-    });
-    if (error) throw error;
+    };
+
+    const { error } = await supabase.from('users').insert(insertPayload);
+    if (!error) return;
+
+    if (!isMissingCorrectionPinColumnError(error)) throw error;
+    const fallbackPayload: any = { ...insertPayload };
+    delete fallbackPayload.correction_pin;
+    const { error: fallbackError } = await supabase.from('users').insert(fallbackPayload);
+    if (fallbackError) throw fallbackError;
 };
 
 export const dbToggleUserLock = async (userId: string, isLocked: boolean) => {

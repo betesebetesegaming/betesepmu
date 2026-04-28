@@ -142,6 +142,7 @@ export interface User {
   isLocked: boolean;
   phone?: string;
   password?: string;
+  correctionPin?: string;
   walletBalance?: number;
   bonusBalance?: number;
   totalDepositedAmount?: number;
