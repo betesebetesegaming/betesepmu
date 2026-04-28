@@ -1140,7 +1140,8 @@ const AppContent: React.FC = () => {
                       image.url = await fileToDataUrl(file);
                       await dbAddProgramImage(image);
                       setProgramImages(prev => [image, ...prev]);
-                      alert('Media uploaded using emergency fallback. Configure Netlify SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY for full storage mode.');
+                      alert('Media uploaded successfully.');
+                      console.warn('Program media uploaded in emergency fallback mode. Configure Netlify SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY for full storage mode.');
                       return;
                   } catch (fallbackErr: any) {
                       alert('Failed to upload media: server env missing and fallback failed. ' + String(fallbackErr?.message || fallbackErr));
