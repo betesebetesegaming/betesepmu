@@ -62,6 +62,15 @@ const normalizePromotionRules = (rules: PromotionRule[]): PromotionRule[] => {
         .map(([depositAmount, bonusAmount]) => ({ depositAmount, bonusAmount }));
 };
 
+const fileToDataUrl = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(new Error('Failed to read file as data URL.'));
+        reader.readAsDataURL(file);
+    });
+};
+
 const AppContent: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [users, setUsers] = useState<User[]>([]);
@@ -1122,7 +1131,24 @@ const AppContent: React.FC = () => {
               image.url = url;
               await dbAddProgramImage(image);
           } catch (e: any) {
-              alert("Failed to upload media: " + e.message);
+              const rawMessage = String(e?.message || e || 'Unknown upload error');
+              const missingServerEnv = rawMessage.toLowerCase().includes('missing supabase server environment variables');
+
+              if (missingServerEnv) {
+                  try {
+                      // Emergency fallback: keep upload functional even when Netlify server env vars are not configured.
+                      image.url = await fileToDataUrl(file);
+                      await dbAddProgramImage(image);
+                      setProgramImages(prev => [image, ...prev]);
+                      alert('Media uploaded using emergency fallback. Configure Netlify SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY for full storage mode.');
+                      return;
+                  } catch (fallbackErr: any) {
+                      alert('Failed to upload media: server env missing and fallback failed. ' + String(fallbackErr?.message || fallbackErr));
+                      return;
+                  }
+              }
+
+              alert("Failed to upload media: " + rawMessage);
               return;
           }
       } else {
