@@ -1167,6 +1167,21 @@ const normalizeProgramMediaType = (rawMediaType: unknown): ProgramImage['mediaTy
     return value === 'video' ? 'video' : 'image';
 };
 
+const isRlsPolicyError = (error: any): boolean => {
+    const msg = String(error?.message || error || '').toLowerCase();
+    return msg.includes('row-level security policy') || msg.includes('rls');
+};
+
+const toBase64 = async (file: File): Promise<string> => {
+    const buffer = await file.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += 1) {
+        binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
+};
+
 export const dbFetchProgramImages = async (): Promise<ProgramImage[]> => {
     if (!supabase) return [];
     let data: any[] | null = null;
@@ -1203,7 +1218,31 @@ export const dbUploadProgramFile = async (file: File): Promise<string> => {
         cacheControl: '3600',
         upsert: false
     });
-    if (error) throw new Error(`Storage upload failed: ${error.message}`);
+    if (error && !isRlsPolicyError(error)) {
+        throw new Error(`Storage upload failed: ${error.message}`);
+    }
+
+    // If storage RLS blocks browser upload, fallback through secure Netlify server function.
+    if (error && isRlsPolicyError(error)) {
+        const base64Data = await toBase64(file);
+        const response = await fetch('/.netlify/functions/program-media-upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                fileName: file.name,
+                fileType: file.type || 'application/octet-stream',
+                base64Data
+            })
+        });
+
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload?.publicUrl) {
+            throw new Error(`Storage upload failed: ${payload?.error || payload?.details || 'RLS fallback upload failed'}`);
+        }
+
+        return String(payload.publicUrl);
+    }
+
     const { data } = supabase.storage.from('PROGRAMS').getPublicUrl(path);
     return data.publicUrl;
 };
@@ -1216,7 +1255,26 @@ export const dbAddProgramImage = async (image: ProgramImage) => {
         url: image.url,
         media_type: normalizeProgramMediaType(image.mediaType)
     });
-    if (error) throw error;
+    if (!error) return;
+
+    if (!isRlsPolicyError(error)) throw error;
+
+    // If table RLS blocks browser insert, fallback through secure Netlify server function.
+    const response = await fetch('/.netlify/functions/program-media-insert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            id: image.id,
+            type: normalizeProgramType(image.type),
+            url: image.url,
+            mediaType: normalizeProgramMediaType(image.mediaType)
+        })
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        throw new Error(payload?.error || payload?.details || 'Program media insert failed');
+    }
 };
 
 export const dbDeleteProgramImage = async (id: string) => {

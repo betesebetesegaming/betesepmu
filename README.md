@@ -72,6 +72,12 @@ AI support function path:
 
 `netlify/functions/support-ai.js`
 
+Program media fallback functions (for storage/table RLS environments):
+
+`netlify/functions/program-media-upload.js`
+
+`netlify/functions/program-media-insert.js`
+
 Required Netlify environment variables:
 
 - `SUPABASE_URL` (or `VITE_SUPABASE_URL`)
