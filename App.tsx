@@ -14,7 +14,7 @@ import { WithdrawalCodeModal } from './components/WithdrawalCodeModal';
 import { TicketModal } from './components/TicketModal';
 import { ChatPanel } from './components/ChatSystem';
 import { EmergencyRecover } from './components/EmergencyRecover';
-import { SEVEN_DAYS_IN_MS, BETTING_CUTOFF_MS, validateTicketForPlacement, normalizeGambiaPhone } from './utils';
+import { SEVEN_DAYS_IN_MS, BETTING_CUTOFF_MS, validateTicketForPlacement, validateTicketAgainstRaceState, normalizeGambiaPhone } from './utils';
 import { LanguageProvider } from './LanguageContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { 
@@ -410,6 +410,12 @@ const AppContent: React.FC = () => {
                 return;
         }
 
+        const raceStateValidation = validateTicketAgainstRaceState(betSlip.selections, races);
+        if (!raceStateValidation.valid) {
+            alert(`Selection blocked: ${raceStateValidation.message}`);
+            return;
+        }
+
     // ONLINE CUSTOMER WALLET CHECK
     if (currentUser.role === 'Customer') {
         const totalAvailable = (currentUser.walletBalance || 0) + (currentUser.bonusBalance || 0);
@@ -473,6 +479,12 @@ const AppContent: React.FC = () => {
       const placementValidation = validateTicketForPlacement({ selections: betSlip.selections, totalCost: betSlip.totalCost });
       if (!placementValidation.valid) {
           alert(`Invalid ticket formula: ${placementValidation.message}`);
+          return;
+      }
+
+      const raceStateValidation = validateTicketAgainstRaceState(betSlip.selections, races);
+      if (!raceStateValidation.valid) {
+          alert(`Selection blocked: ${raceStateValidation.message}`);
           return;
       }
 
@@ -706,6 +718,12 @@ const AppContent: React.FC = () => {
         const manualValidation = validateTicketForPlacement({ selections: order.selections, totalCost: order.totalCost });
         if (!manualValidation.valid) {
             alert(`Invalid manual bet formula: ${manualValidation.message}`);
+            return;
+        }
+
+        const manualRaceValidation = validateTicketAgainstRaceState(order.selections, races);
+        if (!manualRaceValidation.valid) {
+            alert(`Manual bet blocked: ${manualRaceValidation.message}`);
             return;
         }
     

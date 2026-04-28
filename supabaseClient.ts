@@ -14,7 +14,7 @@ import {
     BetSelection,
     WithdrawalRequest
 } from './types';
-import { calculateTicketWinnings, validateTicketForPlacement, normalizeGambiaPhone } from './utils';
+import { calculateTicketWinnings, validateTicketForPlacement, validateTicketAgainstRaceState, normalizeGambiaPhone } from './utils';
 
 // Safely retrieve environment variables
 const getEnvVar = (key: string): string | undefined => {
@@ -451,6 +451,27 @@ export const dbPlaceBet = async (ticket: Ticket, user: User) => {
     const placementValidation = validateTicketForPlacement({ selections: ticket.selections, totalCost: ticket.totalCost });
     if (!placementValidation.valid) {
         throw new Error(`Invalid ticket formula: ${placementValidation.message}`);
+    }
+
+    const raceIds = Array.from(new Set((ticket.selections || []).map(sel => sel.raceId).filter(Boolean)));
+    const { data: raceRows, error: raceFetchError } = await supabase
+        .from('races')
+        .select('id, name, horse_count, non_runners, disabled_bet_types')
+        .in('id', raceIds);
+    if (raceFetchError) throw new Error(`Race validation failed: ${raceFetchError.message}`);
+
+    const raceStateValidation = validateTicketAgainstRaceState(
+        ticket.selections,
+        (raceRows || []).map((row: any) => ({
+            id: row.id,
+            name: row.name,
+            horseCount: Number(row.horse_count || 0),
+            nonRunners: Array.isArray(row.non_runners) ? row.non_runners : [],
+            disabledBetTypes: Array.isArray(row.disabled_bet_types) ? row.disabled_bet_types : []
+        }))
+    );
+    if (!raceStateValidation.valid) {
+        throw new Error(`Selection blocked: ${raceStateValidation.message}`);
     }
 
     const isOnlineCustomer = user.role === 'Customer';

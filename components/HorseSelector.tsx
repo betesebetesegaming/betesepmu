@@ -75,6 +75,14 @@ export const HorseSelector: React.FC<HorseSelectorProps> = ({
       setSelectionSequence([]);
   }, [betType, race.id]);
 
+  // Keep sequence valid when non-runners or horse count change while user is selecting.
+  useEffect(() => {
+      setSelectionSequence(prev => prev.filter(item => {
+          if (item === 'X') return true;
+          return item > 0 && item <= race.horseCount && !race.nonRunners.includes(item);
+      }));
+  }, [race.horseCount, race.nonRunners]);
+
   const handleNumberClick = (num: number) => {
     if (disabled) return;
     if (race.nonRunners.includes(num)) return;

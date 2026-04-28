@@ -242,6 +242,39 @@ export const validateTicketForPlacement = (ticketLike: { selections: BetSelectio
     return { valid: true };
 };
 
+export const validateTicketAgainstRaceState = (
+    selections: BetSelection[],
+    races: Array<Pick<Race, 'id' | 'name' | 'horseCount' | 'nonRunners' | 'disabledBetTypes'>>
+): { valid: boolean; message?: string } => {
+    const raceMap = new Map(races.map(r => [r.id, r]));
+
+    for (const sel of selections || []) {
+        const race = raceMap.get(sel.raceId);
+        if (!race) {
+            return { valid: false, message: `Race not found for selection ${sel.raceId}.` };
+        }
+
+        const maxHorse = Number(race.horseCount || 0);
+        const nonRunners = new Set((race.nonRunners || []).map(n => Number(n)).filter(n => Number.isFinite(n)));
+
+        for (const n of sel.numbers || []) {
+            const horseNo = Number(n);
+            if (!Number.isFinite(horseNo) || horseNo <= 0 || horseNo > maxHorse) {
+                return { valid: false, message: `${race.name}: horse ${horseNo} is outside valid range 1-${maxHorse}.` };
+            }
+            if (nonRunners.has(horseNo)) {
+                return { valid: false, message: `${race.name}: horse ${horseNo} is marked NP and cannot be played.` };
+            }
+        }
+
+        if ((race.disabledBetTypes || []).includes(sel.betType)) {
+            return { valid: false, message: `${race.name}: ${sel.betType} is disabled for this race.` };
+        }
+    }
+
+    return { valid: true };
+};
+
 export function calculateTicketWinnings(ticket: Ticket, allRaces: Race[]): { totalWinnings: number; breakdown: WinningsBreakdown[] } {
     const combinations = (numbers: number[], size: number): number[][] => {
         if (size <= 0 || numbers.length < size) return [];
