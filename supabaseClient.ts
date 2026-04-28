@@ -1194,6 +1194,9 @@ export const dbFetchProgramImages = async (): Promise<ProgramImage[]> => {
 
 export const dbUploadProgramFile = async (file: File): Promise<string> => {
     if (!supabase) throw new Error("Database not connected");
+    if (!file || typeof (file as any).name !== 'string') {
+        throw new Error('Invalid upload file. Please choose a file and try again.');
+    }
     const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
     const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
     const { error } = await supabase.storage.from('PROGRAMS').upload(path, file, {
