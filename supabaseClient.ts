@@ -778,6 +778,43 @@ export const dbApplyCustomerDeposit = async (
     };
 };
 
+export const dbApplyCustomerBalanceAdjustment = async (
+    customerId: string,
+    walletDelta: number,
+    bonusDelta: number
+) => {
+    if (!supabase) throw new Error("Database not connected");
+
+    const normalizedWalletDelta = Number(Number(walletDelta || 0).toFixed(2));
+    const normalizedBonusDelta = Number(Number(bonusDelta || 0).toFixed(2));
+    if (normalizedWalletDelta === 0 && normalizedBonusDelta === 0) {
+        throw new Error('No adjustment provided');
+    }
+
+    const { data: userRow, error: userError } = await supabase
+        .from('users')
+        .select('wallet_balance, bonus_balance')
+        .eq('id', customerId)
+        .single();
+    if (userError) throw userError;
+
+    const currentWallet = Number(userRow?.wallet_balance || 0);
+    const currentBonus = Number(userRow?.bonus_balance || 0);
+    const nextWallet = Number((currentWallet + normalizedWalletDelta).toFixed(2));
+    const nextBonus = Number((currentBonus + normalizedBonusDelta).toFixed(2));
+
+    if (nextWallet < 0) throw new Error('Wallet adjustment would create negative wallet balance');
+    if (nextBonus < 0) throw new Error('Bonus adjustment would create negative bonus balance');
+
+    const { error: updateError } = await supabase
+        .from('users')
+        .update({ wallet_balance: nextWallet, bonus_balance: nextBonus })
+        .eq('id', customerId);
+    if (updateError) throw updateError;
+
+    return { walletBalance: nextWallet, bonusBalance: nextBonus };
+};
+
 export const dbFetchDepositRequests = async (): Promise<any[]> => {
     if (!supabase) return [];
     const { data, error } = await supabase.from('deposit_requests').select('*').order('timestamp', { ascending: false }).limit(200);
@@ -866,6 +903,26 @@ export const dbApproveDepositRequestExact = async (
         .eq('id', requestId);
 
     if (requestUpdateError) throw requestUpdateError;
+};
+
+export const dbMarkDepositRequestApproved = async (
+    requestId: string,
+    adminId: string,
+    adminName: string,
+    time: Date
+) => {
+    if (!supabase) throw new Error("Database not connected");
+    const { error } = await supabase
+        .from('deposit_requests')
+        .update({
+            status: 'Approved',
+            processed_by: adminId,
+            processed_by_name: adminName,
+            processed_at: time.toISOString()
+        })
+        .eq('id', requestId)
+        .eq('status', 'Pending');
+    if (error) throw error;
 };
 
 export const dbRejectDepositRequest = async (requestId: string, adminId: string, adminName: string, time: Date) => {

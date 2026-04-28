@@ -5,6 +5,7 @@ import { User, DepositLog, DepositRequest, Role } from '../types';
 interface CustomerDepositPanelProps {
   customers: User[];
     onDeposit: (customerId: string, amount: number, method: 'Cash' | 'Wave' | 'AfriMoney' | 'Correction', transactionId?: string) => Promise<{ success: boolean; bonusApplied: number | null }>;
+    onAdminAdjustBalance?: (customerId: string, walletDelta: number, bonusDelta: number, note: string) => Promise<{ success: boolean; message: string }>;
   depositLogs: DepositLog[];
   depositRequests?: DepositRequest[];
   onApproveDepositRequest?: (requestId: string) => void;
@@ -12,7 +13,7 @@ interface CustomerDepositPanelProps {
   currentUserRole: Role; // Added to control visibility
 }
 
-export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ customers, onDeposit, depositLogs, depositRequests = [], onApproveDepositRequest, onRejectDepositRequest, currentUserRole }) => {
+export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ customers, onDeposit, onAdminAdjustBalance, depositLogs, depositRequests = [], onApproveDepositRequest, onRejectDepositRequest, currentUserRole }) => {
   // If Vendor, default to 'manual', otherwise 'requests'
   const [activeTab, setActiveTab] = useState<'requests' | 'manual' | 'history'>(
       currentUserRole === 'Vendor' ? 'manual' : 'requests'
@@ -24,6 +25,11 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
   const [amount, setAmount] = useState<number | ''>('');
   const [successMessage, setSuccessMessage] = useState('');
   const [methodFilter, setMethodFilter] = useState<'All' | 'Cash' | 'Wave' | 'AfriMoney' | 'Correction'>('All');
+    const [trackingCustomerId, setTrackingCustomerId] = useState('');
+    const [walletAdjustment, setWalletAdjustment] = useState<number | ''>('');
+    const [bonusAdjustment, setBonusAdjustment] = useState<number | ''>('');
+    const [adjustmentNote, setAdjustmentNote] = useState('');
+    const [adjustmentMessage, setAdjustmentMessage] = useState<{ ok: boolean; text: string } | null>(null);
   
   // Correction Mode Toggle
   const [isCorrectionMode, setIsCorrectionMode] = useState(false);
@@ -63,6 +69,33 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
       }
       return logs;
   }, [depositLogs, methodFilter]);
+
+  const trackingStats = useMemo(() => {
+      const onlineApproved = (depositRequests || []).filter(req => req.status === 'Approved');
+      const terminal = (depositLogs || []).filter(log => log.method === 'Cash');
+      const corrections = (depositLogs || []).filter(log => log.method === 'Correction');
+      return {
+          onlineCount: onlineApproved.length,
+          onlineAmount: onlineApproved.reduce((sum, req) => sum + Number(req.amount || 0), 0),
+          terminalCount: terminal.length,
+          terminalAmount: terminal.reduce((sum, log) => sum + Number(log.amount || 0), 0),
+          correctionCount: corrections.length,
+          correctionWalletImpact: corrections.reduce((sum, log) => sum + Number(log.amount || 0), 0),
+          correctionBonusImpact: corrections.reduce((sum, log) => sum + Number(log.bonusAdjustment || 0), 0)
+      };
+  }, [depositLogs, depositRequests]);
+
+  const onlineRequestAudit = useMemo(() => {
+      return (depositRequests || [])
+          .slice()
+          .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+          .slice(0, 20);
+  }, [depositRequests]);
+
+  const trackingCustomer = useMemo(
+      () => (customers || []).find(c => c.id === trackingCustomerId) || null,
+      [customers, trackingCustomerId]
+  );
 
   useEffect(() => {
       if (selectedCustomer) {
@@ -116,6 +149,41 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
       setSearchTerm(customer.phone ?? '');
       setSuccessMessage('');
   }
+
+  const handleBalanceAdjustment = async (e: React.FormEvent) => {
+      e.preventDefault();
+      setAdjustmentMessage(null);
+      if (currentUserRole !== 'Admin') {
+          setAdjustmentMessage({ ok: false, text: 'Only admin can adjust wallet/bonus.' });
+          return;
+      }
+      if (!trackingCustomerId || !onAdminAdjustBalance) {
+          setAdjustmentMessage({ ok: false, text: 'Select customer first.' });
+          return;
+      }
+
+      const walletDelta = walletAdjustment === '' ? 0 : Number(walletAdjustment);
+      const bonusDelta = bonusAdjustment === '' ? 0 : Number(bonusAdjustment);
+      if (!Number.isFinite(walletDelta) || !Number.isFinite(bonusDelta)) {
+          setAdjustmentMessage({ ok: false, text: 'Invalid wallet/bonus values.' });
+          return;
+      }
+      if (walletDelta === 0 && bonusDelta === 0) {
+          setAdjustmentMessage({ ok: false, text: 'Enter wallet or bonus adjustment.' });
+          return;
+      }
+
+      const result = await onAdminAdjustBalance(trackingCustomerId, walletDelta, bonusDelta, adjustmentNote.trim());
+      if (!result.success) {
+          setAdjustmentMessage({ ok: false, text: result.message });
+          return;
+      }
+
+      setAdjustmentMessage({ ok: true, text: result.message });
+      setWalletAdjustment('');
+      setBonusAdjustment('');
+      setAdjustmentNote('');
+  };
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-lg">
@@ -292,6 +360,120 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
 
       {activeTab === 'history' && (
           <div className="space-y-4 animate-fade-in">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                      <p className="text-xs font-bold text-blue-700 uppercase">Online Deposits</p>
+                      <p className="text-xl font-black text-blue-900">{trackingStats.onlineAmount.toFixed(2)} GMD</p>
+                      <p className="text-xs text-blue-700">{trackingStats.onlineCount} transactions</p>
+                  </div>
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                      <p className="text-xs font-bold text-green-700 uppercase">Terminal Deposits</p>
+                      <p className="text-xl font-black text-green-900">{trackingStats.terminalAmount.toFixed(2)} GMD</p>
+                      <p className="text-xs text-green-700">{trackingStats.terminalCount} transactions</p>
+                  </div>
+                  <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                      <p className="text-xs font-bold text-orange-700 uppercase">Corrections</p>
+                      <p className="text-sm font-black text-orange-900">Wallet {trackingStats.correctionWalletImpact >= 0 ? '+' : ''}{trackingStats.correctionWalletImpact.toFixed(2)} GMD</p>
+                      <p className="text-sm font-black text-orange-900">Bonus {trackingStats.correctionBonusImpact >= 0 ? '+' : ''}{trackingStats.correctionBonusImpact.toFixed(2)} GMD</p>
+                      <p className="text-xs text-orange-700">{trackingStats.correctionCount} adjustments</p>
+                  </div>
+              </div>
+
+              {currentUserRole === 'Admin' && (
+                  <form onSubmit={handleBalanceAdjustment} className="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4 space-y-3">
+                      <h4 className="text-sm font-black text-yellow-800 uppercase">Tracking Box: Fix Wallet/Bonus</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div>
+                              <label className="block text-xs font-bold text-gray-700 mb-1">Customer</label>
+                              <select
+                                  value={trackingCustomerId}
+                                  onChange={(e) => setTrackingCustomerId(e.target.value)}
+                                  className="w-full p-2 border rounded bg-white"
+                                  required
+                              >
+                                  <option value="">Select customer</option>
+                                  {(customers || []).map(c => (
+                                      <option key={c.id} value={c.id}>{c.name} ({c.phone || c.id})</option>
+                                  ))}
+                              </select>
+                              {trackingCustomer && (
+                                  <p className="text-xs text-gray-600 mt-1">Current: Wallet {(trackingCustomer.walletBalance || 0).toFixed(2)} | Bonus {(trackingCustomer.bonusBalance || 0).toFixed(2)}</p>
+                              )}
+                          </div>
+                          <div>
+                              <label className="block text-xs font-bold text-gray-700 mb-1">Reason</label>
+                              <input
+                                  type="text"
+                                  value={adjustmentNote}
+                                  onChange={(e) => setAdjustmentNote(e.target.value)}
+                                  placeholder="ex: wrong bonus fixed"
+                                  className="w-full p-2 border rounded"
+                              />
+                          </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div>
+                              <label className="block text-xs font-bold text-gray-700 mb-1">Wallet Adjustment (+/-)</label>
+                              <input
+                                  type="number"
+                                  step="0.01"
+                                  value={walletAdjustment === '' ? '' : walletAdjustment}
+                                  onChange={(e) => setWalletAdjustment(e.target.value === '' ? '' : Number(e.target.value))}
+                                  className="w-full p-2 border rounded"
+                                  placeholder="0.00"
+                              />
+                          </div>
+                          <div>
+                              <label className="block text-xs font-bold text-gray-700 mb-1">Bonus Adjustment (+/-)</label>
+                              <input
+                                  type="number"
+                                  step="0.01"
+                                  value={bonusAdjustment === '' ? '' : bonusAdjustment}
+                                  onChange={(e) => setBonusAdjustment(e.target.value === '' ? '' : Number(e.target.value))}
+                                  className="w-full p-2 border rounded"
+                                  placeholder="0.00"
+                              />
+                          </div>
+                      </div>
+                      <button type="submit" className="px-4 py-2 bg-yellow-600 text-white font-bold rounded hover:bg-yellow-700">Apply Fix</button>
+                      {adjustmentMessage && <p className={`text-xs font-bold ${adjustmentMessage.ok ? 'text-green-700' : 'text-red-700'}`}>{adjustmentMessage.text}</p>}
+                  </form>
+              )}
+
+              <div className="bg-white border rounded-lg p-3">
+                  <h5 className="text-sm font-black text-gray-800 uppercase mb-2">Online Request Audit (Latest 20)</h5>
+                  <div className="overflow-x-auto">
+                      <table className="min-w-full text-xs">
+                          <thead className="bg-gray-100">
+                              <tr>
+                                  <th className="text-left px-2 py-1">Time</th>
+                                  <th className="text-left px-2 py-1">Customer</th>
+                                  <th className="text-right px-2 py-1">Amount</th>
+                                  <th className="text-left px-2 py-1">Method</th>
+                                  <th className="text-left px-2 py-1">Status</th>
+                                  <th className="text-left px-2 py-1">Processed By</th>
+                              </tr>
+                          </thead>
+                          <tbody>
+                              {onlineRequestAudit.map(req => (
+                                  <tr key={req.id} className="border-t">
+                                      <td className="px-2 py-1 whitespace-nowrap">{req.timestamp.toLocaleString()}</td>
+                                      <td className="px-2 py-1">{req.customerName}</td>
+                                      <td className="px-2 py-1 text-right font-bold">{Number(req.amount || 0).toFixed(2)}</td>
+                                      <td className="px-2 py-1">{req.method}</td>
+                                      <td className="px-2 py-1">
+                                          <span className={`px-2 py-0.5 rounded-full font-bold ${req.status === 'Approved' ? 'bg-green-100 text-green-700' : req.status === 'Rejected' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                                              {req.status}
+                                          </span>
+                                      </td>
+                                      <td className="px-2 py-1">{req.processedByName || '-'}</td>
+                                  </tr>
+                              ))}
+                          </tbody>
+                      </table>
+                  </div>
+              </div>
+
               <div className="flex items-center justify-between bg-gray-50 p-3 rounded-lg border">
                   <span className="text-sm font-bold text-gray-700">Filter Type:</span>
                   <select 
@@ -314,8 +496,10 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
                               <th className="text-left py-2 px-3">Time</th>
                               <th className="text-left py-2 px-3">Customer</th>
                               <th className="text-right py-2 px-3">Amount</th>
+                              <th className="text-right py-2 px-3">Bonus Adj</th>
                               <th className="text-left py-2 px-3">Method</th>
                               <th className="text-left py-2 px-3">Processed By</th>
+                              <th className="text-left py-2 px-3">Note</th>
                           </tr>
                       </thead>
                       <tbody>
@@ -327,12 +511,16 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
                                       {log.amount.toFixed(2)} GMD
                                       {log.bonusAwarded ? <span className="block text-xs text-yellow-600 font-normal">+ {log.bonusAwarded} Bonus</span> : null}
                                   </td>
+                                  <td className={`py-2 px-3 text-right font-bold ${Number(log.bonusAdjustment || 0) < 0 ? 'text-red-600' : 'text-blue-700'}`}>
+                                      {Number(log.bonusAdjustment || 0) === 0 ? '-' : `${Number(log.bonusAdjustment || 0) > 0 ? '+' : ''}${Number(log.bonusAdjustment || 0).toFixed(2)}`}
+                                  </td>
                                   <td className="py-2 px-3">
                                       <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${log.method === 'Correction' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-700'}`}>
                                           {log.method}
                                       </span>
                                   </td>
                                   <td className="py-2 px-3 font-bold text-betese-dark">{log.processedByName}</td>
+                                  <td className="py-2 px-3 text-xs text-gray-600">{log.note || '-'}</td>
                               </tr>
                           ))}
                       </tbody>

@@ -22,7 +22,7 @@ import {
     dbFetchLiveTickets, checkBackendConnection, dbSaveRace, 
     dbUpdateRace, dbDeleteRace, dbUpdateNonRunners, dbSaveRaceResult,
     dbFetchDepositRequests, dbFetchWithdrawalRequests, dbDepositRequest,
-    dbApproveDepositRequestExact, dbRejectDepositRequest, dbCancelWithdrawal,
+    dbMarkDepositRequestApproved, dbRejectDepositRequest, dbCancelWithdrawal,
     dbCreateWithdrawalRequest, dbAddUser, dbFetchPromotions,
     dbTogglePromotionStatus, dbUpdatePromotion, dbMovePromotion,
     dbCreatePromotion, dbDeletePromotion, dbFetchProgramImages,
@@ -32,7 +32,7 @@ import {
     dbProcessWithdrawalRequest, dbFetchChatThreads, dbFetchChatMessages,
     dbSendChatMessage, dbMarkThreadAsRead, dbSettleRaceTickets, dbCancelTicket,
     dbToggleUserLock, dbAdminResetPassword, dbRecalculateAllTicketsSafely,
-    dbApplyCustomerDeposit, dbFreshStart, dbFetchUserBalance
+    dbApplyCustomerDeposit, dbApplyCustomerBalanceAdjustment, dbFreshStart, dbFetchUserBalance
 } from './supabaseClient';
 
 const normalizeRole = (role: unknown): Role => {
@@ -688,39 +688,78 @@ const AppContent: React.FC = () => {
       if (!request || request.status !== 'Pending' || !currentUser) return;
       
       try {
-          if (supabase) {
-              await dbApproveDepositRequestExact(
-                  requestId,
-                  request.customerId,
-                  Number(request.amount.toFixed(2)),
-                  currentUser.id,
-                  currentUser.name,
-                  effectiveTime
-              );
-
-              // Keep UI in sync immediately with the exact approved amount.
-              setUsers(prev => (prev || []).map(u => {
-                  if (u.id !== request.customerId) return u;
-                  return { ...u, walletBalance: Number(((u.walletBalance || 0) + Number(request.amount.toFixed(2))).toFixed(2)) };
-              }));
-
-              setCurrentUser(prev => {
-                  if (!prev || prev.id !== request.customerId) return prev;
-                  return { ...prev, walletBalance: Number(((prev.walletBalance || 0) + Number(request.amount.toFixed(2))).toFixed(2)) };
-              });
-
-              setDepositRequests(prev => (prev || []).map(r =>
-                  r.id === requestId
-                      ? { ...r, status: 'Approved', processedBy: currentUser.id, processedByName: currentUser.name, processedAt: effectiveTime }
-                      : r
-              ));
-          } else {
-              handleDeposit(request.customerId, request.amount, request.method, request.transactionId);
-              setDepositRequests(prev => (prev || []).map(r => r.id === requestId ? { ...r, status: 'Approved', processedBy: currentUser.id, processedByName: currentUser.name, processedAt: effectiveTime } : r));
+          const result = await handleDeposit(request.customerId, request.amount, request.method, request.transactionId);
+          if (!result.success) {
+              throw new Error('Unable to credit wallet for this request.');
           }
+
+          if (supabase) {
+              await dbMarkDepositRequestApproved(requestId, currentUser.id, currentUser.name, effectiveTime);
+          }
+
+          setDepositRequests(prev => (prev || []).map(r =>
+              r.id === requestId
+                  ? { ...r, status: 'Approved', processedBy: currentUser.id, processedByName: currentUser.name, processedAt: effectiveTime }
+                  : r
+          ));
       } catch (e: any) {
           alert(`Approval Error: ${e.message}`);
       }
+  };
+
+  const handleAdminBalanceAdjustment = async (customerId: string, walletDelta: number, bonusDelta: number, note: string) => {
+      if (!currentUser || currentUser.role !== 'Admin') {
+          return { success: false, message: 'Only admin can adjust wallet or bonus balances.' };
+      }
+
+      const customer = (users || []).find(u => u.id === customerId && u.role === 'Customer');
+      if (!customer) return { success: false, message: 'Customer not found.' };
+
+      const normalizedWalletDelta = Number(Number(walletDelta || 0).toFixed(2));
+      const normalizedBonusDelta = Number(Number(bonusDelta || 0).toFixed(2));
+      if (!Number.isFinite(normalizedWalletDelta) || !Number.isFinite(normalizedBonusDelta)) {
+          return { success: false, message: 'Invalid adjustment amounts.' };
+      }
+      if (normalizedWalletDelta === 0 && normalizedBonusDelta === 0) {
+          return { success: false, message: 'Enter wallet or bonus adjustment.' };
+      }
+
+      const nextWallet = Number(((customer.walletBalance || 0) + normalizedWalletDelta).toFixed(2));
+      const nextBonus = Number(((customer.bonusBalance || 0) + normalizedBonusDelta).toFixed(2));
+      if (nextWallet < 0) return { success: false, message: 'Wallet cannot go below zero.' };
+      if (nextBonus < 0) return { success: false, message: 'Bonus cannot go below zero.' };
+
+      let appliedWallet = nextWallet;
+      let appliedBonus = nextBonus;
+      try {
+          if (supabase) {
+              const dbResult = await dbApplyCustomerBalanceAdjustment(customerId, normalizedWalletDelta, normalizedBonusDelta);
+              appliedWallet = dbResult.walletBalance;
+              appliedBonus = dbResult.bonusBalance;
+          }
+      } catch (e: any) {
+          return { success: false, message: e.message || 'Failed to apply adjustment.' };
+      }
+
+      const updatedCustomer = { ...customer, walletBalance: appliedWallet, bonusBalance: appliedBonus };
+      setUsers(prev => (prev || []).map(u => u.id === customerId ? updatedCustomer : u));
+      setCurrentUser(prev => prev && prev.id === customerId ? { ...prev, ...updatedCustomer } : prev);
+
+      setDepositLogs(prev => [...prev, {
+          id: `dl-${Date.now()}`,
+          customerId,
+          customerName: customer.name,
+          customerPhone: customer.phone,
+          amount: normalizedWalletDelta,
+          bonusAdjustment: normalizedBonusDelta || undefined,
+          processedById: currentUser.id,
+          processedByName: currentUser.name,
+          timestamp: effectiveTime,
+          method: 'Correction',
+          note: note?.trim() || undefined
+      }]);
+
+      return { success: true, message: 'Balance adjustment applied.' };
   };
 
   const handleRejectDepositRequest = async (requestId: string) => {
@@ -1388,6 +1427,7 @@ const AppContent: React.FC = () => {
                     onLockAllVendors={() => {}}
                     onAddUser={() => {}}
                     onDeposit={handleDeposit}
+                    onAdminAdjustBalance={handleAdminBalanceAdjustment}
                     depositLogs={depositLogs}
                     allTickets={placedTickets}
                     onCancelTicket={cancelTicket}

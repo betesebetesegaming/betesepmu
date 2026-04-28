@@ -184,11 +184,13 @@ export interface DepositLog {
   customerPhone?: string; // Added phone number for tracking
   amount: number;
   bonusAwarded?: number;
+  bonusAdjustment?: number;
   processedById: string;
   processedByName: string;
   timestamp: Date;
   method: 'Cash' | 'Wave' | 'AfriMoney' | 'Correction'; // Added Correction
   transactionId?: string;
+  note?: string;
 }
 
 export interface ChatMessage {
