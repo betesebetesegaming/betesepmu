@@ -72,7 +72,7 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
 
         bonusPlayTickets.forEach(ticket => {
             const ticketDay = ticket.timestamp.toISOString().slice(0, 10);
-            const uniqueRaceIds = Array.from(new Set(ticket.selections.map(selection => selection.raceId)));
+            const uniqueRaceIds = Array.from(new Set<string>(ticket.selections.map(selection => selection.raceId)));
             uniqueRaceIds.forEach(raceId => {
                 distinctRaceIds.add(raceId);
                 if (!raceDayMap.has(raceId)) raceDayMap.set(raceId, new Set<string>());

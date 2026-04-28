@@ -166,7 +166,7 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
   };
 
   const agentOptions = useMemo(() =>
-    Array.from(new Set(tickets.map(t => t.vendorName).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
+    Array.from(new Set<string>(tickets.map(t => t.vendorName).filter((a): a is string => Boolean(a)))).sort((a, b) => a.localeCompare(b)),
   [tickets]);
 
   const filteredTickets = useMemo(() => {

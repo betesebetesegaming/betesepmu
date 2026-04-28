@@ -152,7 +152,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
             return stats;
         }, {} as Record<string, RacePerformance>);
 
-        Object.entries(byRace).forEach(([raceId, stats]) => {
+        (Object.entries(byRace) as [string, RacePerformance][]).forEach(([raceId, stats]) => {
             stats.ticketsCount = raceTicketSet.get(raceId)?.size || 0;
         });
 
@@ -244,7 +244,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
             })
             .sort((a, b) => a.scheduledTime.getTime() - b.scheduledTime.getTime());
 
-        for (const [raceId, stats] of Object.entries(byRace)) {
+        for (const [raceId, stats] of Object.entries(byRace) as [string, RacePerformance][]) {
             if (knownRaceIds.has(raceId)) continue;
             raceCards.push({
                 raceId,
@@ -266,7 +266,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
     }, [tickets, raceNameMap, races]);
 
     const ledgerAgentOptions = useMemo(() => {
-        return Array.from(new Set(analyticsData.combinationLedger.map(row => row.actorName).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+        return Array.from(new Set<string>(analyticsData.combinationLedger.map(row => row.actorName).filter((a): a is string => Boolean(a)))).sort((a, b) => a.localeCompare(b));
     }, [analyticsData.combinationLedger]);
 
     const filteredCombinationLedger = useMemo(() => {

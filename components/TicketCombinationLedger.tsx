@@ -159,7 +159,7 @@ export const TicketCombinationLedger: React.FC<TicketCombinationLedgerProps> = (
   }, [tickets, raceById, now]);
 
   const agentOptions = useMemo(() => {
-    return Array.from(new Set(rows.map(r => r.vendorName).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+    return Array.from(new Set<string>(rows.map(r => r.vendorName).filter((a): a is string => Boolean(a)))).sort((a, b) => a.localeCompare(b));
   }, [rows]);
 
   const filteredRows = useMemo(() => {

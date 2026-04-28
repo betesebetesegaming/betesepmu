@@ -134,7 +134,7 @@ export const AutomaticRaffleDrawerPanel: React.FC<AutomaticRaffleDrawerPanelProp
     };
 
     const runNumberBasedDraw = () => {
-        const numberMap = new Map(eligibleEntries.map(entry => [entry.raffleNumber, entry]));
+        const numberMap = new Map<string, RaffleEntry>(eligibleEntries.map(entry => [entry.raffleNumber, entry] as [string, RaffleEntry]));
         const selectedNumbers = [firstNumber, secondNumber, thirdNumber].map(n => n.trim());
 
         if (selectedNumbers.some(n => !n)) {
