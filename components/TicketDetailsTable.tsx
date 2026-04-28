@@ -115,14 +115,20 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
     return new Map(races.map(r => [r.id, r]));
   }, [races]);
 
-  const recalculatedWinningsByTicket = useMemo(() => {
-    const map = new Map<string, number>();
+  const recalculatedByTicket = useMemo(() => {
+    const map = new Map<string, { totalWinnings: number; breakdown: ReturnType<typeof calculateTicketWinnings>['breakdown'] }>();
     tickets.forEach(ticket => {
       const recalculated = calculateTicketWinnings(ticket, races);
-      map.set(ticket.id, Number(recalculated.totalWinnings || 0));
+      map.set(ticket.id, { totalWinnings: Number(recalculated.totalWinnings || 0), breakdown: recalculated.breakdown });
     });
     return map;
   }, [tickets, races]);
+
+  const recalculatedWinningsByTicket = useMemo(() => {
+    const map = new Map<string, number>();
+    recalculatedByTicket.forEach((v, k) => map.set(k, v.totalWinnings));
+    return map;
+  }, [recalculatedByTicket]);
 
   const getDisplayStatus = (ticket: Ticket): DisplayStatus => {
     if (ticket.status === 'Paid' || ticket.status === 'Canceled' || ticket.status === 'Booked') return ticket.status;
@@ -398,14 +404,32 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                       {/* Bet combinations — full-width inline boxes */}
                       <td className="py-1.5 px-2 align-top border-r border-gray-200 min-w-[220px]">
                         <div className="">
-                          {ticket.selections.map((sel, i) => (
-                            <div
-                              key={i}
-                              className="text-xs text-gray-700 border border-gray-300 px-2 py-1 bg-white leading-snug w-full break-words"
-                            >
-                              {formatBetLabel(sel.betType)} - {formatBetNumbers(sel)} - {sel.multiplier} ticket(s) {(sel.cost * sel.multiplier).toFixed(0)} GMD
-                            </div>
-                          ))}
+                          {ticket.selections.map((sel, i) => {
+                            const ticketResult = recalculatedByTicket.get(ticket.id);
+                            const selBreakdown = ticketResult?.breakdown?.find(b => b.selectionIndex === i);
+                            const raceSettled = Boolean(raceById.get(sel.raceId)?.result?.winningNumbers?.length);
+                            const isWin = selBreakdown?.status === 'Win';
+                            const isLoss = raceSettled && selBreakdown?.status === 'Loss';
+                            return (
+                              <div
+                                key={i}
+                                className={`text-xs border px-2 py-1 leading-snug w-full break-words mb-0.5 last:mb-0 ${
+                                  isWin ? 'border-green-400 bg-green-50 text-green-800' :
+                                  isLoss ? 'border-red-200 bg-red-50 text-red-700' :
+                                  'border-gray-300 bg-white text-gray-700'
+                                }`}
+                              >
+                                <span className="font-semibold">{formatBetLabel(sel.betType)} - {formatBetNumbers(sel)} - {sel.multiplier} ticket(s) {(sel.cost * sel.multiplier).toFixed(0)} GMD</span>
+                                {isWin && (
+                                  <span className="ml-1 inline-flex items-center gap-1 font-black text-green-700">
+                                    ✓ WIN {selBreakdown.totalPayout ? `+${selBreakdown.totalPayout.toFixed(0)} GMD` : ''}
+                                    {selBreakdown.winType ? <span className="text-[9px] font-normal opacity-75">({selBreakdown.winType})</span> : null}
+                                  </span>
+                                )}
+                                {isLoss && <span className="ml-1 font-bold text-red-500">✗ LOST</span>}
+                              </div>
+                            );
+                          })}
                         </div>
                       </td>
 
