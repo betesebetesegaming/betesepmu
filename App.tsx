@@ -641,7 +641,7 @@ const AppContent: React.FC = () => {
         customerId,
         customerName: cust.name,
         customerPhone: cust.phone,
-        amount,
+        amount: normalizedAmount,
                 bonusAwarded: bonusApplied || undefined,
         processedById: currentUser.id,
         processedByName: currentUser.name,

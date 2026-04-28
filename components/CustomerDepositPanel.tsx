@@ -243,11 +243,12 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
                     <form onSubmit={handleDeposit} className="flex gap-2">
                         <input 
                             type="number"
-                            value={amount}
-                            onChange={e => setAmount(Number(e.target.value))}
+                            value={amount === '' ? '' : amount}
+                            onChange={e => setAmount(e.target.value === '' ? '' : Number(e.target.value))}
                             placeholder={isCorrectionMode ? "Amount to Remove" : "Amount to Deposit"}
                             className={`flex-grow p-2 border rounded-md font-bold text-lg ${isCorrectionMode ? 'border-red-300 text-red-700' : 'border-green-300 text-green-700'}`}
                             min="1"
+                            step="0.01"
                             required
                         />
                         <button 
