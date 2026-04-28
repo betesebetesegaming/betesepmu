@@ -429,7 +429,6 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                                 {isWin && selBreakdown && (
                                   <div className="mt-0.5 text-[11px] font-black text-green-700 bg-green-100 border border-green-300 rounded px-1.5 py-0.5">
                                     ✓ WIN — Rapport <span className="underline">{selBreakdown.payoutPerCombination?.toFixed(0)}</span>
-                                    {' × '}{selBreakdown.basePrice?.toFixed(0)} GMD (base)
                                     {' × '}{selBreakdown.multiplier} ticket{(selBreakdown.multiplier || 1) > 1 ? 's' : ''}
                                     {' = '}<span className="text-green-900">+{selBreakdown.totalPayout?.toFixed(0)} GMD</span>
                                     {selBreakdown.winType ? <span className="ml-1 font-normal text-[9px] opacity-75">({selBreakdown.winType})</span> : null}

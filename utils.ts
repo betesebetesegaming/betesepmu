@@ -481,15 +481,15 @@ export function calculateTicketWinnings(ticket: Ticket, allRaces: Race[]): { tot
             }
 
             if (matchedCombos.length > 0 && unitPayout > 0) {
-                // Use the base price for ONE combination unit, not the total sel.cost.
-                // sel.cost can be N × basePrice for combo bets (e.g. 3-horse Couplé = 90 = 3×30).
-                // Only one combination wins, so payout = rapport × basePrice × multiplier.
-                const basePrice = getBetBasePrice(sel.betType);
-                const totalForSource = unitPayout * (basePrice || sel.cost) * sel.multiplier;
+                // Correct PMU payout formula: Rapport × Multiplier (number of tickets played).
+                // The rapport entered by admin IS the total payout for 1 ticket.
+                // Base price (e.g. 25 GMD) is the COST per ticket, NOT a multiplier on winnings.
+                // Example: Rapport 500 × 1 ticket = 500 GMD. Rapport 500 × 25 tickets = 12,500 GMD.
+                const totalForSource = unitPayout * sel.multiplier;
                 selectionTotal += totalForSource;
                 winningCombinationList.push(...matchedCombos);
                 payoutPerCombination = unitPayout;
-                winningBasePrice = basePrice || sel.cost;
+                winningBasePrice = getBetBasePrice(sel.betType);
                 winType = matchedType;
                 source = resultSource.source;
             }
