@@ -2,8 +2,8 @@
 import { BetTypeOption, Race, BetPricing, User, ChatThread, ChatMessage, Promotion } from './types';
 
 export const BET_PRICING: Record<BetTypeOption, BetPricing> = {
-  [BetTypeOption.SimpleGagnant]: { minHorses: 1, perHorsePrice: 25, priceMap: {} },
-  [BetTypeOption.SimplePlace]: { minHorses: 1, perHorsePrice: 25, priceMap: {} },
+  [BetTypeOption.SimpleGagnant]: { minHorses: 1, perHorsePrice: 30, priceMap: {} },
+  [BetTypeOption.SimplePlace]: { minHorses: 1, perHorsePrice: 30, priceMap: {} },
   [BetTypeOption.CoupleGagnant]: {
     minHorses: 2,
     basePrice: 30,

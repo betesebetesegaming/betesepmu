@@ -211,7 +211,12 @@ export const validateSelectionFormula = (sel: BetSelection): { valid: boolean; m
     if (pricing.perHorsePrice !== undefined) {
         if (xCount > 0) return { valid: false, message: `${sel.betType}: wildcard X is not allowed` };
         const expected = pricing.perHorsePrice * numberCount;
-        if (Math.abs((sel.cost || 0) - expected) >= 0.001) {
+        // Also accept the legacy 25 GMD price for SimpleGagnant/SimplePlace so old tickets
+        // placed before the price change to 30 GMD still settle correctly.
+        const legacyExpected = 25 * numberCount;
+        const costOk = Math.abs((sel.cost || 0) - expected) < 0.001 ||
+                       Math.abs((sel.cost || 0) - legacyExpected) < 0.001;
+        if (!costOk) {
             return { valid: false, message: `${sel.betType}: invalid cost` };
         }
         return { valid: true };
