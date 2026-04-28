@@ -284,6 +284,21 @@ const AppContent: React.FC = () => {
       } catch (e: any) { alert("Failed to delete race: " + e.message); }
   };
 
+  const handleUpdateNonRunners = async (raceId: string, nonRunners: number[]) => {
+      const normalized = [...new Set((nonRunners || []).map(n => Number(n)).filter(n => Number.isFinite(n) && n > 0))]
+          .sort((a, b) => a - b);
+      try {
+          if (supabase) {
+              await dbUpdateNonRunners(raceId, normalized);
+              await loadLiveSystemData(currentUser || undefined);
+          } else {
+              setRaces(prev => (prev || []).map(r => r.id === raceId ? { ...r, nonRunners: normalized } : r));
+          }
+      } catch (e: any) {
+          alert("Failed to save non-runners: " + (e?.message || e));
+      }
+  };
+
   const handleSaveRaceResult = async (result: RaceResult): Promise<boolean> => {
       if (!currentUser || currentUser.role !== 'Admin') {
           alert("Only Admin can enter or edit race results.");
@@ -1323,7 +1338,7 @@ const AppContent: React.FC = () => {
                     onAddRace={handleAddRace}
                     onUpdateRace={handleUpdateRace}
                     onDeleteRace={handleDeleteRace}
-                    onUpdateNonRunners={() => {}}
+                    onUpdateNonRunners={handleUpdateNonRunners}
                     onSaveRaceResult={handleSaveRaceResult}
                     users={users}
                     onToggleLock={handleToggleLock}
@@ -1367,7 +1382,7 @@ const AppContent: React.FC = () => {
                     onDeposit={handleDeposit}
                     races={races}
                     onSaveRaceResult={handleSaveRaceResult}
-                    onUpdateNonRunners={() => {}}
+                    onUpdateNonRunners={handleUpdateNonRunners}
                     depositLogs={depositLogs}
                     onUpdateRace={handleUpdateRace}
                     onDeleteRace={handleDeleteRace}
