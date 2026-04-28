@@ -640,6 +640,7 @@ const AppContent: React.FC = () => {
         id: `dl-${Date.now()}`,
         customerId,
         customerName: cust.name,
+        customerPhone: cust.phone,
         amount,
                 bonusAwarded: bonusApplied || undefined,
         processedById: currentUser.id,

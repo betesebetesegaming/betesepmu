@@ -273,7 +273,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
 
     const renderCurrentView = () => {
         switch (view) {
-            case 'VENDOR_MONITOR': return <VendorMonitorPanel allTickets={allTickets} users={users} onCancelTicket={onCancelTicket} onToggleLock={onToggleLock} />;
+            case 'VENDOR_MONITOR': return <VendorMonitorPanel allTickets={allTickets} depositLogs={depositLogs} users={users} onCancelTicket={onCancelTicket} onToggleLock={onToggleLock} />;
             case 'ANALYTICS': return <div className="space-y-6"><AnalyticsDashboard tickets={allTickets} races={races} /><PromotionManagementPanel promotions={promotions} onToggleStatus={onTogglePromotionStatus} onUpdatePromotion={onUpdatePromotion} onMovePromotion={onMovePromotion} onCreatePromotion={onCreatePromotion} onDeletePromotion={onDeletePromotion} /></div>;
             case 'RAFFLE_DRAW': return <AutomaticRaffleDrawerPanel users={users} tickets={allTickets} effectiveTime={effectiveTime} />;
             case 'PROGRAM': return <div className="space-y-6"><ProgramManagementPanel programImages={programImages} onUpload={onAddProgramImage} onDelete={onDeleteProgramImage} /><CombinationSearch allTickets={allTickets} races={races} onCancelTicket={onCancelTicket} effectiveTime={effectiveTime} /></div>;

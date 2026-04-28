@@ -203,16 +203,18 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
     const handleShareEndOfSaleWhatsApp = () => {
         const supportNumber = '2204176003';
         const text =
-            `📊 END OF SALE REPORT\n` +
+            `END OF SALE REPORT\n` +
             `Vendor: ${currentUser.name}\n` +
             `Date: ${effectiveTime.toLocaleDateString()}\n` +
-            `──────────────────\n` +
-            `🎫 Tickets Sold : ${placedTickets.length}\n` +
-            `💰 Gross Sales  : GMD ${reportSales.toFixed(0)}\n` +
-            `💸 Paid Out     : GMD ${reportPayouts.toFixed(0)}\n` +
-            `──────────────────\n` +
-            `🏦 Net Balance  : GMD ${reportNet.toFixed(0)}\n` +
-            `──────────────────\n` +
+            `------------------\n` +
+            `Tickets Sold : ${placedTickets.length}\n` +
+            `Ticket Sales : GMD ${reportTicketSales.toFixed(0)}\n` +
+            `Online Sales : GMD ${reportOnlineSales.toFixed(0)}\n` +
+            `Total Sales  : GMD ${reportSales.toFixed(0)}\n` +
+            `Paid Out     : GMD ${reportPayouts.toFixed(0)}\n` +
+            `------------------\n` +
+            `Net Balance  : GMD ${reportNet.toFixed(0)}\n` +
+            `------------------\n` +
             `Generated: ${effectiveTime.toLocaleString()}`;
         window.open(`https://wa.me/${supportNumber}?text=${encodeURIComponent(text)}`, '_blank');
     };
@@ -225,8 +227,16 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
     const pendingFinanceCount = ((depositRequests || []).filter(r => r && r.status === 'Pending').length) + 
                                ((withdrawalRequests || []).filter(r => r && r.status === 'Pending').length);
 
+    const vendorOnlineDepositLogs = (depositLogs || []).filter(log =>
+        log?.processedById === currentUser.id &&
+        Number(log?.amount || 0) > 0 &&
+        log?.method !== 'Correction'
+    );
+
     // Totals for report calculation with safety
-    const reportSales = (placedTickets || []).reduce((sum, t) => sum + (t?.totalCost || 0), 0);
+    const reportTicketSales = (placedTickets || []).reduce((sum, t) => sum + (t?.totalCost || 0), 0);
+    const reportOnlineSales = vendorOnlineDepositLogs.reduce((sum, log) => sum + Number(log?.amount || 0), 0);
+    const reportSales = reportTicketSales + reportOnlineSales;
     const reportPayouts = (placedTickets || [])
         .filter(t => t?.status === 'Paid')
         .reduce((sum, t) => sum + (t?.winnings || 0), 0);
@@ -307,12 +317,21 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                                 <p className="text-white/80 text-sm font-bold">{effectiveTime.toLocaleDateString()}</p>
                             </div>
 
-                            {/* 3 stat boxes */}
-                            <div className="grid grid-cols-3 divide-x divide-gray-200">
+                            <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-y md:divide-y-0 divide-gray-200">
+                                <div className="p-5 text-center">
+                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Ticket Sales</p>
+                                    <p className="text-2xl font-black text-betese-green leading-none">GMD {reportTicketSales.toFixed(0)}</p>
+                                    <p className="text-[10px] text-gray-400 mt-1">{placedTickets.length} ticket(s)</p>
+                                </div>
+                                <div className="p-5 text-center">
+                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Online Sales</p>
+                                    <p className="text-2xl font-black text-indigo-600 leading-none">GMD {reportOnlineSales.toFixed(0)}</p>
+                                    <p className="text-[10px] text-gray-400 mt-1">{vendorOnlineDepositLogs.length} deposit(s)</p>
+                                </div>
                                 <div className="p-5 text-center">
                                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Sales</p>
                                     <p className="text-2xl font-black text-betese-green leading-none">GMD {reportSales.toFixed(0)}</p>
-                                    <p className="text-[10px] text-gray-400 mt-1">{placedTickets.length} ticket(s)</p>
+                                    <p className="text-[10px] text-gray-400 mt-1">tickets + online deposits</p>
                                 </div>
                                 <div className="p-5 text-center">
                                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Paid Out</p>
@@ -321,12 +340,12 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                                         {placedTickets.filter(t => t.status === 'Paid').length} paid
                                     </p>
                                 </div>
-                                <div className="p-5 text-center">
+                                <div className="p-5 text-center col-span-2 md:col-span-4 border-t border-gray-200">
                                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Net Balance</p>
                                     <p className={`text-2xl font-black leading-none ${reportNet >= 0 ? 'text-blue-700' : 'text-red-600'}`}>
                                         GMD {reportNet.toFixed(0)}
                                     </p>
-                                    <p className="text-[10px] text-gray-400 mt-1">sales − payouts</p>
+                                    <p className="text-[10px] text-gray-400 mt-1">(ticket sales + online sales) - payouts</p>
                                 </div>
                             </div>
 
@@ -456,7 +475,11 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                                 </div>
                             )}
                             <div className="bg-betese-green/10 border-l-8 border-betese-green p-4 rounded-r-2xl flex items-center justify-between shadow-lg">
-                                <div><p className="text-[11px] font-black text-betese-green uppercase">Shift Gross Total:</p><p className="font-black text-2xl text-gray-900 tracking-tight">GMD {reportSales.toFixed(0)}</p></div>
+                                <div>
+                                    <p className="text-[11px] font-black text-betese-green uppercase">Shift Total Sales:</p>
+                                    <p className="font-black text-2xl text-gray-900 tracking-tight">GMD {reportSales.toFixed(0)}</p>
+                                    <p className="text-[10px] text-gray-500 mt-1">Ticket {reportTicketSales.toFixed(0)} + Online {reportOnlineSales.toFixed(0)}</p>
+                                </div>
                                 <button onClick={handlePrintDailyReport} className="px-6 py-4 bg-betese-green text-white font-black rounded-xl shadow hover:brightness-110 active:scale-95 text-sm uppercase flex items-center gap-2 border-b-4 border-black/20"><svg viewBox="0 0 24 24" fill="none" className="w-5 h-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M4 20V12M10 20V8M16 20V5M22 20V10"/></svg> PRINT SALES</button>
                             </div>
                         </div>
@@ -500,7 +523,9 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                 </div>
                 <div className="solid"></div>
                 <div className="flex justify-between py-1 b"><span>TOTAL TICKETS:</span><span>{placedTickets.length}</span></div>
-                <div className="flex justify-between py-1 b"><span>GROSS SALES:</span><span>GMD {reportSales.toFixed(0)}</span></div>
+                <div className="flex justify-between py-1 b"><span>TICKET SALES:</span><span>GMD {reportTicketSales.toFixed(0)}</span></div>
+                <div className="flex justify-between py-1 b"><span>ONLINE SALES:</span><span>GMD {reportOnlineSales.toFixed(0)}</span></div>
+                <div className="flex justify-between py-1 b"><span>TOTAL SALES:</span><span>GMD {reportSales.toFixed(0)}</span></div>
                 <div className="flex justify-between py-1 b"><span>TOTAL PAID:</span><span>GMD {reportPayouts.toFixed(0)}</span></div>
                 <div className="solid"></div>
                 <div className="flex b my-2 justify-between items-center">
@@ -526,7 +551,9 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                 </div>
                 <div className="solid"></div>
                 <div className="flex justify-between py-1 b"><span>TICKETS SOLD:</span><span>{placedTickets.length}</span></div>
-                <div className="flex justify-between py-1 b"><span>GROSS SALES:</span><span>GMD {reportSales.toFixed(0)}</span></div>
+                <div className="flex justify-between py-1 b"><span>TICKET SALES:</span><span>GMD {reportTicketSales.toFixed(0)}</span></div>
+                <div className="flex justify-between py-1 b"><span>ONLINE SALES:</span><span>GMD {reportOnlineSales.toFixed(0)}</span></div>
+                <div className="flex justify-between py-1 b"><span>TOTAL SALES:</span><span>GMD {reportSales.toFixed(0)}</span></div>
                 <div className="flex justify-between py-1 b"><span>PAID OUT:</span><span>GMD {reportPayouts.toFixed(0)}</span></div>
                 <div className="solid"></div>
                 <div className="flex b my-2 justify-between items-center">
