@@ -90,7 +90,7 @@ export interface BetSlip {
 
 export interface WinningsBreakdown {
   selectionIndex: number;
-  status: 'Win' | 'Loss';
+  status: 'Win' | 'Loss' | 'Pending';
   // Win-specific details
   winType?: string;
   winningCombinations?: number;

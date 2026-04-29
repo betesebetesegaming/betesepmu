@@ -114,7 +114,7 @@ export const TicketCombinationLedger: React.FC<TicketCombinationLedgerProps> = (
         const breakdown = ticket.winningsBreakdown?.find(b => b.selectionIndex === selectionIndex);
         const safeDate = normalizeDate(ticket.timestamp as unknown as Date | string | number);
         const scheduledTime = race?.endDate || null;
-        const isFinished = Boolean(race?.result) || (scheduledTime ? now >= scheduledTime : false);
+        const isFinished = Boolean(race?.result?.winningNumbers?.length);
         const selectionStatus: LedgerRow['selectionStatus'] = ticket.status === 'Canceled'
           ? 'Canceled'
           : ticket.status === 'Booked'

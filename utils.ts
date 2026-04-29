@@ -336,8 +336,9 @@ export function calculateTicketWinnings(ticket: Ticket, allRaces: Race[]): { tot
         }
 
         const race = allRaces.find((r) => r.id === sel.raceId);
-        if (!race?.result) {
-            finalBreakdown.push({ selectionIndex: index, status: 'Loss' });
+        // Do not settle as loss until official winning numbers are published.
+        if (!race?.result?.winningNumbers?.length) {
+            finalBreakdown.push({ selectionIndex: index, status: 'Pending' });
             return;
         }
 
