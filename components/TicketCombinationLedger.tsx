@@ -186,6 +186,10 @@ export const TicketCombinationLedger: React.FC<TicketCombinationLedgerProps> = (
     filteredRows.forEach(row => {
       const baseDate = row.scheduledTime || normalizeDate(`${row.dateKey}T00:00:00`) || now;
       const dateKey = toDateInput(baseDate);
+      const raceRef = raceById.get(row.raceId);
+      const winningNumbersText = raceRef?.result?.winningNumbers?.length
+        ? raceRef.result.winningNumbers.join(' - ')
+        : 'Pending result';
       if (!sectionMap.has(row.raceId)) {
         sectionMap.set(row.raceId, {
           raceId: row.raceId,
@@ -193,7 +197,7 @@ export const TicketCombinationLedger: React.FC<TicketCombinationLedgerProps> = (
           raceName: row.race,
           scheduledTime: row.scheduledTime,
           isFinished: row.isFinished,
-          winningNumbers: row.isFinished ? 'Result added' : 'Pending result',
+          winningNumbers: winningNumbersText,
           dateKey,
           isToday: dateKey === todayKey,
           ordinal: 0,
@@ -226,7 +230,7 @@ export const TicketCombinationLedger: React.FC<TicketCombinationLedgerProps> = (
     });
 
     return { sections, todayKey };
-  }, [filteredRows, now]);
+  }, [filteredRows, now, raceById]);
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[80] p-4 overflow-y-auto">
@@ -354,7 +358,9 @@ export const TicketCombinationLedger: React.FC<TicketCombinationLedgerProps> = (
                           <span className="font-semibold text-sm opacity-90">- {section.raceName}</span>
                         </div>
                         <div className={`text-xs mt-0.5 ${isFirstFinished ? 'text-white/80' : section.isFinished ? 'text-amber-700' : 'text-white/80'}`}>
-                          {section.isFinished ? 'Result added - settlement verified per selection' : 'Awaiting result'}
+                          {section.isFinished
+                            ? `Result: ${section.winningNumbers} - settlement verified per selection`
+                            : `Awaiting result - ${section.winningNumbers}`}
                         </div>
                       </div>
                     </div>
