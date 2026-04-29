@@ -227,17 +227,26 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
     const pendingFinanceCount = ((depositRequests || []).filter(r => r && r.status === 'Pending').length) + 
                                ((withdrawalRequests || []).filter(r => r && r.status === 'Pending').length);
 
-    const vendorOnlineDepositLogs = (depositLogs || []).filter(log =>
-        log?.processedById === currentUser.id &&
-        Number(log?.amount || 0) > 0 &&
-        log?.method !== 'Correction'
-    );
+    const toDayKey = (value: Date) => `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
+    const reportDayKey = toDayKey(effectiveTime);
 
-    // Totals for report calculation with safety
-    const reportTicketSales = (placedTickets || []).reduce((sum, t) => sum + (t?.totalCost || 0), 0);
+    const todaysVendorTickets = (placedTickets || []).filter((ticket) => {
+        if (!ticket || ticket.status === 'Canceled' || ticket.status === 'Booked') return false;
+        const ticketTime = ticket.timestamp instanceof Date ? ticket.timestamp : new Date(ticket.timestamp);
+        return toDayKey(ticketTime) === reportDayKey;
+    });
+
+    const vendorOnlineDepositLogs = (depositLogs || []).filter(log => {
+        if (!log || log.processedById !== currentUser.id || Number(log.amount || 0) <= 0 || log.method === 'Correction') return false;
+        const logTime = log.timestamp instanceof Date ? log.timestamp : new Date(log.timestamp);
+        return toDayKey(logTime) === reportDayKey;
+    });
+
+    // Day-based totals for report calculation
+    const reportTicketSales = todaysVendorTickets.reduce((sum, t) => sum + Number(t?.totalCost || 0), 0);
     const reportOnlineSales = vendorOnlineDepositLogs.reduce((sum, log) => sum + Number(log?.amount || 0), 0);
     const reportSales = reportTicketSales + reportOnlineSales;
-    const reportPayouts = (placedTickets || [])
+    const reportPayouts = todaysVendorTickets
         .filter(t => t?.status === 'Paid')
         .reduce((sum, t) => sum + (t?.winnings || 0), 0);
     const reportNet = reportSales - reportPayouts;
@@ -321,7 +330,7 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                                 <div className="p-5 text-center">
                                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Ticket Sales</p>
                                     <p className="text-2xl font-black text-betese-green leading-none">GMD {reportTicketSales.toFixed(0)}</p>
-                                    <p className="text-[10px] text-gray-400 mt-1">{placedTickets.length} ticket(s)</p>
+                                    <p className="text-[10px] text-gray-400 mt-1">{todaysVendorTickets.length} ticket(s)</p>
                                 </div>
                                 <div className="p-5 text-center">
                                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Online Sales</p>
