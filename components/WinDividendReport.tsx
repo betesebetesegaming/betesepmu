@@ -1,7 +1,6 @@
 import React from 'react';
 import { WinSummary, WIN_CATEGORY_ORDER } from '../utils';
 import { Payouts, BetTypeOption } from '../types';
-import { BET_PRICING } from '../constants';
 
 interface WinDividendReportProps {
   summary: WinSummary | null;
@@ -44,15 +43,13 @@ export const WinDividendReport: React.FC<WinDividendReportProps> = ({ summary, p
     const details = WIN_TYPE_DETAILS[winType];
     if (!details) return total;
     const { betType, payoutKey } = details;
-    const pricing = BET_PRICING[betType];
-    const basePrice = pricing?.basePrice ?? pricing?.perHorsePrice ?? 1;
     const payoutValue = winType === 'Couplé Gagnant'
       ? (payouts.ordreGagnant ?? payouts.desordreGagnant)
       : payouts[payoutKey];
-    const { stake } = summary[winType];
+    const { units } = summary[winType];
 
-    if (typeof payoutValue === 'number' && basePrice > 0) {
-      return total + ((stake / basePrice) * payoutValue);
+    if (typeof payoutValue === 'number' && units > 0) {
+      return total + (units * payoutValue);
     }
     return total;
   }, 0);
@@ -72,19 +69,17 @@ export const WinDividendReport: React.FC<WinDividendReportProps> = ({ summary, p
           </thead>
           <tbody>
             {winningCategories.map(winType => {
-              const { count, stake } = summary[winType];
+                const { count, stake, units } = summary[winType];
               const details = WIN_TYPE_DETAILS[winType];
               let totalPayout = 0;
               if(details) {
-                  const { betType, payoutKey } = details;
-                  const pricing = BET_PRICING[betType];
-                  const basePrice = pricing?.basePrice ?? pricing?.perHorsePrice ?? 1;
+                  const { payoutKey } = details;
                   const payoutValue = winType === 'Couplé Gagnant'
                     ? (payouts.ordreGagnant ?? payouts.desordreGagnant)
                     : payouts[payoutKey];
                   
-                  if (typeof payoutValue === 'number' && basePrice > 0) {
-                      totalPayout = (stake / basePrice) * payoutValue;
+                  if (typeof payoutValue === 'number' && units > 0) {
+                    totalPayout = units * payoutValue;
                   }
               }
 

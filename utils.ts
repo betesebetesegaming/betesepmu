@@ -153,7 +153,7 @@ export const triggerPrint = (elementId: string): void => {
 };
 
 export interface WinSummary {
-    [key: string]: { count: number; stake: number; };
+    [key: string]: { count: number; stake: number; units: number; };
 }
 
 export const WIN_CATEGORY_ORDER = [
@@ -168,17 +168,19 @@ export function calculateWinSummary(race: Race, winningNumbers: number[], ticket
     if (!winningNumbers.length) return summary;
     const first = winningNumbers[0];
     const second = winningNumbers[1];
-    const add = (cat: string, stake: number) => {
-        if (!summary[cat]) summary[cat] = { count: 0, stake: 0 };
+    const add = (cat: string, stake: number, units: number) => {
+        if (!summary[cat]) summary[cat] = { count: 0, stake: 0, units: 0 };
         summary[cat].count++;
         summary[cat].stake += stake;
+        summary[cat].units += units;
     };
     tickets.forEach(t => {
         if (t.status === 'Canceled') return;
         t.selections.forEach(sel => {
             if (sel.raceId !== race.id) return;
             const stake = sel.cost * sel.multiplier;
-            if (sel.betType === BetTypeOption.SimpleGagnant && sel.numbers[0] === first) add('Simple Gagnant', stake);
+            const units = Number(sel.multiplier || 0);
+            if (sel.betType === BetTypeOption.SimpleGagnant && sel.numbers[0] === first) add('Simple Gagnant', stake, units);
             if (
                 sel.betType === BetTypeOption.CoupleGagnant &&
                 first !== undefined &&
@@ -186,7 +188,7 @@ export function calculateWinSummary(race: Race, winningNumbers: number[], ticket
                 sel.numbers.includes(first) &&
                 sel.numbers.includes(second)
             ) {
-                add('Couplé Gagnant', stake);
+                add('Couplé Gagnant', stake, units);
             }
         });
     });
