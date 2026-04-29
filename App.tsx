@@ -32,7 +32,8 @@ import {
     dbProcessWithdrawalRequest, dbFetchChatThreads, dbFetchChatMessages,
     dbSendChatMessage, dbMarkThreadAsRead, dbSettleRaceTickets, dbCancelTicket,
     dbToggleUserLock, dbAdminResetPassword, dbRecalculateAllTicketsSafely,
-    dbApplyCustomerDeposit, dbApplyCustomerBalanceAdjustment, dbFreshStart, dbFetchUserBalance
+    dbApplyCustomerDeposit, dbApplyCustomerBalanceAdjustment, dbFreshStart, dbFetchUserBalance,
+    dbMigrateLegacyBookedTicketsToActive
 } from './supabaseClient';
 
 const normalizeRole = (role: unknown): Role => {
@@ -89,6 +90,7 @@ const AppContent: React.FC = () => {
   const [seenWinningTickets, setSeenWinningTickets] = useState<Set<string>>(new Set());
   const [paymentConfigs, setPaymentConfigs] = useState<PaymentIntegrationConfig[]>([]);
     const duplicatePhoneLockInFlightRef = useRef(false);
+        const legacyBookedMigrationDoneRef = useRef(false);
 
   const [betSlip, setBetSlip] = useState<BetSlip>({ selections: [], totalCost: 0 });
   const [lastTicket, setLastTicket] = useState<Ticket | null>(null);
@@ -106,6 +108,17 @@ const AppContent: React.FC = () => {
           const isConnected = await checkBackendConnection();
           setIsOnline(isConnected);
           if(!isConnected) return;
+
+          if (!legacyBookedMigrationDoneRef.current) {
+              try {
+                  await dbMigrateLegacyBookedTicketsToActive();
+              } catch (migrationError) {
+                  console.error('Legacy booking migration failed:', migrationError);
+              } finally {
+                  legacyBookedMigrationDoneRef.current = true;
+              }
+          }
+
           const [fetchedUsers, fetchedRaces, fetchedDeposits, fetchedWithdrawals] = await Promise.all([
               dbFetchUsers(), 
               dbFetchRaces(),

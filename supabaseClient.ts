@@ -1015,6 +1015,52 @@ export const dbPayForBooking = async (
     return !!data;
 };
 
+export const dbMigrateLegacyBookedTicketsToActive = async (): Promise<number> => {
+    if (!supabase) return 0;
+
+    const { data: bookedRows, error: bookedError } = await supabase
+        .from('tickets')
+        .select('id, vendor_id, vendor_name')
+        .eq('status', 'Booked');
+    if (bookedError) throw bookedError;
+
+    const legacyBooked = bookedRows || [];
+    if (legacyBooked.length === 0) return 0;
+
+    const { data: vendorRows, error: vendorError } = await supabase
+        .from('users')
+        .select('id, name')
+        .eq('role', 'Vendor');
+    if (vendorError) throw vendorError;
+
+    const normalizeName = (value: string) => String(value || '').trim().toLowerCase();
+    const vendorByName = new Map<string, string>();
+    (vendorRows || []).forEach((row: any) => {
+        const key = normalizeName(row.name || '');
+        if (key && !vendorByName.has(key)) vendorByName.set(key, String(row.id));
+    });
+
+    let migratedCount = 0;
+    for (const row of legacyBooked as any[]) {
+        const currentVendorId = String(row.vendor_id || '').trim();
+        const resolvedVendorId = currentVendorId || vendorByName.get(normalizeName(row.vendor_name || '')) || null;
+
+        const updatePayload: any = { status: 'Active' };
+        if (resolvedVendorId) updatePayload.vendor_id = resolvedVendorId;
+        if (row.vendor_name) updatePayload.vendor_name = row.vendor_name;
+
+        const { error: updateError } = await supabase
+            .from('tickets')
+            .update(updatePayload)
+            .eq('id', row.id)
+            .eq('status', 'Booked');
+        if (updateError) throw updateError;
+        migratedCount += 1;
+    }
+
+    return migratedCount;
+};
+
 export const dbCancelTicket = async (
     ticketRef: string,
     canceledById: string,
