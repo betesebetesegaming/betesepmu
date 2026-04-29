@@ -516,9 +516,9 @@ const AppContent: React.FC = () => {
       const newTicket: Ticket = {
           id: Math.floor(10000000 + Math.random() * 90000000).toString(),
           timestamp: effectiveTime,
-          vendorId: '',
+          vendorId: currentUser.role === 'Customer' ? '' : currentUser.id,
           vendorName: currentUser.name,
-          status: 'Booked',
+          status: 'Active',
           bookingCode,
           customerId: currentUser.role === 'Customer' ? currentUser.id : undefined,
           ...betSlip
@@ -537,7 +537,7 @@ const AppContent: React.FC = () => {
       }
       setLastTicket(newTicket);
       setBetSlip({ selections: [], totalCost: 0 });
-      alert("BOOKING CREATED SUCCESSFULLY: Ticket has been added to your history.");
+            alert("TICKET CREATED & PAID SUCCESSFULLY: Booking code is for reference/reprint only.");
   };
 
     const handleDeposit = async (customerId: string, amount: number, method: string = 'Cash', transactionId?: string) => {
@@ -822,8 +822,14 @@ const AppContent: React.FC = () => {
 
   const payForBooking = async (code: string): Promise<{ success: boolean; message: string; ticket?: Ticket }> => {
       const normalizedCode = (code || '').trim().toUpperCase();
-      const ticket = (placedTickets || []).find(t => t.bookingCode?.toUpperCase() === normalizedCode && t.status === 'Booked');
+      const ticket = (placedTickets || []).find(t => t.bookingCode?.toUpperCase() === normalizedCode);
       if (!ticket || !currentUser) return { success: false, message: 'Not found' };
+      if (ticket.status === 'Active') {
+          return { success: true, message: 'Booking already paid. Ticket is active.', ticket };
+      }
+      if (ticket.status !== 'Booked') {
+          return { success: false, message: `Booking cannot be paid while status is ${ticket.status}.` };
+      }
 
       if (supabase) {
           try {
