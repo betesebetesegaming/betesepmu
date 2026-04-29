@@ -338,7 +338,6 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                 <th className="text-center py-1.5 px-2 font-semibold text-gray-700 border-r border-gray-300">Bet</th>
                 <th className="text-center py-1.5 px-2 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Winnings</th>
                 <th className="text-center py-1.5 px-2 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Result</th>
-                <th className="hidden md:table-cell text-center py-1.5 px-2 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Wallet</th>
                 <th className="text-center py-1.5 px-2 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Status</th>
                 <th className="text-center py-1.5 px-2 font-semibold text-gray-700 whitespace-nowrap">Actions</th>
               </tr>
@@ -457,13 +456,6 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                         </span>
                       </td>
 
-                      {/* Wallet flow */}
-                      <td className="hidden md:table-cell py-2 px-2 align-top text-xs font-semibold whitespace-nowrap border-r border-gray-200">
-                        <span className={`${displayStatus === 'Paid' ? (ticket.customerId && ticket.paidByName === 'System Bonus Credit' ? 'text-amber-700' : 'text-blue-700') : 'text-gray-500'}`}>
-                          {getWalletFlowLabel(ticket, displayStatus)}
-                        </span>
-                      </td>
-
                       {/* Status */}
                       <td className={`py-2 px-2 align-top text-xs font-semibold whitespace-nowrap border-r border-gray-200 ${getStatusColor(displayStatus)}`}>
                         <div className="space-y-0.5">
@@ -473,6 +465,11 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                           {displayStatus === 'Paid' && (ticket.paidByName || ticket.paidById) && (
                             <div className="text-[10px] font-black text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded mt-0.5 whitespace-nowrap">
                               Paid By: {ticket.paidByName || ticket.paidById} ({channel})
+                            </div>
+                          )}
+                          {displayStatus === 'Paid' && (
+                            <div className="text-[10px] text-gray-500 mt-0.5">
+                              {getWalletFlowLabel(ticket, displayStatus)}
                             </div>
                           )}
                         </div>
@@ -509,7 +506,7 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                 })
               ) : (
                 <tr>
-                  <td colSpan={9} className="py-8 px-4 text-center text-gray-400 text-sm">
+                  <td colSpan={8} className="py-8 px-4 text-center text-gray-400 text-sm">
                     No tickets match the current filter.
                   </td>
                 </tr>
