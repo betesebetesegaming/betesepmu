@@ -332,17 +332,15 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
           <table className="min-w-full text-sm border-collapse">
             <thead>
               <tr className="bg-gradient-to-b from-green-100 to-green-50 border-b border-gray-300">
-                <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Ticket number</th>
-                <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Race number</th>
-                <th className="hidden lg:table-cell text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Bet time</th>
-                <th className="text-center py-1.5 px-3 font-semibold text-gray-700 border-r border-gray-300">Bet</th>
-                <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Winnings Amount</th>
-                <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Result</th>
-                <th className="hidden md:table-cell text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Wallet Flow</th>
-                <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Channel</th>
-                <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Paid By</th>
-                <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Status</th>
-                <th className="text-center py-1.5 px-3 font-semibold text-gray-700 whitespace-nowrap">Options</th>
+                <th className="text-center py-1.5 px-2 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Ticket</th>
+                <th className="text-center py-1.5 px-2 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Race</th>
+                <th className="hidden lg:table-cell text-center py-1.5 px-2 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Time</th>
+                <th className="text-center py-1.5 px-2 font-semibold text-gray-700 border-r border-gray-300">Bet</th>
+                <th className="text-center py-1.5 px-2 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Winnings</th>
+                <th className="text-center py-1.5 px-2 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Result</th>
+                <th className="hidden md:table-cell text-center py-1.5 px-2 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Wallet</th>
+                <th className="text-center py-1.5 px-2 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-300">Status</th>
+                <th className="text-center py-1.5 px-2 font-semibold text-gray-700 whitespace-nowrap">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -369,7 +367,7 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                       className={`${rowIdx % 2 === 0 ? 'bg-white' : 'bg-gray-100/70'} border-b border-gray-300 hover:bg-gray-50`}
                     >
                       {/* Ticket number */}
-                      <td className="py-3 px-4 align-top border-r border-gray-200">
+                      <td className="py-2 px-2 align-top border-r border-gray-200">
                         <button
                           onClick={() => setLedgerTicket(ticket)}
                           className="text-xs font-mono text-gray-800 hover:text-blue-700 hover:underline text-left leading-snug break-all"
@@ -377,18 +375,14 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                         >
                           {ticket.id}
                         </button>
-                        <div className="text-[10px] text-gray-600 font-semibold mt-0.5">
-                          Vendor: {ticket.vendorName || ticket.vendorId || '-'}
-                        </div>
-                        <div className="mt-1">
-                          <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-black ${channel === 'Online' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                            {channel.toUpperCase()}
-                          </span>
-                        </div>
+                        <div className="text-[10px] text-gray-500 mt-0.5">{ticket.vendorName || ticket.vendorId || '-'}</div>
+                        <span className={`inline-block mt-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-black ${channel === 'Online' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                          {channel.toUpperCase()}
+                        </span>
                       </td>
 
                       {/* Race number */}
-                      <td className="py-3 px-4 align-top text-xs text-gray-700 border-r border-gray-200 min-w-[170px]">
+                      <td className="py-2 px-2 align-top text-xs text-gray-700 border-r border-gray-200 min-w-[110px]">
                         {raceInfo.map((item, i) => (
                           <div key={i} className="mb-1 last:mb-0">
                             <div className="font-semibold">{item.time ? `${item.label} (${item.time})` : item.label}</div>
@@ -397,12 +391,12 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                       </td>
 
                       {/* Bet time */}
-                      <td className="hidden lg:table-cell py-3 px-4 align-top text-xs text-gray-600 whitespace-nowrap border-r border-gray-200">
+                      <td className="hidden lg:table-cell py-2 px-2 align-top text-xs text-gray-600 whitespace-nowrap border-r border-gray-200">
                         {formatDate(ticket.timestamp)}
                       </td>
 
                       {/* Bet combinations — full-width inline boxes */}
-                      <td className="py-1.5 px-2 align-top border-r border-gray-200 min-w-[220px]">
+                      <td className="py-1.5 px-1.5 align-top border-r border-gray-200 min-w-[180px]">
                         <div className="">
                           {ticket.selections.map((sel, i) => {
                             const ticketResult = recalculatedByTicket.get(ticket.id);
@@ -446,7 +440,7 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                       </td>
 
                       {/* Amount */}
-                      <td className="py-3 px-4 align-top text-xs font-semibold whitespace-nowrap border-r border-gray-200">
+                      <td className="py-2 px-2 align-top text-xs font-semibold whitespace-nowrap border-r border-gray-200">
                         {displayStatus === 'Winning' || displayStatus === 'Paid' ? (
                           <span className="text-blue-700">{recalculatedWinnings.toFixed(2)} GMD</span>
                         ) : displayStatus === 'Lost' ? (
@@ -457,39 +451,21 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                       </td>
 
                       {/* Result */}
-                      <td className="py-3 px-4 align-top text-xs font-semibold border-r border-gray-200 min-w-[200px] max-w-[260px]">
+                      <td className="py-2 px-2 align-top text-xs font-semibold border-r border-gray-200 min-w-[120px] max-w-[180px]">
                         <span className={`${displayStatus === 'Winning' || displayStatus === 'Paid' ? 'text-blue-700' : displayStatus === 'Lost' ? 'text-red-600' : 'text-gray-500'}`}>
                           {resultNumbers}
                         </span>
                       </td>
 
                       {/* Wallet flow */}
-                      <td className="hidden md:table-cell py-3 px-4 align-top text-xs font-semibold whitespace-nowrap border-r border-gray-200">
+                      <td className="hidden md:table-cell py-2 px-2 align-top text-xs font-semibold whitespace-nowrap border-r border-gray-200">
                         <span className={`${displayStatus === 'Paid' ? (ticket.customerId && ticket.paidByName === 'System Bonus Credit' ? 'text-amber-700' : 'text-blue-700') : 'text-gray-500'}`}>
                           {getWalletFlowLabel(ticket, displayStatus)}
                         </span>
                       </td>
 
-                      {/* Channel */}
-                      <td className="py-3 px-4 align-top text-xs font-semibold whitespace-nowrap border-r border-gray-200">
-                        <span className={`inline-flex items-center rounded-full border px-2 py-0.5 font-black ${channel === 'Online' ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-emerald-300 bg-emerald-50 text-emerald-700'}`}>
-                          {channel}
-                        </span>
-                      </td>
-
                       {/* Status */}
-                      <td className="py-3 px-4 align-top text-xs font-semibold whitespace-nowrap border-r border-gray-200">
-                        {displayStatus === 'Paid' ? (
-                          <span className="inline-flex items-center rounded-full border border-purple-300 bg-purple-50 px-2 py-0.5 font-black text-purple-700">
-                            {ticket.paidByName || ticket.paidById || (isOnlineTicket ? 'System Auto Credit' : 'Cashier')}
-                          </span>
-                        ) : (
-                          <span className="text-gray-400">-</span>
-                        )}
-                      </td>
-
-                      {/* Status */}
-                      <td className={`py-3 px-4 align-top text-xs font-semibold whitespace-nowrap border-r border-gray-200 ${getStatusColor(displayStatus)}`}>
+                      <td className={`py-2 px-2 align-top text-xs font-semibold whitespace-nowrap border-r border-gray-200 ${getStatusColor(displayStatus)}`}>
                         <div className="space-y-0.5">
                           <span className={`inline-flex items-center rounded-full border px-2 py-0.5 font-black ${getStatusChipClass(displayStatus)}`}>
                             {getDisplayStatusLabel(ticket, displayStatus)}
@@ -503,7 +479,7 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                       </td>
 
                       {/* Options */}
-                      <td className="py-3 px-4 align-top">
+                      <td className="py-2 px-2 align-top">
                         <div className="space-y-1">
                           <div className="flex items-start gap-1">
                           <button
@@ -533,7 +509,7 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                 })
               ) : (
                 <tr>
-                  <td colSpan={11} className="py-8 px-4 text-center text-gray-400 text-sm">
+                  <td colSpan={9} className="py-8 px-4 text-center text-gray-400 text-sm">
                     No tickets match the current filter.
                   </td>
                 </tr>
