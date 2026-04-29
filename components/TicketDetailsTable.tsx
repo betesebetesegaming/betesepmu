@@ -299,15 +299,6 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
             <option value="Booked">Booked</option>
           </select>
 
-          <select
-            value={filterChannel}
-            onChange={e => setFilterChannel(e.target.value as FilterChannel)}
-            className="flex-1 min-w-[140px] px-3 py-1.5 rounded-full border-2 border-white/60 bg-white/90 text-sm font-semibold text-gray-800 focus:outline-none focus:border-white"
-          >
-            <option value="All">All Channels</option>
-            <option value="Online">Online</option>
-            <option value="Terminal">Terminal</option>
-          </select>
         </div>
 
         <div className="px-4 py-2 border-b bg-slate-50 text-xs text-gray-700 flex flex-wrap gap-4">
@@ -375,9 +366,6 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                           {ticket.id}
                         </button>
                         <div className="text-[10px] text-gray-500 mt-0.5">{ticket.vendorName || ticket.vendorId || '-'}</div>
-                        <span className={`inline-block mt-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-black ${channel === 'Online' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                          {channel.toUpperCase()}
-                        </span>
                       </td>
 
                       {/* Race number */}
@@ -464,12 +452,7 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
                           </span>
                           {displayStatus === 'Paid' && (ticket.paidByName || ticket.paidById) && (
                             <div className="text-[10px] font-black text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded mt-0.5 whitespace-nowrap">
-                              Paid By: {ticket.paidByName || ticket.paidById} ({channel})
-                            </div>
-                          )}
-                          {displayStatus === 'Paid' && (
-                            <div className="text-[10px] text-gray-500 mt-0.5">
-                              {getWalletFlowLabel(ticket, displayStatus)}
+                              Paid By: {ticket.paidByName || ticket.paidById}
                             </div>
                           )}
                         </div>
