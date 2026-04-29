@@ -350,7 +350,7 @@ export const dbSettleRaceTickets = async (result: RaceResult, allRaces: Race[]) 
         const evaluation = calculateTicketWinnings(ticket, updatedRaces);
         const allSelectionsResolved = ticket.selections.every((selection) => {
             const race = updatedRaces.find((item) => item.id === selection.raceId);
-            return Boolean(race?.result);
+            return Boolean(race?.result?.winningNumbers?.length);
         });
 
         const nextWinnings = Number(evaluation.totalWinnings.toFixed(2));
