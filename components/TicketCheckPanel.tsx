@@ -118,6 +118,9 @@ export const TicketCheckPanel: React.FC<TicketCheckPanelProps> = ({ allTickets, 
           Scan Mode: {scanMode ? 'On' : 'Off'}
         </button>
       </div>
+      <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[11px] font-bold text-red-700 uppercase tracking-wide">
+        Cancel Rule: Ticket can only be canceled more than 2 minutes before race start.
+      </div>
       <div className="space-y-4">
         <div className="flex gap-2">
             <input

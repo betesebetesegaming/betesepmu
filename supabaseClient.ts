@@ -12,9 +12,10 @@ import {
     ProgramImage,
     ManualBetOrder,
     BetSelection,
-    WithdrawalRequest
+    WithdrawalRequest,
+    DepositLog
 } from './types';
-import { calculateTicketWinnings, validateTicketForPlacement, validateTicketAgainstRaceState, normalizeGambiaPhone } from './utils';
+import { BETTING_CUTOFF_MS, calculateTicketWinnings, validateTicketForPlacement, validateTicketAgainstRaceState, normalizeGambiaPhone } from './utils';
 
 // Safely retrieve environment variables
 const getEnvVar = (key: string): string | undefined => {
@@ -95,6 +96,15 @@ const isMissingCorrectionPinColumnError = (error: any): boolean => {
     const code = String(error.code || '');
     const combined = `${String(error.message || '')} ${String(error.details || '')} ${String(error.hint || '')}`.toLowerCase();
     return code === 'PGRST204' || combined.includes('correction_pin');
+};
+
+const isMissingDepositLogsTableError = (error: any): boolean => {
+    if (!error) return false;
+    const code = String(error.code || '');
+    const combined = `${String(error.message || '')} ${String(error.details || '')} ${String(error.hint || '')}`.toLowerCase();
+    return code === 'PGRST204'
+        || combined.includes('deposit_logs')
+        || combined.includes('relation "deposit_logs" does not exist');
 };
 
 /**
@@ -444,19 +454,26 @@ export const dbRecalculateAllTicketsSafely = async () => {
     const { data: raceRows, error: raceError } = await supabase.from('races').select('*');
     if (raceError) throw raceError;
 
-    const allRaces: Race[] = (raceRows || []).map((r: any) => ({
-        id: r.id,
-        raceCode: r.race_code || undefined,
-        name: r.name,
-        venue: r.venue || undefined,
-        startDate: new Date(r.start_date),
-        endDate: new Date(r.end_date),
-        horseCount: r.horse_count,
-        nonRunners: r.non_runners || [],
-        result: r.result || undefined,
-        disabledBetTypes: r.disabled_bet_types || [],
-        jackpot: r.jackpot || 0
-    }));
+    const allRaces: Race[] = (raceRows || []).map((r: any) => {
+        const result: RaceResult | undefined = r.result ? {
+            ...r.result,
+            enteredAt: r.result.enteredAt ? new Date(r.result.enteredAt) : undefined,
+            lastEditedAt: r.result.lastEditedAt ? new Date(r.result.lastEditedAt) : undefined,
+        } : undefined;
+        return {
+            id: r.id,
+            raceCode: r.race_code || undefined,
+            name: r.name,
+            venue: r.venue || undefined,
+            startDate: new Date(r.start_date),
+            endDate: new Date(r.end_date),
+            horseCount: r.horse_count,
+            nonRunners: r.non_runners || [],
+            result,
+            disabledBetTypes: r.disabled_bet_types || [],
+            jackpot: r.jackpot || 0
+        };
+    });
 
     // Dummy result id keeps races unchanged while triggering full settlement pass.
     const noopResult: RaceResult = {
@@ -612,7 +629,12 @@ export const dbFetchRaces = async (): Promise<Race[]> => {
         venue: r.venue || undefined,
         startDate: new Date(r.start_date),
         endDate: new Date(r.end_date),
-        horseCount: r.horse_count, nonRunners: r.non_runners || [], result: r.result,
+        horseCount: r.horse_count, nonRunners: r.non_runners || [],
+        result: r.result ? {
+            ...r.result,
+            enteredAt: r.result.enteredAt ? new Date(r.result.enteredAt) : undefined,
+            lastEditedAt: r.result.lastEditedAt ? new Date(r.result.lastEditedAt) : undefined,
+        } : undefined,
         disabledBetTypes: r.disabled_bet_types || [], jackpot: r.jackpot,
         updatedById: r.updated_by_id || undefined,
         updatedByName: r.updated_by_name || undefined,
@@ -836,6 +858,60 @@ export const dbFetchDepositRequests = async (): Promise<any[]> => {
     const { data, error } = await supabase.from('deposit_requests').select('*').order('timestamp', { ascending: false }).limit(200);
     if (error) return [];
     return data;
+};
+
+export const dbFetchDepositLogs = async (): Promise<DepositLog[]> => {
+    if (!supabase) return [];
+
+    const { data, error } = await supabase
+        .from('deposit_logs')
+        .select('*')
+        .order('timestamp', { ascending: false })
+        .limit(3000);
+
+    if (error) {
+        if (isMissingDepositLogsTableError(error)) return [];
+        throw error;
+    }
+
+    return (data || []).map((row: any) => ({
+        id: String(row.id),
+        customerId: String(row.customer_id || ''),
+        customerName: String(row.customer_name || ''),
+        customerPhone: row.customer_phone || undefined,
+        amount: Number(row.amount || 0),
+        bonusAwarded: row.bonus_awarded == null ? undefined : Number(row.bonus_awarded),
+        bonusAdjustment: row.bonus_adjustment == null ? undefined : Number(row.bonus_adjustment),
+        processedById: String(row.processed_by_id || ''),
+        processedByName: String(row.processed_by_name || ''),
+        timestamp: row.timestamp ? new Date(row.timestamp) : new Date(),
+        method: row.method,
+        transactionId: row.transaction_id || undefined,
+        note: row.note || undefined,
+    }));
+};
+
+export const dbInsertDepositLog = async (log: DepositLog): Promise<void> => {
+    if (!supabase) return;
+
+    const payload = {
+        id: log.id,
+        customer_id: log.customerId,
+        customer_name: log.customerName,
+        customer_phone: log.customerPhone || null,
+        amount: Number(Number(log.amount || 0).toFixed(2)),
+        bonus_awarded: log.bonusAwarded == null ? null : Number(Number(log.bonusAwarded).toFixed(2)),
+        bonus_adjustment: log.bonusAdjustment == null ? null : Number(Number(log.bonusAdjustment).toFixed(2)),
+        processed_by_id: log.processedById,
+        processed_by_name: log.processedByName,
+        timestamp: log.timestamp.toISOString(),
+        method: log.method,
+        transaction_id: log.transactionId || null,
+        note: log.note || null,
+    };
+
+    const { error } = await supabase.from('deposit_logs').insert(payload);
+    if (error && !isMissingDepositLogsTableError(error)) throw error;
 };
 
 export const dbDepositRequest = async (request: any) => {
@@ -1095,6 +1171,32 @@ export const dbCancelTicket = async (
     if (!ticketRow) return { success: false, refundedAmount: 0, message: 'Ticket not found.' };
     if (!['Active', 'Booked'].includes(ticketRow.status)) {
         return { success: false, refundedAmount: 0, ticketId: ticketRow.id, message: `Ticket cannot be canceled while status is ${ticketRow.status}.` };
+    }
+
+    const selectionRaceIds = Array.from(new Set((Array.isArray(ticketRow.selections) ? ticketRow.selections : []).map((s: any) => s?.raceId).filter(Boolean)));
+    if (selectionRaceIds.length > 0) {
+        const { data: raceRows, error: raceError } = await supabase
+            .from('races')
+            .select('id,start_date')
+            .in('id', selectionRaceIds);
+        if (raceError) throw raceError;
+
+        const raceById = new Map((raceRows || []).map((r: any) => [r.id, new Date(r.start_date)]));
+        const inCancelLockWindow = selectionRaceIds.some((raceId) => {
+            const startDate = raceById.get(raceId);
+            if (!startDate) return false;
+            const cancelDeadline = startDate.getTime() - BETTING_CUTOFF_MS;
+            return canceledAt.getTime() >= cancelDeadline;
+        });
+
+        if (inCancelLockWindow) {
+            return {
+                success: false,
+                refundedAmount: 0,
+                ticketId: ticketRow.id,
+                message: 'Cancellation blocked: ticket can only be canceled more than 2 minutes before race start.'
+            };
+        }
     }
 
     const mappedTicket = mapDbTicketRow(ticketRow);

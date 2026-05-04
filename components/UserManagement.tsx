@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { User, Role } from '../types';
+import { TableScrollNavigator } from './TableScrollNavigator';
 
 type FilterRole = Role | 'All';
 
@@ -118,7 +119,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onToggleL
             )}
 
             <h2 className="text-xl font-bold text-betese-dark mb-4">User Account Management</h2>
-            <div className="overflow-x-auto">
+            <TableScrollNavigator className="overflow-x-auto">
                 <table className="min-w-full bg-white text-sm">
                     <thead className="bg-gray-200">
                         <tr>
@@ -158,7 +159,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onToggleL
                         ))}
                     </tbody>
                 </table>
-            </div>
+            </TableScrollNavigator>
         </div>
     );
 };

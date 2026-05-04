@@ -1,19 +1,11 @@
 
-import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { Suspense, lazy, useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { BetSlip, BetTypeOption, Ticket, BetSelection, User, Role, WithdrawalRequest, Race, RaceResult, DepositLog, ChatMessage, ChatThread, Promotion, PromotionRule, DepositRequest, PaymentIntegrationConfig, ProgramImage, ManualBetOrder } from './types';
 import { BET_PRICING } from './constants';
-import { LoginScreen } from './components/LoginScreen';
-import { BettingTerminal } from './components/BettingTerminal';
 import { Header } from './components/Header';
-import { AdminDashboard } from './components/AdminDashboard';
-import { SupervisorDashboard } from './components/SupervisorDashboard';
-import { CustomerDashboard } from './components/CustomerDashboard';
 import { ConfirmationModal } from './components/ConfirmationModal';
 import { BookingCodeModal } from './components/BookingCodeModal';
 import { WithdrawalCodeModal } from './components/WithdrawalCodeModal';
-import { TicketModal } from './components/TicketModal';
-import { ChatPanel } from './components/ChatSystem';
-import { EmergencyRecover } from './components/EmergencyRecover';
 import { SEVEN_DAYS_IN_MS, BETTING_CUTOFF_MS, validateTicketForPlacement, validateTicketAgainstRaceState, normalizeGambiaPhone } from './utils';
 import { LanguageProvider } from './LanguageContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -33,8 +25,21 @@ import {
     dbSendChatMessage, dbMarkThreadAsRead, dbSettleRaceTickets, dbCancelTicket,
     dbToggleUserLock, dbAdminResetPassword, dbRecalculateAllTicketsSafely,
     dbApplyCustomerDeposit, dbApplyCustomerBalanceAdjustment, dbFreshStart, dbFetchUserBalance,
-    dbMigrateLegacyBookedTicketsToActive
+    dbMigrateLegacyBookedTicketsToActive, dbFetchDepositLogs, dbInsertDepositLog
 } from './supabaseClient';
+
+const LoginScreen = lazy(() => import('./components/LoginScreen').then(m => ({ default: m.LoginScreen })));
+const BettingTerminal = lazy(() => import('./components/BettingTerminal').then(m => ({ default: m.BettingTerminal })));
+const AdminDashboard = lazy(() => import('./components/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
+const SupervisorDashboard = lazy(() => import('./components/SupervisorDashboard').then(m => ({ default: m.SupervisorDashboard })));
+const CustomerDashboard = lazy(() => import('./components/CustomerDashboard').then(m => ({ default: m.CustomerDashboard })));
+const TicketModal = lazy(() => import('./components/TicketModal').then(m => ({ default: m.TicketModal })));
+const ChatPanel = lazy(() => import('./components/ChatSystem').then(m => ({ default: m.ChatPanel })));
+const EmergencyRecover = lazy(() => import('./components/EmergencyRecover').then(m => ({ default: m.EmergencyRecover })));
+
+const LoadingPane: React.FC = () => (
+    <div className="rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-600">Loading...</div>
+);
 
 const normalizeRole = (role: unknown): Role => {
     const value = String(role || '').trim().toLowerCase();
@@ -93,6 +98,7 @@ const AppContent: React.FC = () => {
         const legacyBookedMigrationDoneRef = useRef(false);
 
   const [betSlip, setBetSlip] = useState<BetSlip>({ selections: [], totalCost: 0 });
+  const isBettingInFlightRef = useRef(false); // prevents double-click on Place Bet / Book Bet
   const [lastTicket, setLastTicket] = useState<Ticket | null>(null);
   const [paidTicketModal, setPaidTicketModal] = useState<Ticket | null>(null);
   const [ticketToReprint, setTicketToReprint] = useState<Ticket | null>(null);
@@ -101,6 +107,13 @@ const AppContent: React.FC = () => {
   const [isProgramModalOpen, setIsProgramModalOpen] = useState(false);
   const [effectiveTime, setEffectiveTime] = useState(new Date());
   const [isOnline, setIsOnline] = useState(true);
+
+    const isSunmiLite = useMemo(() => {
+            if (typeof window === 'undefined') return false;
+            const ua = String(window.navigator?.userAgent || '').toLowerCase();
+            const params = new URLSearchParams(window.location.search);
+            return ua.includes('sunmi') || ua.includes('t2mini') || params.get('lite') === '1';
+    }, []);
 
   const loadLiveSystemData = async (user?: User) => {
       if (!supabase) return;
@@ -119,11 +132,12 @@ const AppContent: React.FC = () => {
               }
           }
 
-          const [fetchedUsers, fetchedRaces, fetchedDeposits, fetchedWithdrawals] = await Promise.all([
+          const [fetchedUsers, fetchedRaces, fetchedDeposits, fetchedWithdrawals, fetchedDepositLogs] = await Promise.all([
               dbFetchUsers(), 
               dbFetchRaces(),
               dbFetchDepositRequests(),
-              dbFetchWithdrawalRequests()
+              dbFetchWithdrawalRequests(),
+              dbFetchDepositLogs()
           ]);
 
           const [fetchedPromotions, fetchedThreads, fetchedMessages, fetchedProgramImages, fetchedPaymentConfigs, fetchedManualBets] = await Promise.all([
@@ -162,6 +176,8 @@ const AppContent: React.FC = () => {
               processedByName: r.processed_by_name, 
               processedAt: r.processed_at ? new Date(r.processed_at) : undefined
           })));
+
+          setDepositLogs(fetchedDepositLogs || []);
 
           setWithdrawalRequests((fetchedWithdrawals || []).map((r: any) => ({
               id: r.id, 
@@ -266,7 +282,16 @@ const AppContent: React.FC = () => {
       });
   }, [users]);
 
-  useEffect(() => { const interval = setInterval(() => setEffectiveTime(new Date()), 1000); return () => clearInterval(interval); }, []);
+  useEffect(() => {
+      const interval = setInterval(() => setEffectiveTime(new Date()), isSunmiLite ? 5000 : 1000);
+      return () => clearInterval(interval);
+  }, [isSunmiLite]);
+
+  useEffect(() => {
+      if (typeof document === 'undefined') return;
+      document.body.classList.toggle('sunmi-lite', isSunmiLite);
+      return () => document.body.classList.remove('sunmi-lite');
+  }, [isSunmiLite]);
 
   const handleAddRace = async (race: Race) => {
       try {
@@ -318,13 +343,29 @@ const AppContent: React.FC = () => {
           return false;
       }
 
-      const nextRaces = (races || []).map(r => r.id === result.raceId ? { ...r, result } : r);
+      const existingRace = (races || []).find(r => r.id === result.raceId);
+      const isEdit = !!(existingRace?.result?.winningNumbers?.length);
+      const now = new Date();
+
+      // Stamp audit trail
+      const auditedResult: RaceResult = {
+          ...result,
+          lastEditedById: currentUser.id,
+          lastEditedByName: currentUser.name,
+          lastEditedAt: now,
+          // Preserve original entry info on edits; set it fresh on first entry
+          enteredById: isEdit ? (existingRace?.result?.enteredById ?? currentUser.id) : currentUser.id,
+          enteredByName: isEdit ? (existingRace?.result?.enteredByName ?? currentUser.name) : currentUser.name,
+          enteredAt: isEdit ? (existingRace?.result?.enteredAt ?? now) : now,
+      };
+
+      const nextRaces = (races || []).map(r => r.id === auditedResult.raceId ? { ...r, result: auditedResult } : r);
 
       try {
           if (supabase) {
-              await dbSaveRaceResult(result);
+              await dbSaveRaceResult(auditedResult);
               setRaces(nextRaces);
-              await dbSettleRaceTickets(result, nextRaces);
+              await dbSettleRaceTickets(auditedResult, nextRaces);
               await loadLiveSystemData(currentUser);
           } else {
               setRaces(nextRaces);
@@ -409,25 +450,32 @@ const AppContent: React.FC = () => {
     setBetSlip(prev => {
       const updated = { ...newSelection, cost, multiplier: 1 };
       const newSelections = [...prev.selections, updated];
-      const totalCost = newSelections.reduce((sum, s) => sum + (s.cost * s.multiplier), 0);
+      const totalCost = Number(newSelections.reduce((sum, s) => sum + (s.cost * s.multiplier), 0).toFixed(2));
       return { selections: newSelections, totalCost };
     });
   };
 
   const placeBet = async () => {
     if (!currentUser || betSlip.selections.length === 0) return;
+    if (isBettingInFlightRef.current) return;
+    isBettingInFlightRef.current = true;
 
-        const placementValidation = validateTicketForPlacement({ selections: betSlip.selections, totalCost: betSlip.totalCost });
-        if (!placementValidation.valid) {
-                alert(`Invalid ticket formula: ${placementValidation.message}`);
-                return;
-        }
+    try {
+      // Recalculate totalCost fresh from selections to eliminate floating-point drift
+      const recomputedCost = Number(betSlip.selections.reduce((sum, s) => sum + (s.cost * s.multiplier), 0).toFixed(2));
+      const validSlip = { selections: betSlip.selections, totalCost: recomputedCost };
 
-        const raceStateValidation = validateTicketAgainstRaceState(betSlip.selections, races);
-        if (!raceStateValidation.valid) {
-            alert(`Selection blocked: ${raceStateValidation.message}`);
-            return;
-        }
+      const placementValidation = validateTicketForPlacement(validSlip);
+      if (!placementValidation.valid) {
+          alert(`Invalid ticket formula: ${placementValidation.message}`);
+          return;
+      }
+
+      const raceStateValidation = validateTicketAgainstRaceState(betSlip.selections, races || []);
+      if (!raceStateValidation.valid) {
+          alert(`Selection blocked: ${raceStateValidation.message}`);
+          return;
+      }
 
     // ONLINE CUSTOMER WALLET CHECK
     if (currentUser.role === 'Customer') {
@@ -480,77 +528,99 @@ const AppContent: React.FC = () => {
       ...betSlip
     };
 
-    try {
-        if (supabase) { 
-            await dbPlaceBet(newTicket, currentUser); 
-            setPlacedTickets(prev => {
-                const exists = (prev || []).some(t => t.id === newTicket.id);
-                return exists ? prev : [...(prev || []), newTicket];
-            });
-            const updatedTickets = await dbFetchLiveTickets(currentUser);
-            setPlacedTickets(updatedTickets);
-        } else { 
-            // LOCAL MOCK WALLET DEDUCTION
-            if (currentUser.role === 'Customer') {
-                const bonusUsed = Math.min(currentUser.bonusBalance || 0, betSlip.totalCost);
-                const cashUsed = betSlip.totalCost - bonusUsed;
-                const updatedUser = {
-                    ...currentUser,
-                    walletBalance: Number(((currentUser.walletBalance || 0) - cashUsed).toFixed(2)),
-                    bonusBalance: Number(((currentUser.bonusBalance || 0) - bonusUsed).toFixed(2))
-                };
-                setCurrentUser(updatedUser);
-                setUsers(prev => prev.map(u => u.id === currentUser.id ? updatedUser : u));
-            }
-            setPlacedTickets(prev => [...prev, newTicket]); 
-        }
-        setLastTicket(newTicket);
-        setBetSlip({ selections: [], totalCost: 0 });
-        alert("BET PLACED SUCCESSFULLY: Ticket has been added to your history.");
-    } catch (e: any) { alert(`Transaction Failed: ${e.message}`); }
+      try {
+          if (supabase) { 
+              await dbPlaceBet(newTicket, currentUser); 
+              setPlacedTickets(prev => {
+                  const exists = (prev || []).some(t => t.id === newTicket.id);
+                  return exists ? prev : [...(prev || []), newTicket];
+              });
+              const updatedTickets = await dbFetchLiveTickets(currentUser);
+              setPlacedTickets(updatedTickets);
+          } else { 
+              // LOCAL MOCK WALLET DEDUCTION
+              if (currentUser.role === 'Customer') {
+                  const bonusUsed = Math.min(currentUser.bonusBalance || 0, betSlip.totalCost);
+                  const cashUsed = betSlip.totalCost - bonusUsed;
+                  const updatedUser = {
+                      ...currentUser,
+                      walletBalance: Number(((currentUser.walletBalance || 0) - cashUsed).toFixed(2)),
+                      bonusBalance: Number(((currentUser.bonusBalance || 0) - bonusUsed).toFixed(2))
+                  };
+                  setCurrentUser(updatedUser);
+                  setUsers(prev => prev.map(u => u.id === currentUser.id ? updatedUser : u));
+              }
+              setPlacedTickets(prev => [...prev, newTicket]); 
+          }
+          setLastTicket(newTicket);
+          setBetSlip({ selections: [], totalCost: 0 });
+          alert("BET PLACED SUCCESSFULLY: Ticket has been added to your history.");
+      } catch (e: any) { alert(`Transaction Failed: ${e.message}`); }
+    } finally {
+      isBettingInFlightRef.current = false;
+    }
   };
 
   const bookBet = async () => {
       if (!currentUser || betSlip.selections.length === 0) return;
+      if (isBettingInFlightRef.current) return;
+      isBettingInFlightRef.current = true;
 
-      const placementValidation = validateTicketForPlacement({ selections: betSlip.selections, totalCost: betSlip.totalCost });
-      if (!placementValidation.valid) {
-          alert(`Invalid ticket formula: ${placementValidation.message}`);
-          return;
-      }
+      try {
+          // Recalculate totalCost fresh to eliminate floating-point drift
+          const recomputedCost = Number(betSlip.selections.reduce((sum, s) => sum + (s.cost * s.multiplier), 0).toFixed(2));
+          const validSlip = { selections: betSlip.selections, totalCost: recomputedCost };
 
-      const raceStateValidation = validateTicketAgainstRaceState(betSlip.selections, races);
-      if (!raceStateValidation.valid) {
-          alert(`Selection blocked: ${raceStateValidation.message}`);
-          return;
-      }
+          const placementValidation = validateTicketForPlacement(validSlip);
+          if (!placementValidation.valid) {
+              alert(`Invalid ticket formula: ${placementValidation.message}`);
+              return;
+          }
 
-      const bookingCode = "B" + Math.random().toString(36).substring(2, 8).toUpperCase();
-      const newTicket: Ticket = {
-          id: Math.floor(10000000 + Math.random() * 90000000).toString(),
-          timestamp: effectiveTime,
-          vendorId: currentUser.role === 'Customer' ? '' : currentUser.id,
-          vendorName: currentUser.name,
-          status: 'Active',
-          bookingCode,
-          customerId: currentUser.role === 'Customer' ? currentUser.id : undefined,
-          ...betSlip
-      };
-      
-      if (supabase) {
-          await dbPlaceBet(newTicket, currentUser);
-          setPlacedTickets(prev => {
-              const exists = (prev || []).some(t => t.id === newTicket.id);
-              return exists ? prev : [...(prev || []), newTicket];
+          const raceStateValidation = validateTicketAgainstRaceState(betSlip.selections, races || []);
+          if (!raceStateValidation.valid) {
+              alert(`Selection blocked: ${raceStateValidation.message}`);
+              return;
+          }
+
+          const now = effectiveTime.getTime();
+          const isClosed = betSlip.selections.some(s => {
+              const r = (races || []).find(race => race.id === s.raceId);
+              return !r || (r.endDate.getTime() - now) <= BETTING_CUTOFF_MS;
           });
-          const updatedTickets = await dbFetchLiveTickets(currentUser);
-          setPlacedTickets(updatedTickets);
-      } else {
-          setPlacedTickets(prev => [...prev, newTicket]);
+          if (isClosed) { alert("FAILED: Betting closed (2-minute cutoff reached)."); return; }
+
+          const bookingCode = "B" + Math.random().toString(36).substring(2, 8).toUpperCase();
+          const newTicket: Ticket = {
+              id: Math.floor(10000000 + Math.random() * 90000000).toString(),
+              timestamp: effectiveTime,
+              vendorId: currentUser.role === 'Customer' ? '' : currentUser.id,
+              vendorName: currentUser.name,
+              status: 'Booked',
+              bookingCode,
+              customerId: currentUser.role === 'Customer' ? currentUser.id : undefined,
+              ...validSlip
+          };
+
+          if (supabase) {
+              await dbPlaceBet(newTicket, currentUser);
+              setPlacedTickets(prev => {
+                  const exists = (prev || []).some(t => t.id === newTicket.id);
+                  return exists ? prev : [...(prev || []), newTicket];
+              });
+              const updatedTickets = await dbFetchLiveTickets(currentUser);
+              setPlacedTickets(updatedTickets);
+          } else {
+              setPlacedTickets(prev => [...prev, newTicket]);
+          }
+          setLastTicket(newTicket);
+          setBetSlip({ selections: [], totalCost: 0 });
+          alert("BOOKING CREATED SUCCESSFULLY: Use the booking code to retrieve, collect payment, and activate the ticket.");
+      } catch (e: any) {
+          alert(`Booking Failed: ${e.message}`);
+      } finally {
+          isBettingInFlightRef.current = false;
       }
-      setLastTicket(newTicket);
-      setBetSlip({ selections: [], totalCost: 0 });
-            alert("TICKET CREATED & PAID SUCCESSFULLY: Booking code is for reference/reprint only.");
   };
 
     const handleDeposit = async (customerId: string, amount: number, method: string = 'Cash', transactionId?: string) => {
@@ -649,19 +719,32 @@ const AppContent: React.FC = () => {
                     setCurrentUser(prev => prev && prev.id === customerId ? { ...prev, ...updated } : prev);
                 }
 
-    setDepositLogs(prev => [...prev, {
+    const createdDepositLog: DepositLog = {
         id: `dl-${Date.now()}`,
         customerId,
         customerName: cust.name,
         customerPhone: cust.phone,
         amount: normalizedAmount,
-                bonusAwarded: bonusApplied || undefined,
+        bonusAwarded: bonusApplied || undefined,
         processedById: currentUser.id,
         processedByName: currentUser.name,
         timestamp: effectiveTime,
         method: method as any,
         transactionId
-    }]);
+    };
+
+    if (supabase) {
+        try {
+            await dbInsertDepositLog(createdDepositLog);
+            const latestLogs = await dbFetchDepositLogs();
+            setDepositLogs(latestLogs || []);
+        } catch (e) {
+            console.error('Failed to persist deposit log, keeping local copy', e);
+            setDepositLogs(prev => [...prev, createdDepositLog]);
+        }
+    } else {
+        setDepositLogs(prev => [...prev, createdDepositLog]);
+    }
         return { success: true, bonusApplied };
   };
 
@@ -725,9 +808,14 @@ const AppContent: React.FC = () => {
           return { success: false, message: 'Only admin can adjust wallet or bonus balances.' };
       }
 
-      const expectedPin = String(currentUser.correctionPin || currentUser.password || '').trim();
+      const acceptedPins = new Set(
+          [
+              String(currentUser.correctionPin || '').trim(),
+              String(currentUser.password || '').trim()
+          ].filter(Boolean)
+      );
       const providedPin = String(approvalPin || '').trim();
-      if (!expectedPin || providedPin !== expectedPin) {
+      if (acceptedPins.size === 0 || !acceptedPins.has(providedPin)) {
           return { success: false, message: 'Approval PIN is invalid.' };
       }
 
@@ -764,7 +852,7 @@ const AppContent: React.FC = () => {
       setUsers(prev => (prev || []).map(u => u.id === customerId ? updatedCustomer : u));
       setCurrentUser(prev => prev && prev.id === customerId ? { ...prev, ...updatedCustomer } : prev);
 
-      setDepositLogs(prev => [...prev, {
+      const createdCorrectionLog: DepositLog = {
           id: `dl-${Date.now()}`,
           customerId,
           customerName: customer.name,
@@ -776,7 +864,20 @@ const AppContent: React.FC = () => {
           timestamp: effectiveTime,
           method: 'Correction',
           note: note?.trim() || undefined
-      }]);
+      };
+
+      if (supabase) {
+          try {
+              await dbInsertDepositLog(createdCorrectionLog);
+              const latestLogs = await dbFetchDepositLogs();
+              setDepositLogs(latestLogs || []);
+          } catch (e) {
+              console.error('Failed to persist correction log, keeping local copy', e);
+              setDepositLogs(prev => [...prev, createdCorrectionLog]);
+          }
+      } else {
+          setDepositLogs(prev => [...prev, createdCorrectionLog]);
+      }
 
       return { success: true, message: 'Balance adjustment applied.' };
   };
@@ -834,30 +935,41 @@ const AppContent: React.FC = () => {
   };
 
   const payForBooking = async (code: string): Promise<{ success: boolean; message: string; ticket?: Ticket }> => {
-      const normalizedCode = (code || '').trim().toUpperCase();
-      const ticket = (placedTickets || []).find(t => t.bookingCode?.toUpperCase() === normalizedCode);
-      if (!ticket || !currentUser) return { success: false, message: 'Not found' };
-      if (ticket.status === 'Active') {
-          return { success: true, message: 'Booking already paid. Ticket is active.', ticket };
-      }
-      if (ticket.status !== 'Booked') {
-          return { success: false, message: `Booking cannot be paid while status is ${ticket.status}.` };
-      }
+      const normalizeBookingCode = (value: string) => String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const normalizedCode = normalizeBookingCode(code);
+      if (!normalizedCode || !currentUser) return { success: false, message: 'Not found' };
+      const ticket = (placedTickets || []).find(t => normalizeBookingCode(t.bookingCode || '') === normalizedCode);
 
       if (supabase) {
           try {
               const success = await dbPayForBooking(normalizedCode, currentUser.id, currentUser.name, effectiveTime);
-              if (!success) return { success: false, message: 'Booking not found or already processed.' };
               const nextTickets = await dbFetchLiveTickets(currentUser);
               setPlacedTickets(nextTickets);
               const activatedTicket = (nextTickets || []).find(
-                t => t.bookingCode?.toUpperCase() === normalizedCode && t.status === 'Active'
+                t => normalizeBookingCode(t.bookingCode || '') === normalizedCode && t.status === 'Active'
               );
+
+              if (!success) {
+                  if (activatedTicket) {
+                      setLastTicket(activatedTicket);
+                      return { success: true, message: 'Booking already paid. Ticket is active.', ticket: activatedTicket };
+                  }
+                  return { success: false, message: 'Booking not found or already processed.' };
+              }
+
               if (activatedTicket) setLastTicket(activatedTicket);
               return { success: true, message: 'Booking activated successfully.', ticket: activatedTicket };
           } catch (e: any) {
               return { success: false, message: e.message || 'Failed to activate booking.' };
           }
+      }
+
+      if (!ticket) return { success: false, message: 'Not found' };
+      if (ticket.status === 'Active') {
+          return { success: true, message: 'Booking already paid. Ticket is active.', ticket };
+      }
+      if (ticket.status !== 'Booked') {
+          return { success: false, message: `Booking cannot be paid while status is ${ticket.status}.` };
       }
 
       const updated = { ...ticket, status: 'Active' as const, vendorId: currentUser.id, vendorName: currentUser.name };
@@ -893,15 +1005,15 @@ const AppContent: React.FC = () => {
           return;
       }
 
-      if (targetTicket.status === 'Active') {
-          const hasRaceStarted = targetTicket.selections.some((selection) => {
-              const race = (races || []).find((item) => item.id === selection.raceId);
-              return race ? effectiveTime >= race.startDate : false;
-          });
-          if (hasRaceStarted) {
-              alert('Cannot cancel ticket after race start.');
-              return;
-          }
+      const reachedCancelLockWindow = targetTicket.selections.some((selection) => {
+          const race = (races || []).find((item) => item.id === selection.raceId);
+          if (!race) return false;
+          const cancelDeadline = race.startDate.getTime() - BETTING_CUTOFF_MS;
+          return effectiveTime.getTime() >= cancelDeadline;
+      });
+      if (reachedCancelLockWindow) {
+          alert('Cannot cancel ticket now. Cancellation is only allowed more than 2 minutes before race start.');
+          return;
       }
 
       if (!confirm(`Cancel ticket #${targetTicket.id}?`)) return;
@@ -1042,11 +1154,39 @@ const AppContent: React.FC = () => {
             return null;
         }
 
-        const expectedPin = String(currentUser.correctionPin || currentUser.password || '').trim();
-        const approvalPin = window.prompt('Security check: enter your Admin correction PIN to create a new Admin account.');
-        if (!expectedPin || String(approvalPin || '').trim() !== expectedPin) {
-            alert('Invalid PIN. Admin account creation canceled.');
-            return null;
+        const acceptedCurrentSecrets = new Set(
+            [
+                String(currentUser.correctionPin || '').trim(),
+                String(currentUser.password || '').trim()
+            ].filter(Boolean)
+        );
+        const acceptedPins = new Set([
+            ...acceptedCurrentSecrets,
+            String(correctionPin || '').trim()
+        ].filter(Boolean));
+
+        const isSeedAdmin = !String(currentUser.createdById || '').trim();
+
+        if (acceptedCurrentSecrets.size > 0) {
+            const approvalPin = window.prompt('Security check: enter your current Admin password/PIN (or the new Admin correction PIN you just entered).');
+            if (!acceptedPins.has(String(approvalPin || '').trim())) {
+                if (isSeedAdmin) {
+                    const proceedSeedFallback = window.confirm('PIN mismatch detected. As original Admin, continue with confirmation phrase only?');
+                    if (!proceedSeedFallback) {
+                        alert('Admin account creation canceled.');
+                        return null;
+                    }
+                } else {
+                    alert('Invalid PIN. Use current Admin password/PIN, or the new Admin correction PIN field value. Admin account creation canceled.');
+                    return null;
+                }
+            }
+        } else {
+            const proceedWithoutPin = window.confirm('No Admin PIN is configured on this original account. Continue with confirmation phrase only?');
+            if (!proceedWithoutPin) {
+                alert('Admin account creation canceled.');
+                return null;
+            }
         }
 
         const confirmation = window.prompt('Type CREATE ADMIN to confirm this high-privilege action.');
@@ -1410,11 +1550,19 @@ const AppContent: React.FC = () => {
       }));
   };
 
-  if (!currentUser) return <LoginScreen onLogin={handleLogin} users={users} onSignUp={addUser as any} />;
+  if (!currentUser) {
+      return (
+          <Suspense fallback={<LoadingPane />}>
+              <LoginScreen onLogin={handleLogin} users={users} onSignUp={addUser as any} />
+          </Suspense>
+      );
+  }
 
   return (
     <ErrorBoundary>
-      <EmergencyRecover onRecover={handleRefreshSystem} />
+      <Suspense fallback={null}>
+          <EmergencyRecover onRecover={handleRefreshSystem} />
+      </Suspense>
       <Header
         user={currentUser}
         onLogout={handleLogout}
@@ -1427,7 +1575,8 @@ const AppContent: React.FC = () => {
         threads={threads}
         pendingDepositCount={(depositRequests || []).filter(r => r.status === 'Pending').length}
       />
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6" key={systemKey}>
+            <main className={`max-w-7xl mx-auto ${isSunmiLite ? 'px-3 sm:px-4 py-4' : 'px-4 sm:px-6 lg:px-8 py-6'}`} key={systemKey}>
+                <Suspense fallback={<LoadingPane />}>
         {currentUser.role === 'Vendor' && (
           <BettingTerminal
             races={races}
@@ -1437,8 +1586,8 @@ const AppContent: React.FC = () => {
             onInitiatePlaceBet={placeBet}
             lastTicket={lastTicket}
             onCloseTicket={() => setLastTicket(null)}
-            onRemoveSelection={(index) => setBetSlip(prev => { const s = prev.selections.filter((_, i) => i !== index); return { selections: s, totalCost: s.reduce((sum, x) => sum + (x.cost * x.multiplier), 0) }; })}
-            onUpdateSelectionMultiplier={(index, m) => setBetSlip(prev => { const s = [...prev.selections]; if(s[index]) s[index].multiplier = Math.max(1, m); return { selections: s, totalCost: s.reduce((sum, x) => sum + (x.cost * x.multiplier), 0) }; })}
+            onRemoveSelection={(index) => setBetSlip(prev => { const s = prev.selections.filter((_, i) => i !== index); return { selections: s, totalCost: Number(s.reduce((sum, x) => sum + (x.cost * x.multiplier), 0).toFixed(2)) }; })}
+            onUpdateSelectionMultiplier={(index, m) => setBetSlip(prev => { const s = [...prev.selections]; if(s[index]) s[index].multiplier = Math.max(1, m); return { selections: s, totalCost: Number(s.reduce((sum, x) => sum + (x.cost * x.multiplier), 0).toFixed(2)) }; })}
             placedTickets={placedTickets}
             allTickets={placedTickets}
             onCancelTicket={cancelTicket}
@@ -1556,8 +1705,8 @@ const AppContent: React.FC = () => {
                 onInitiateBookBet={bookBet}
                 lastTicket={lastTicket}
                 onCloseTicket={() => setLastTicket(null)}
-                onRemoveSelection={(idx) => setBetSlip(prev => { const s = prev.selections.filter((_, i) => i !== idx); return { selections: s, totalCost: s.reduce((sum, x) => sum + (x.cost * x.multiplier), 0) }; })}
-                onUpdateSelectionMultiplier={(idx, m) => setBetSlip(prev => { const s = [...prev.selections]; if(s[idx]) s[idx].multiplier = Math.max(1, m); return { selections: s, totalCost: s.reduce((sum, x) => sum + (x.cost * x.multiplier), 0) }; })}
+                onRemoveSelection={(idx) => setBetSlip(prev => { const s = prev.selections.filter((_, i) => i !== idx); return { selections: s, totalCost: Number(s.reduce((sum, x) => sum + (x.cost * x.multiplier), 0).toFixed(2)) }; })}
+                onUpdateSelectionMultiplier={(idx, m) => setBetSlip(prev => { const s = [...prev.selections]; if(s[idx]) s[idx].multiplier = Math.max(1, m); return { selections: s, totalCost: Number(s.reduce((sum, x) => sum + (x.cost * x.multiplier), 0).toFixed(2)) }; })}
                 placedTickets={placedTickets}
                 onCancelTicket={cancelTicket}
                 seenWinningTickets={seenWinningTickets}
@@ -1576,10 +1725,13 @@ const AppContent: React.FC = () => {
                 onExternalProgramClose={() => setIsProgramModalOpen(false)}
              />
         )}
+                </Suspense>
       </main>
-      {paidTicketModal && <TicketModal ticket={paidTicketModal} onClose={() => setPaidTicketModal(null)} showPrintButton={true} races={races} />}
-      {ticketToReprint && <TicketModal ticket={ticketToReprint} onClose={() => setTicketToReprint(null)} showPrintButton={true} races={races} />}
-            <ChatPanel isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} currentUser={currentUser} users={users} threads={threads} messages={messages} onSendMessage={handleSendMessage} onMarkAsRead={handleMarkThreadAsRead} />
+            <Suspense fallback={null}>
+                    {paidTicketModal && <TicketModal ticket={paidTicketModal} onClose={() => setPaidTicketModal(null)} showPrintButton={true} races={races} />}
+                    {ticketToReprint && <TicketModal ticket={ticketToReprint} onClose={() => setTicketToReprint(null)} showPrintButton={true} races={races} />}
+                    <ChatPanel isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} currentUser={currentUser} users={users} threads={threads} messages={messages} onSendMessage={handleSendMessage} onMarkAsRead={handleMarkThreadAsRead} />
+            </Suspense>
     </ErrorBoundary>
   );
 };

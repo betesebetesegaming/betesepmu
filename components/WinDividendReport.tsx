@@ -1,6 +1,7 @@
 import React from 'react';
 import { WinSummary, WIN_CATEGORY_ORDER } from '../utils';
 import { Payouts, BetTypeOption } from '../types';
+import { TableScrollNavigator } from './TableScrollNavigator';
 
 interface WinDividendReportProps {
   summary: WinSummary | null;
@@ -57,7 +58,7 @@ export const WinDividendReport: React.FC<WinDividendReportProps> = ({ summary, p
   return (
     <div className="mt-6">
       <h3 className="text-xl font-semibold text-betese-dark mb-2 border-b pb-1">Winning Bet Summary</h3>
-      <div className="overflow-x-auto">
+      <TableScrollNavigator className="overflow-x-auto">
         <table className="min-w-full bg-white text-sm">
           <thead className="bg-gray-100">
             <tr>
@@ -100,7 +101,7 @@ export const WinDividendReport: React.FC<WinDividendReportProps> = ({ summary, p
             </tr>
           </tfoot>
         </table>
-      </div>
+      </TableScrollNavigator>
     </div>
   );
 };

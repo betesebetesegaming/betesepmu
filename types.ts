@@ -49,6 +49,13 @@ export interface RaceResult {
   // Optional tertiary result for complex ties (Separate Report 2)
   bracket2WinningNumbers?: number[];
   bracket2Payouts?: Payouts;
+  // Security audit trail
+  enteredById?: string;
+  enteredByName?: string;
+  enteredAt?: Date;
+  lastEditedById?: string;
+  lastEditedByName?: string;
+  lastEditedAt?: Date;
 }
 
 

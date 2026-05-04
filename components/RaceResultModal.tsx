@@ -211,6 +211,33 @@ export const RaceResultModal: React.FC<RaceResultModalProps> = ({ race, onClose,
                         </div>
                     </div>
                 </div>
+
+                {/* Security Audit Trail Banner */}
+                {race.result && (race.result.enteredByName || race.result.lastEditedByName) && (
+                    <div className="flex-shrink-0 mb-3 p-3 rounded-lg border border-red-200 bg-red-50 text-xs space-y-1">
+                        <div className="font-bold text-red-700 uppercase tracking-wide mb-1">Security Audit Trail</div>
+                        {race.result.enteredByName && (
+                            <div className="flex items-center gap-2">
+                                <span className="inline-block bg-green-100 text-green-800 font-bold px-2 py-0.5 rounded">First Entered</span>
+                                <span className="font-semibold text-gray-800">{race.result.enteredByName}</span>
+                                <span className="text-gray-500">
+                                    {race.result.enteredAt
+                                        ? new Date(race.result.enteredAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+                                        : ''}
+                                </span>
+                            </div>
+                        )}
+                        {race.result.lastEditedByName && race.result.lastEditedAt && (
+                            <div className="flex items-center gap-2">
+                                <span className="inline-block bg-orange-100 text-orange-800 font-bold px-2 py-0.5 rounded">Last Edited</span>
+                                <span className="font-semibold text-gray-800">{race.result.lastEditedByName}</span>
+                                <span className="text-gray-500">
+                                    {new Date(race.result.lastEditedAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
+                                </span>
+                            </div>
+                        )}
+                    </div>
+                )}
                 
                 {/* Tabs */}
                 <div className="flex gap-1 border-b border-gray-200 mb-4 flex-shrink-0">

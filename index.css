@@ -12,6 +12,26 @@
   }
 }
 
+/* POS-lite mode for low-power terminals like Sunmi */
+body.sunmi-lite *,
+body.sunmi-lite *::before,
+body.sunmi-lite *::after {
+  animation: none !important;
+  transition: none !important;
+  filter: none !important;
+  backdrop-filter: none !important;
+  text-shadow: none !important;
+}
+
+body.sunmi-lite .shadow,
+body.sunmi-lite .shadow-sm,
+body.sunmi-lite .shadow-md,
+body.sunmi-lite .shadow-lg,
+body.sunmi-lite .shadow-xl,
+body.sunmi-lite .shadow-2xl {
+  box-shadow: none !important;
+}
+
 /* High-contrast styles for printing via html2canvas - migrated from index.html */
 .print-mode {
     &, & * {

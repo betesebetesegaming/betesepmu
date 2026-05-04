@@ -16,6 +16,7 @@ export const BookingRetrievalPanel: React.FC<BookingRetrievalPanelProps> = ({ al
   const [foundTicket, setFoundTicket] = useState<Ticket | null>(null);
   const [message, setMessage] = useState('');
   const [isSuccess, setIsSuccess] = useState(false);
+    const normalizeBookingCode = (value: string) => String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 
   const handleFindBooking = () => {
     setMessage('');
@@ -25,19 +26,28 @@ export const BookingRetrievalPanel: React.FC<BookingRetrievalPanelProps> = ({ al
         setMessage('Please enter a Booking Code.');
         return;
     }
-    const normalizedCode = bookingCode.trim().toUpperCase();
-    const ticket = allTickets.find(t => t.bookingCode?.toUpperCase() === normalizedCode && t.status === 'Booked');
-    if (ticket) {
-        setFoundTicket(ticket);
-    } else {
+    const normalizedCode = normalizeBookingCode(bookingCode);
+    const ticket = allTickets.find(t => normalizeBookingCode(t.bookingCode || '') === normalizedCode);
+    if (!ticket) {
         setMessage('Booking code not found or has already been processed.');
+        return;
     }
+
+    if (ticket.status !== 'Booked') {
+        setMessage(ticket.status === 'Active'
+            ? 'Booking already paid. Ticket is active.'
+            : `Booking cannot be paid while status is ${ticket.status}.`
+        );
+        return;
+    }
+
+    setFoundTicket(ticket);
   };
 
   const handlePay = async () => {
       if (!foundTicket?.bookingCode) return;
       
-      const result = await onPayForBooking(foundTicket.bookingCode.trim().toUpperCase());
+    const result = await onPayForBooking(normalizeBookingCode(foundTicket.bookingCode));
       setMessage(result.message);
       setIsSuccess(result.success);
 

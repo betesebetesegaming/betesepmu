@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Ticket, User } from '../types';
+import { TableScrollNavigator } from './TableScrollNavigator';
 
 type PrizeTier = 'First' | 'Second' | 'Third';
 
@@ -261,7 +262,7 @@ export const AutomaticRaffleDrawerPanel: React.FC<AutomaticRaffleDrawerPanelProp
 
             <div className="rounded-xl bg-white p-5 shadow-sm border border-slate-200">
                 <h3 className="text-lg font-bold text-slate-900 mb-3">Eligible Number List</h3>
-                <div className="overflow-x-auto">
+                <TableScrollNavigator className="overflow-x-auto">
                     <table className="min-w-full text-sm">
                         <thead>
                             <tr className="bg-slate-100 text-left text-slate-700">
@@ -289,7 +290,7 @@ export const AutomaticRaffleDrawerPanel: React.FC<AutomaticRaffleDrawerPanelProp
                             ))}
                         </tbody>
                     </table>
-                </div>
+                </TableScrollNavigator>
             </div>
         </div>
     );

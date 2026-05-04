@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Ticket, Race, BetTypeOption, BetSelection } from '../types';
+import { TableScrollNavigator } from './TableScrollNavigator';
 
 interface CombinationSearchProps {
   allTickets: Ticket[];
@@ -61,7 +62,7 @@ export const CombinationSearch: React.FC<CombinationSearchProps> = ({ allTickets
         </select>
       </div>
 
-      <div className="overflow-x-auto">
+      <TableScrollNavigator className="overflow-x-auto">
         <table className="min-w-full bg-white text-sm">
           <thead className="bg-gray-200">
             <tr>
@@ -115,7 +116,7 @@ export const CombinationSearch: React.FC<CombinationSearchProps> = ({ allTickets
             )}
           </tbody>
         </table>
-      </div>
+      </TableScrollNavigator>
     </div>
   );
 };

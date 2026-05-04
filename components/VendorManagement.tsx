@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, Role } from '../types';
 import { PasswordResetModal } from './PasswordResetModal';
+import { TableScrollNavigator } from './TableScrollNavigator';
 import { normalizeGambiaPhone } from '../utils';
 
 type FilterRole = Role | 'All';
@@ -180,7 +181,7 @@ export const UserAccountManagement: React.FC<UserAccountManagementProps> = ({ us
             )}
 
             <h2 className="text-xl font-bold text-betese-dark mb-4">User Account Management</h2>
-            <div className="overflow-x-auto">
+            <TableScrollNavigator className="overflow-x-auto">
                 <table className="min-w-full bg-white text-sm">
                     <thead className="bg-gray-200">
                         <tr>
@@ -230,7 +231,7 @@ export const UserAccountManagement: React.FC<UserAccountManagementProps> = ({ us
                         ))}
                     </tbody>
                 </table>
-            </div>
+            </TableScrollNavigator>
         </div>
         </>
     );

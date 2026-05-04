@@ -185,6 +185,27 @@ create table if not exists deposit_requests (
 create index if not exists idx_deposit_requests_status on deposit_requests (status);
 create index if not exists idx_deposit_requests_customer on deposit_requests (customer_id);
 
+create table if not exists deposit_logs (
+  id text primary key,
+  customer_id text not null references users(id) on delete cascade,
+  customer_name text,
+  customer_phone text,
+  amount numeric(12,2) not null,
+  bonus_awarded numeric(12,2),
+  bonus_adjustment numeric(12,2),
+  processed_by_id text not null references users(id) on delete restrict,
+  processed_by_name text,
+  timestamp timestamptz not null,
+  method text not null check (method in ('Cash', 'Wave', 'AfriMoney', 'Correction')),
+  transaction_id text,
+  note text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_deposit_logs_time on deposit_logs (timestamp desc);
+create index if not exists idx_deposit_logs_customer on deposit_logs (customer_id);
+create index if not exists idx_deposit_logs_processor on deposit_logs (processed_by_id);
+
 create table if not exists withdrawal_requests (
   id text primary key,
   user_id text not null references users(id) on delete cascade,

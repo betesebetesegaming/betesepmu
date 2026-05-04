@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { ManualBetOrder, User, Race } from '../types';
+import { TableScrollNavigator } from './TableScrollNavigator';
 
 interface PendingManualBetsPanelProps {
     manualBetOrders: ManualBetOrder[];
@@ -16,7 +17,7 @@ export const PendingManualBetsPanel: React.FC<PendingManualBetsPanelProps> = ({ 
         <div className="bg-white p-6 rounded-lg shadow-lg">
             <h2 className="text-2xl font-bold text-betese-dark mb-4">Pending Manual Bets</h2>
             <p className="text-sm text-gray-600 mb-4">These are special bets created by the back office for you to process. Confirm with the customer before printing.</p>
-            <div className="overflow-x-auto">
+            <TableScrollNavigator className="overflow-x-auto">
                 <table className="min-w-full bg-white text-sm">
                     <thead className="bg-gray-200">
                         <tr>
@@ -61,7 +62,7 @@ export const PendingManualBetsPanel: React.FC<PendingManualBetsPanelProps> = ({ 
                         )}
                     </tbody>
                 </table>
-            </div>
+            </TableScrollNavigator>
         </div>
     );
 };

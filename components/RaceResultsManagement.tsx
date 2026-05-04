@@ -2,6 +2,7 @@
 import React, { useMemo, useState } from 'react';
 import { Race, RaceResult, Ticket } from '../types';
 import { RaceResultModal } from './RaceResultModal';
+import { TableScrollNavigator } from './TableScrollNavigator';
 import { formatWinningNumbersForDisplay } from '../utils';
 
 interface RaceResultsManagementProps {
@@ -46,7 +47,7 @@ export const RaceResultsManagement: React.FC<RaceResultsManagementProps> = ({ ra
             <h2 className="text-xl font-bold text-betese-dark mb-4">Race Results & Payouts</h2>
             <p className="text-sm text-gray-600 mb-4">{canEdit ? 'This is the dedicated area to enter or edit the winning numbers and payout dividends for all completed races.' : 'This area is view-only. Race results and tie brackets can only be entered or edited by Admin.'}</p>
             
-            <div className="overflow-x-auto mt-4">
+            <TableScrollNavigator className="overflow-x-auto mt-4">
                 <table className="min-w-full bg-white">
                     <thead className="bg-gray-100">
                         <tr>
@@ -54,6 +55,8 @@ export const RaceResultsManagement: React.FC<RaceResultsManagementProps> = ({ ra
                             <th className="text-left py-2 px-3">Completed At</th>
                             <th className="text-left py-2 px-3">Result Status</th>
                             <th className="text-left py-2 px-3">Winning Numbers</th>
+                            <th className="text-left py-2 px-3 bg-red-50 text-red-700">Entered By</th>
+                            <th className="text-left py-2 px-3 bg-orange-50 text-orange-700">Last Edited By</th>
                             {canEdit && <th className="text-left py-2 px-3">Actions</th>}
                         </tr>
                     </thead>
@@ -86,6 +89,26 @@ export const RaceResultsManagement: React.FC<RaceResultsManagementProps> = ({ ra
                                         </>
                                     ) : '---'}
                                 </td>
+                                <td className="py-2 px-3 text-xs">
+                                    {race.result?.enteredByName ? (
+                                        <div>
+                                            <div className="font-bold text-green-700">{race.result.enteredByName}</div>
+                                            <div className="text-gray-500">
+                                                {race.result.enteredAt ? new Date(race.result.enteredAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) : ''}
+                                            </div>
+                                        </div>
+                                    ) : <span className="text-gray-400">—</span>}
+                                </td>
+                                <td className="py-2 px-3 text-xs">
+                                    {race.result?.lastEditedByName ? (
+                                        <div>
+                                            <div className="font-bold text-orange-700">{race.result.lastEditedByName}</div>
+                                            <div className="text-gray-500">
+                                                {race.result.lastEditedAt ? new Date(race.result.lastEditedAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) : ''}
+                                            </div>
+                                        </div>
+                                    ) : <span className="text-gray-400">—</span>}
+                                </td>
                                 {canEdit && (
                                     <td className="py-2 px-3">
                                         <button
@@ -99,11 +122,11 @@ export const RaceResultsManagement: React.FC<RaceResultsManagementProps> = ({ ra
                             </tr>
                         ))}
                         {pastRaces.length === 0 && (
-                             <tr><td colSpan={canEdit ? 5 : 4} className="text-center py-4 text-gray-500">No completed races found.</td></tr>
+                             <tr><td colSpan={canEdit ? 7 : 6} className="text-center py-4 text-gray-500">No completed races found.</td></tr>
                         )}
                     </tbody>
                 </table>
-            </div>
+            </TableScrollNavigator>
         </div>
         </>
     );

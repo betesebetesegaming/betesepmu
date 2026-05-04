@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { DepositLog, Ticket, User } from '../types';
+import { TableScrollNavigator } from './TableScrollNavigator';
 
 interface VendorMonitorPanelProps {
     allTickets: Ticket[];
@@ -43,8 +44,17 @@ export const VendorMonitorPanel: React.FC<VendorMonitorPanelProps> = ({
     const [confirmLockId, setConfirmLockId] = useState<string | null>(null);
     const [adminCancelInput, setAdminCancelInput] = useState('');
     const [adminCancelMsg, setAdminCancelMsg] = useState<{ ok: boolean; text: string } | null>(null);
+    const [period, setPeriod] = useState<'today' | 'all'>('today');
 
     const vendors = useMemo(() => users.filter(u => u.role === 'Vendor'), [users]);
+
+    const isSameLocalDay = (a: Date, b: Date) => (
+        a.getFullYear() === b.getFullYear() &&
+        a.getMonth() === b.getMonth() &&
+        a.getDate() === b.getDate()
+    );
+    const now = new Date();
+    const periodLabel = period === 'today' ? 'today' : 'all time';
 
     const getFundingMeta = (ticket: Ticket) => {
         const firstSelection = ticket.selections?.[0];
@@ -85,12 +95,17 @@ export const VendorMonitorPanel: React.FC<VendorMonitorPanelProps> = ({
 
     const vendorStats: VendorStat[] = useMemo(() => {
         return vendors.map(vendor => {
-            const vTickets = allTickets.filter(t => t.vendorId === vendor.id);
-            const vendorDeposits = (depositLogs || []).filter(log =>
-                log.processedById === vendor.id &&
-                Number(log.amount || 0) > 0 &&
-                log.method !== 'Correction'
-            );
+            const vTickets = allTickets.filter(t => {
+                if (t.vendorId !== vendor.id) return false;
+                if (period === 'all') return true;
+                return isSameLocalDay(t.timestamp, now);
+            });
+            const vendorDeposits = (depositLogs || []).filter(log => {
+                if (log.processedById !== vendor.id) return false;
+                if (Number(log.amount || 0) <= 0 || log.method === 'Correction') return false;
+                if (period === 'all') return true;
+                return isSameLocalDay(log.timestamp, now);
+            });
             const ticketSales = vTickets.reduce((s, t) => s + (t.totalCost || 0), 0);
             const onlineSales = vendorDeposits.reduce((s, log) => s + Number(log.amount || 0), 0);
             const totalSales = ticketSales + onlineSales;
@@ -117,7 +132,7 @@ export const VendorMonitorPanel: React.FC<VendorMonitorPanelProps> = ({
                 paidCount: vTickets.filter(t => t.status === 'Paid').length,
             };
         });
-    }, [vendors, allTickets, depositLogs]);
+    }, [vendors, allTickets, depositLogs, period]);
 
     const sortedVendorStats = useMemo(() => {
         const sorted = [...vendorStats].sort((a, b) => {
@@ -161,6 +176,7 @@ export const VendorMonitorPanel: React.FC<VendorMonitorPanelProps> = ({
     const drillTickets = useMemo(() => {
         if (!selectedVendorId) return [];
         let t = allTickets.filter(tt => tt.vendorId === selectedVendorId)
+            .filter(tt => period === 'all' ? true : isSameLocalDay(tt.timestamp, now))
             .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
         if (ticketFilter !== 'All') t = t.filter(tt => tt.status === ticketFilter);
         if (searchTicket.trim()) {
@@ -168,13 +184,17 @@ export const VendorMonitorPanel: React.FC<VendorMonitorPanelProps> = ({
             t = t.filter(tt => tt.id.toLowerCase().includes(term));
         }
         return t;
-    }, [selectedVendorId, allTickets, ticketFilter, searchTicket]);
+    }, [selectedVendorId, allTickets, ticketFilter, searchTicket, period]);
     const drillDeposits = useMemo(() => {
         if (!selectedVendorId) return [];
         return (depositLogs || [])
-            .filter(log => log.processedById === selectedVendorId && Number(log.amount || 0) > 0 && log.method !== 'Correction')
+            .filter(log => {
+                if (log.processedById !== selectedVendorId) return false;
+                if (Number(log.amount || 0) <= 0 || log.method === 'Correction') return false;
+                return period === 'all' ? true : isSameLocalDay(log.timestamp, now);
+            })
             .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-    }, [selectedVendorId, depositLogs]);
+    }, [selectedVendorId, depositLogs, period]);
 
     const formatGMD = (n: number) => `GMD ${n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 
@@ -275,10 +295,10 @@ export const VendorMonitorPanel: React.FC<VendorMonitorPanelProps> = ({
                 {/* Online deposit table */}
                 <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-200">
                     <div className="bg-indigo-700 px-5 py-3 flex flex-wrap items-center gap-3">
-                        <h3 className="text-base font-black text-white uppercase flex-1">Online Deposit Sales</h3>
+                        <h3 className="text-base font-black text-white uppercase flex-1">Online Deposit Sales ({periodLabel})</h3>
                         <span className="text-white/70 text-sm font-bold">{drillDeposits.length} rows</span>
                     </div>
-                    <div className="overflow-x-auto">
+                    <TableScrollNavigator className="overflow-x-auto">
                         <table className="min-w-full text-sm border-collapse">
                             <thead className="bg-indigo-50 border-b border-indigo-100">
                                 <tr>
@@ -302,13 +322,13 @@ export const VendorMonitorPanel: React.FC<VendorMonitorPanelProps> = ({
                                 ))}
                             </tbody>
                         </table>
-                    </div>
+                    </TableScrollNavigator>
                 </div>
 
                 {/* Drill ticket table */}
                 <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-200">
                     <div className="bg-gray-800 px-5 py-3 flex flex-wrap items-center gap-3">
-                        <h3 className="text-base font-black text-white uppercase flex-1">Ticket Transactions</h3>
+                        <h3 className="text-base font-black text-white uppercase flex-1">Ticket Transactions ({periodLabel})</h3>
                         <input
                             type="text"
                             placeholder="Search ticket ID…"
@@ -327,7 +347,7 @@ export const VendorMonitorPanel: React.FC<VendorMonitorPanelProps> = ({
                         </select>
                         <span className="text-white/60 text-sm font-bold">{drillTickets.length} rows</span>
                     </div>
-                    <div className="overflow-x-auto max-h-[480px] overflow-y-auto">
+                    <TableScrollNavigator className="overflow-x-auto max-h-[480px] overflow-y-auto">
                         <table className="min-w-full text-sm border-collapse">
                             <thead className="sticky top-0 bg-gray-50 border-b border-gray-300 z-10">
                                 <tr>
@@ -390,7 +410,7 @@ export const VendorMonitorPanel: React.FC<VendorMonitorPanelProps> = ({
                                 })}
                             </tbody>
                         </table>
-                    </div>
+                    </TableScrollNavigator>
                 </div>
 
                 {/* Confirm cancel modal */}
@@ -435,11 +455,27 @@ export const VendorMonitorPanel: React.FC<VendorMonitorPanelProps> = ({
         <div className="space-y-6">
             {/* Grand totals */}
             <div className="bg-gradient-to-r from-gray-900 to-gray-700 rounded-2xl shadow-2xl p-5">
-                <p className="text-[10px] font-black text-white/50 uppercase tracking-widest mb-3">System-Wide Overview — All Vendors</p>
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                    <p className="text-[10px] font-black text-white/50 uppercase tracking-widest">System-Wide Overview — All Vendors ({periodLabel})</p>
+                    <div className="inline-flex bg-white/10 border border-white/20 rounded-full p-1">
+                        <button
+                            onClick={() => setPeriod('today')}
+                            className={`px-3 py-1 text-[10px] font-black rounded-full uppercase transition-all ${period === 'today' ? 'bg-white text-gray-900' : 'text-white/80 hover:text-white'}`}
+                        >
+                            Today
+                        </button>
+                        <button
+                            onClick={() => setPeriod('all')}
+                            className={`px-3 py-1 text-[10px] font-black rounded-full uppercase transition-all ${period === 'all' ? 'bg-white text-gray-900' : 'text-white/80 hover:text-white'}`}
+                        >
+                            All Time
+                        </button>
+                    </div>
+                </div>
                 <div className="grid grid-cols-2 sm:grid-cols-6 gap-4">
                     {[
                         { label: 'Vendors',       value: String(vendors.length),      sub: `${vendors.filter(v=>v.isLocked).length} blocked`,   color: 'text-white' },
-                        { label: 'Total Tickets', value: String(grandTickets),        sub: 'all time',             color: 'text-white' },
+                        { label: 'Total Tickets', value: String(grandTickets),        sub: periodLabel,            color: 'text-white' },
                         { label: 'Ticket Sales',  value: formatGMD(grandTicketSales), sub: 'ticket placements',    color: 'text-green-400' },
                         { label: 'Online Sales',  value: formatGMD(grandOnlineSales), sub: 'vendor cash deposits', color: 'text-cyan-300' },
                         { label: 'Total Sales',   value: formatGMD(grandSales),       sub: 'ticket + online',      color: 'text-emerald-300' },

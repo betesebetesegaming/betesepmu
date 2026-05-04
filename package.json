@@ -11,9 +11,18 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "cap:sync": "npm run build && npx cap sync android",
+    "cap:open": "npx cap open android",
+    "sunmi:bench:full": "powershell -ExecutionPolicy Bypass -File scripts/sunmi-benchmark.ps1 -PackageName com.betese.pmu -Runs 5",
+    "sunmi:bench:lite": "powershell -ExecutionPolicy Bypass -File scripts/sunmi-benchmark.ps1 -PackageName com.betese.pmu.poslite -Runs 5",
+    "sunmi:bench:proxy": "powershell -ExecutionPolicy Bypass -File scripts/sunmi-proxy-benchmark.ps1",
+    "sunmi:bench:macro": "powershell -ExecutionPolicy Bypass -File scripts/sunmi-macrobenchmark.ps1 -Target full"
   },
   "dependencies": {
+    "@capacitor/android": "^8.3.1",
+    "@capacitor/cli": "^8.3.1",
+    "@capacitor/core": "^8.3.1",
     "@supabase/supabase-js": "^2.87.1",
     "@tailwindcss/vite": "^4.2.2",
     "autoprefixer": "^10.5.0",

@@ -65,6 +65,7 @@ interface LedgerRow {
   payoutCheck?: 'OK' | 'Check';
   stampTime: string;
 }
+  import { TableScrollNavigator } from './TableScrollNavigator';
 
 interface RaceLedgerSection {
   raceId: string;
@@ -376,7 +377,7 @@ export const TicketCombinationLedger: React.FC<TicketCombinationLedgerProps> = (
                     </div>
                   </div>
 
-                  <div className="overflow-x-auto">
+                  <TableScrollNavigator className="overflow-x-auto">
                     <table className="w-full text-sm border-collapse">
                       <thead>
                         <tr className="bg-gray-100">
@@ -440,7 +441,7 @@ export const TicketCombinationLedger: React.FC<TicketCombinationLedgerProps> = (
                         ))}
                       </tbody>
                     </table>
-                  </div>
+                  </TableScrollNavigator>
                 </div>
               );
             })

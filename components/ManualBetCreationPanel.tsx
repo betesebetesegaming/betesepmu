@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Race, BetTypeOption, User, ManualBetOrder, BetSelection } from '../types';
+import { TableScrollNavigator } from './TableScrollNavigator';
 
 interface ManualBetCreationPanelProps {
     races: Race[];
@@ -80,7 +81,7 @@ export const ManualBetCreationPanel: React.FC<ManualBetCreationPanelProps> = ({ 
 
              <div className="bg-white p-6 rounded-lg shadow-lg">
                 <h3 className="text-xl font-bold text-betese-dark mb-4">Pending Manual Bets</h3>
-                <div className="overflow-x-auto">
+                <TableScrollNavigator className="overflow-x-auto">
                     <table className="min-w-full bg-white text-sm">
                         <thead className="bg-gray-100">
                             <tr>
@@ -115,7 +116,7 @@ export const ManualBetCreationPanel: React.FC<ManualBetCreationPanelProps> = ({ 
                             )}
                         </tbody>
                     </table>
-                </div>
+                </TableScrollNavigator>
             </div>
         </div>
     );

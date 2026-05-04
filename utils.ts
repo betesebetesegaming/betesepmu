@@ -1,5 +1,31 @@
 
 import { Race, Ticket, BetTypeOption, Payouts, WinningsBreakdown, BetSelection } from './types';
+import { Capacitor, registerPlugin } from '@capacitor/core';
+
+interface NativePrintPlugin {
+    printHtml(options: { html: string; jobName?: string }): Promise<{ success: boolean }>;
+}
+
+interface BluetoothThermalPrintPlugin {
+    listPairedPrinters(): Promise<{ printers: Array<{ name: string; address: string }> }>;
+    printText(options: { text: string; address?: string; cut?: boolean }): Promise<{ success: boolean; printerName?: string; printerAddress?: string }>;
+}
+
+interface RawBtPrintPlugin {
+    isInstalled(): Promise<{ installed: boolean }>;
+    printText(options: { text: string }): Promise<{ success: boolean; launched?: boolean }>;
+}
+
+interface SunmiPrintPlugin {
+    printText(options: { text: string }): Promise<{ success: boolean }>;
+    printBitmap(options: { base64: string; width: number }): Promise<{ success: boolean }>;
+    cutPaper(): Promise<{ success: boolean }>;
+}
+
+const NativePrint = registerPlugin<NativePrintPlugin>('NativePrint');
+const BluetoothThermalPrint = registerPlugin<BluetoothThermalPrintPlugin>('BluetoothThermalPrint');
+const RawBtPrint = registerPlugin<RawBtPrintPlugin>('RawBtPrint');
+const SunmiPrint = registerPlugin<SunmiPrintPlugin>('SunmiPrint');
 import { BET_PRICING } from './constants';
 
 // Returns the price for ONE base combination unit (e.g. 30 for CoupleGagnant, 25 for Tiercé)
@@ -78,78 +104,335 @@ export const triggerPrint = (elementId: string): void => {
         return;
     }
 
-    // 1. Cleanup any crashed workers
-    const oldWorker = document.getElementById('betese-stable-printer');
-    if (oldWorker) oldWorker.remove();
+    const oldStage = document.getElementById('betese-print-stage');
+    if (oldStage) oldStage.remove();
+    const oldStyle = document.getElementById('betese-print-style');
+    if (oldStyle) oldStyle.remove();
 
-    // 2. Create the printing worker (Iframe)
-    const iframe = document.createElement('iframe');
-    iframe.id = 'betese-stable-printer';
-    // Style for background processing
-    iframe.setAttribute('style', 'position:fixed; right:0; bottom:0; width:58mm; height:1px; border:0; visibility:hidden;');
-    document.body.appendChild(iframe);
-
-    const printerDoc = iframe.contentWindow?.document;
-    if (!printerDoc) return;
-
-    // 3. Inject High-Density Thermal CSS
-    printerDoc.open();
-    printerDoc.write(`
-        <!DOCTYPE html>
-        <html>
-            <head>
-                <style>
-                    @page { margin: 0; size: auto; }
-                    * { 
-                        box-sizing: border-box; 
-                        -webkit-print-color-adjust: exact !important; 
-                    }
-                    body { 
-                        font-family: 'Courier New', Courier, monospace; 
-                        width: 54mm; /* Slightly less than 58mm to prevent side-clipping */
-                        margin: 0; 
-                        padding: 2mm; 
-                        font-size: 12px; 
-                        line-height: 1.1; 
-                        color: #000 !important;
-                        background: #fff !important;
-                        /* Force thermal head to burn darker */
-                        text-shadow: 0 0 0 #000 !important;
-                        font-weight: bold !important;
-                    }
-                    .c { text-align: center !important; }
-                    .b { font-weight: 900 !important; }
-                    .huge { font-size: 30px !important; letter-spacing: -1px; line-height: 0.9; margin: 4px 0; }
-                    .solid { border-top: 2px solid black !important; margin: 5px 0 !important; }
-                    .dashed { border-top: 1px dashed black !important; margin: 5px 0 !important; }
-                    .flex { display: flex !important; justify-content: space-between !important; align-items: center !important; }
-                    img { display: block !important; margin: 5px auto !important; width: 40mm !important; height: 40mm !important; }
-                    .invert { background: black !important; color: white !important; padding: 2px; }
-                </style>
-            </head>
-            <body>
-                <div id="print-content">
-                    ${sourceElement.innerHTML}
-                </div>
-            </body>
-        </html>
-    `);
-    printerDoc.close();
-
-    // 4. CRITICAL: Android Hardware Buffer Delay
-    // Thermal printers are slow to process images. We wait 1.2s.
-    setTimeout(() => {
-        if (iframe.contentWindow) {
-            iframe.contentWindow.focus();
-            iframe.contentWindow.print();
-            
-            // Garbage collection: Remove iframe after printing is initiated
-            setTimeout(() => {
-                const worker = document.getElementById('betese-stable-printer');
-                if (worker) worker.remove();
-            }, 10000);
+    const printStyle = document.createElement('style');
+    printStyle.id = 'betese-print-style';
+    printStyle.textContent = `
+        #betese-print-stage {
+            position: fixed;
+            left: -10000px;
+            top: 0;
+            width: 58mm;
+            padding: 0;
+            margin: 0;
+            background: #fff;
+            z-index: 2147483647;
+            page-break-inside: avoid !important;
+            break-inside: avoid-page !important;
         }
-    }, 1200); 
+        #betese-print-stage * {
+            box-sizing: border-box;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid-page !important;
+        }
+        #betese-print-stage .c { text-align: center !important; }
+        #betese-print-stage .b { font-weight: 900 !important; }
+        #betese-print-stage .huge { font-size: 30px !important; letter-spacing: -1px; line-height: 0.9; margin: 4px 0; }
+        #betese-print-stage .solid { border-top: 2px solid black !important; margin: 5px 0 !important; }
+        #betese-print-stage .dashed { border-top: 1px dashed black !important; margin: 5px 0 !important; }
+        #betese-print-stage .flex { display: flex !important; justify-content: space-between !important; align-items: center !important; }
+        #betese-print-stage img { display: block !important; margin: 5px auto !important; max-width: 40mm !important; }
+        @media print {
+            body > *:not(#betese-print-stage):not(script):not(style) {
+                display: none !important;
+            }
+            #betese-print-stage {
+                position: static !important;
+                left: 0 !important;
+                width: 58mm !important;
+                margin: 0 !important;
+                padding: 2mm !important;
+                overflow: visible !important;
+                font-family: 'Courier New', Courier, monospace !important;
+                font-size: 12px !important;
+                line-height: 1.1 !important;
+                color: #000 !important;
+                text-shadow: 0 0 0 #000 !important;
+                page-break-before: avoid !important;
+                page-break-after: avoid !important;
+                page-break-inside: avoid !important;
+                break-inside: avoid-page !important;
+            }
+            @page { margin: 0; size: 58mm auto; }
+        }
+    `;
+    document.head.appendChild(printStyle);
+
+    const stage = document.createElement('div');
+    stage.id = 'betese-print-stage';
+    stage.innerHTML = sourceElement.outerHTML;
+    document.body.appendChild(stage);
+
+    const isAndroidTerminal = /android|sunmi/i.test(navigator.userAgent || '');
+    const isNativeAndroid = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
+
+    const cleanup = () => {
+        const s = document.getElementById('betese-print-stage');
+        if (s) s.remove();
+        const st = document.getElementById('betese-print-style');
+        if (st) st.remove();
+    };
+
+    const waitForImages = () => {
+        const images = Array.from(stage.querySelectorAll('img')) as HTMLImageElement[];
+        if (images.length === 0) return Promise.resolve();
+
+        return Promise.race([
+            Promise.all(images.map((img) => {
+                if (img.complete) return Promise.resolve();
+                return new Promise<void>((resolve) => {
+                    img.onload = () => resolve();
+                    img.onerror = () => resolve();
+                });
+            })),
+            new Promise<void>((resolve) => setTimeout(resolve, 1200))
+        ]);
+    };
+
+    const doPrint = () => {
+        const afterPrintHandler = () => {
+            cleanup();
+            window.removeEventListener('afterprint', afterPrintHandler);
+        };
+        window.addEventListener('afterprint', afterPrintHandler);
+
+        try {
+            window.focus();
+            window.print();
+        } catch (e) {
+            console.error('PRINT ERROR:', e);
+        }
+
+        // Fallback cleanup in case Android WebView does not fire afterprint.
+        setTimeout(cleanup, 8000);
+    };
+
+    const buildPrintableHtml = (): string => {
+        return `
+            <!doctype html>
+            <html>
+                <head>
+                    <meta charset="utf-8" />
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+                    <style>${printStyle.textContent || ''}</style>
+                </head>
+                <body>
+                    ${stage.outerHTML}
+                </body>
+            </html>
+        `;
+    };
+
+    const buildPrintableText = (): string => {
+        // 58mm Bluetooth thermal paper = 32 characters wide at standard font size
+        const W = 32;
+        const divider = (ch = '-') => ch.repeat(W);
+        const center = (s: string) => {
+            const padded = s.slice(0, W);
+            const totalPad = W - padded.length;
+            const left = Math.floor(totalPad / 2);
+            return ' '.repeat(left) + padded;
+        };
+        const split = (l: string, r: string) => {
+            const left = l.slice(0, W - r.length - 1).padEnd(W - r.length - 1);
+            return `${left} ${r}`;
+        };
+
+        const lines: string[] = [];
+
+        const walk = (el: Element) => {
+            const tag = el.tagName;
+            // Skip images (QR handled separately)
+            if (tag === 'IMG') {
+                lines.push(''); // blank line placeholder
+                return;
+            }
+            const cls = (el.className || '') + ' ' + (el.getAttribute('class') || '');
+            const kids = Array.from(el.children);
+
+            // Two-column flex row → left / right
+            if ((cls.includes('flex') || cls.includes('justify-between')) && kids.length === 2) {
+                const l = (kids[0].textContent || '').replace(/\s+/g, ' ').trim();
+                const r = (kids[1].textContent || '').replace(/\s+/g, ' ').trim();
+                lines.push(split(l, r));
+                return;
+            }
+
+            // Leaf node with text
+            if (kids.length === 0) {
+                const txt = (el.textContent || '').replace(/\s+/g, ' ').trim();
+                if (!txt) return;
+                if (cls.includes(' c') || tag === 'DIV' && cls.includes('text-center')) {
+                    lines.push(center(txt));
+                } else {
+                    lines.push(txt);
+                }
+                return;
+            }
+
+            // Divider-like elements (borders)
+            if (cls.includes('border-t') || cls.includes('border-b') || cls.includes('border-y')) {
+                lines.push(divider('-'));
+            }
+
+            for (const child of kids) walk(child);
+        };
+
+        walk(sourceElement);
+
+        // De-duplicate consecutive dividers and blank lines
+        const out: string[] = [];
+        for (const line of lines) {
+            const last = out[out.length - 1] ?? null;
+            if (line === last && (line === divider('-') || line === '')) continue;
+            out.push(line);
+        }
+
+        // Ensure 3 blank feed lines at end for paper cut
+        return out.join('\n') + '\n\n\n';
+    };
+
+    const tryAndroidBrowserPopupPrint = (): boolean => {
+        if (isNativeAndroid || !isAndroidTerminal) return false;
+
+        const popup = window.open('', '_blank');
+        if (!popup) return false;
+
+        const html = buildPrintableHtml();
+        popup.document.open();
+        popup.document.write(`
+            ${html}
+            <script>
+                (function () {
+                    const run = function () {
+                        setTimeout(function () {
+                            try { window.focus(); window.print(); } catch (e) {}
+                        }, 150);
+                    };
+                    if (document.readyState === 'complete') run();
+                    else window.addEventListener('load', run);
+                })();
+            <\/script>
+        `);
+        popup.document.close();
+
+        // Main page cleanup once popup has taken over the print rendering.
+        cleanup();
+        return true;
+    };
+
+    const tryNativeAndroidPrint = async (): Promise<boolean> => {
+        if (!isNativeAndroid) return false;
+        try {
+            await NativePrint.printHtml({
+                html: buildPrintableHtml(),
+                jobName: 'Betese Ticket'
+            });
+            cleanup();
+            return true;
+        } catch (e) {
+            console.warn('Native print unavailable, fallback to web print', e);
+            return false;
+        }
+    };
+
+    const tryNativeBluetoothThermalPrint = async (): Promise<boolean> => {
+        if (!isNativeAndroid) return false;
+        try {
+            const preferredAddress = localStorage.getItem('betese_bt_printer_address') || undefined;
+            await BluetoothThermalPrint.printText({
+                text: buildPrintableText(),
+                address: preferredAddress,
+                cut: true
+            });
+            cleanup();
+            return true;
+        } catch (e) {
+            console.warn('Bluetooth thermal print unavailable, fallback to next print mode', e);
+            return false;
+        }
+    };
+
+    const tryRawBtPrint = async (): Promise<boolean> => {
+        if (!isNativeAndroid) return false;
+        try {
+            const status = await RawBtPrint.isInstalled();
+            if (!status?.installed) return false;
+            await RawBtPrint.printText({ text: buildPrintableText() });
+            cleanup();
+            return true;
+        } catch (e) {
+            console.warn('RawBT print unavailable, fallback to next print mode', e);
+            return false;
+        }
+    };
+
+    // Sunmi built-in printer via Sunmi Print AIDL service (direct, no Bluetooth needed)
+    const trySunmiBuiltinPrint = async (): Promise<boolean> => {
+        if (!isNativeAndroid) return false;
+        const isSunmi = /sunmi/i.test(navigator.userAgent || '') ||
+            /sunmi/i.test((window as any).SunmiModelName || '') ||
+            typeof (window as any).SunmiInnerPrinter !== 'undefined';
+        if (!isSunmi) return false;
+        try {
+            const text = buildPrintableText();
+            await SunmiPrint.printText({ text });
+            try { await SunmiPrint.cutPaper(); } catch {}
+            cleanup();
+            return true;
+        } catch (e) {
+            console.warn('Sunmi built-in print unavailable, falling back', e);
+            return false;
+        }
+    };
+
+    if (isAndroidTerminal) {
+        // Browser mode on Sunmi terminals (https://...) cannot use Capacitor plugins.
+        // Try popup print first because many Android WebViews only print from a top-level page.
+        const popupPrinted = tryAndroidBrowserPopupPrint();
+        if (popupPrinted) return;
+
+        if (!isNativeAndroid) {
+            alert('Printing is blocked by terminal browser popup settings. Please allow popups for this site or use the installed Betese APK for stable thermal printing.');
+            doPrint();
+            return;
+        }
+
+        // Print chain: Sunmi built-in → BT thermal → NativePrint → RawBT → web print
+        void trySunmiBuiltinPrint().then((sunmiPrinted) => {
+            if (sunmiPrinted) return;
+            void tryNativeBluetoothThermalPrint().then((btPrinted) => {
+                if (btPrinted) return;
+                void tryNativeAndroidPrint().then((printed) => {
+                    if (printed) return;
+                    void tryRawBtPrint().then((rawBtPrinted) => {
+                        if (!rawBtPrinted) doPrint();
+                    });
+                });
+            });
+        });
+        return;
+    }
+
+    waitForImages().then(() => {
+        setTimeout(doPrint, 120);
+    });
+};
+
+export const listPairedThermalPrinters = async (): Promise<Array<{ name: string; address: string }>> => {
+    if (!(Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android')) return [];
+    try {
+        const result = await BluetoothThermalPrint.listPairedPrinters();
+        return result?.printers || [];
+    } catch {
+        return [];
+    }
 };
 
 export interface WinSummary {
@@ -243,7 +526,7 @@ export const validateTicketForPlacement = (ticketLike: { selections: BetSelectio
         if (!check.valid) return check;
     }
     const computedTotal = ticketLike.selections.reduce((sum, sel) => sum + (sel.cost * sel.multiplier), 0);
-    if (Math.abs(computedTotal - (ticketLike.totalCost || 0)) >= 0.001) {
+    if (Math.abs(computedTotal - (ticketLike.totalCost || 0)) >= 0.01) {
         return { valid: false, message: 'Ticket total cost mismatch' };
     }
     return { valid: true };

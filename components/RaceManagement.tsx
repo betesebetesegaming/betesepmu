@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Race, BetTypeOption, RaceResult } from '../types';
 import { NonRunnerModal } from './NonRunnerModal';
+import { TableScrollNavigator } from './TableScrollNavigator';
 
 interface RaceManagementProps {
     races: Race[];
@@ -238,7 +239,7 @@ export const RaceManagement: React.FC<RaceManagementProps> = ({ races, onAddRace
 
             <h3 className="text-lg font-semibold text-betese-dark mt-6 mb-2">Upcoming Scheduled Races ({upcomingRaces.length})</h3>
             
-            <div className="overflow-x-auto mt-4">
+            <TableScrollNavigator className="overflow-x-auto mt-4">
                 <table className="min-w-full bg-white">
                     <thead className="bg-gray-100">
                         <tr>
@@ -289,7 +290,7 @@ export const RaceManagement: React.FC<RaceManagementProps> = ({ races, onAddRace
                         )}
                     </tbody>
                 </table>
-            </div>
+            </TableScrollNavigator>
             
             {editingNonRunnersRace && <NonRunnerModal race={editingNonRunnersRace} onClose={() => setEditingNonRunnersRace(null)} onSave={(nonRunners) => { onUpdateNonRunners(editingNonRunnersRace.id, nonRunners); setEditingNonRunnersRace(null); }} />}
         </div>

@@ -246,6 +246,11 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
     syncingScrollRef.current = null;
   };
 
+  const scrollTableBy = (dx: number, dy: number) => {
+    if (!tableScrollRef.current) return;
+    tableScrollRef.current.scrollBy({ left: dx, top: dy, behavior: 'smooth' });
+  };
+
   return (
     <>
       {ledgerTicket && <TicketCombinationLedger tickets={tickets} races={races} onClose={() => setLedgerTicket(null)} />}
@@ -318,8 +323,49 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
           </div>
         </div>
 
-        {/* Table */}
-        <div ref={tableScrollRef} onScroll={syncTableToTop} className="overflow-x-auto">
+        {/* Table + directional arrows */}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => scrollTableBy(0, -220)}
+            className="absolute left-1/2 -translate-x-1/2 top-2 z-20 h-8 w-8 rounded-full bg-betese-green text-white font-black shadow-md hover:bg-green-700"
+            aria-label="Scroll up"
+            title="Move up"
+          >
+            ▲
+          </button>
+
+          <button
+            type="button"
+            onClick={() => scrollTableBy(-260, 0)}
+            className="absolute left-2 top-1/2 -translate-y-1/2 z-20 h-8 w-8 rounded-full bg-betese-green text-white font-black shadow-md hover:bg-green-700"
+            aria-label="Scroll left"
+            title="Move left"
+          >
+            ◀
+          </button>
+
+          <button
+            type="button"
+            onClick={() => scrollTableBy(260, 0)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 z-20 h-8 w-8 rounded-full bg-betese-green text-white font-black shadow-md hover:bg-green-700"
+            aria-label="Scroll right"
+            title="Move right"
+          >
+            ▶
+          </button>
+
+          <button
+            type="button"
+            onClick={() => scrollTableBy(0, 220)}
+            className="absolute left-1/2 -translate-x-1/2 bottom-2 z-20 h-8 w-8 rounded-full bg-betese-green text-white font-black shadow-md hover:bg-green-700"
+            aria-label="Scroll down"
+            title="Move down"
+          >
+            ▼
+          </button>
+
+        <div ref={tableScrollRef} onScroll={syncTableToTop} className="overflow-auto max-h-[70vh]">
           <table className="min-w-full text-sm border-collapse">
             <thead>
               <tr className="bg-gradient-to-b from-green-100 to-green-50 border-b border-gray-300">
@@ -496,6 +542,7 @@ export const TicketDetailsTable: React.FC<TicketDetailsTableProps> = ({ tickets,
               )}
             </tbody>
           </table>
+        </div>
         </div>
       </div>
     </>

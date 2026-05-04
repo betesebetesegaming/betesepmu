@@ -100,7 +100,10 @@ const MessagePanel: React.FC<{
     messages: ChatMessage[];
     currentUser: User;
     onSend: (content: string, audioData?: { base64: string, duration: number }) => void;
-}> = ({ thread, messages, currentUser, onSend }) => {
+    onBack?: () => void;
+    onClose?: () => void;
+    isMobile?: boolean;
+}> = ({ thread, messages, currentUser, onSend, onBack, onClose, isMobile = false }) => {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const [message, setMessage] = useState('');
     
@@ -305,8 +308,20 @@ const MessagePanel: React.FC<{
     
     return (
         <div className="flex-1 flex flex-col bg-gray-50">
-            <div className="p-4 border-b bg-white">
-                <h3 className="font-bold text-lg">{thread.name || messages.find(m => m.senderId !== currentUser.id)?.senderName || 'Conversation'}</h3>
+            <div className="p-4 border-b bg-white flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                    {isMobile && onBack && (
+                        <button onClick={onBack} className="p-2 rounded-full hover:bg-gray-100" aria-label="Back to conversations">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                        </button>
+                    )}
+                    <h3 className="font-bold text-lg truncate">{thread.name || messages.find(m => m.senderId !== currentUser.id)?.senderName || 'Conversation'}</h3>
+                </div>
+                {onClose && (
+                    <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100" aria-label="Close chat">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+                    </button>
+                )}
             </div>
             <div className="flex-1 p-4 overflow-y-auto space-y-4">
                 {messages.map(msg => {
@@ -379,7 +394,8 @@ const ThreadList: React.FC<{
     activeThreadId: string | null;
     onSelectThread: (threadId: string) => void;
     onNewMessage: () => void;
-}> = ({ threads, messages, currentUser, activeThreadId, onSelectThread, onNewMessage }) => {
+    onClose?: () => void;
+}> = ({ threads, messages, currentUser, activeThreadId, onSelectThread, onNewMessage, onClose }) => {
     
     const getThreadDisplayNameAndParticipants = (thread: ChatThread) => {
         if (thread.isBroadcast) {
@@ -403,9 +419,16 @@ const ThreadList: React.FC<{
         <div className="w-80 border-r flex flex-col">
             <div className="p-4 border-b flex justify-between items-center">
                 <h2 className="font-bold text-xl">Messages</h2>
-                <button onClick={onNewMessage} className="p-2 rounded-full hover:bg-gray-100">
-                   <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" /></svg>
-                </button>
+                <div className="flex items-center gap-2">
+                    <button onClick={onNewMessage} className="p-2 rounded-full hover:bg-gray-100" aria-label="New message">
+                       <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" /></svg>
+                    </button>
+                    {onClose && (
+                        <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100" aria-label="Close chat">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+                        </button>
+                    )}
+                </div>
             </div>
             <div className="flex-1 overflow-y-auto">
                 {sortedThreads.map(thread => {
@@ -451,6 +474,7 @@ interface ChatPanelProps {
 export const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, currentUser, users, threads, messages, onSendMessage, onMarkAsRead }) => {
     const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
     const [isNewMessageModalOpen, setIsNewMessageModalOpen] = useState(false);
+    const [isMobile, setIsMobile] = useState<boolean>(() => window.innerWidth < 768);
     
     const userThreads = useMemo(() => {
         return threads.filter(thread => {
@@ -475,6 +499,12 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, currentUs
         }
     }, [activeThreadId, messages, onMarkAsRead]);
 
+    useEffect(() => {
+        const onResize = () => setIsMobile(window.innerWidth < 768);
+        window.addEventListener('resize', onResize);
+        return () => window.removeEventListener('resize', onResize);
+    }, []);
+
     const handleSendMessage = (content: string, audioData?: { base64: string, duration: number }) => {
         if (activeThreadId) {
             onSendMessage(activeThreadId, content, [], audioData);
@@ -487,29 +517,44 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, currentUs
 
     if (!isOpen) return null;
 
+    const handleSelectThread = (threadId: string) => {
+        setActiveThreadId(threadId);
+    };
+
+    const shouldShowThreads = !isMobile || !activeThreadId;
+    const shouldShowMessages = !isMobile || Boolean(activeThreadId);
+
     return (
         <div className="fixed inset-0 bg-black bg-opacity-30 z-40 flex items-center justify-center p-4" onClick={onClose}>
-            <div className="bg-white rounded-xl shadow-2xl w-full h-full max-w-4xl max-h-[90vh] flex overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="bg-white rounded-xl shadow-2xl w-full h-full max-w-4xl max-h-[95vh] flex overflow-hidden" onClick={e => e.stopPropagation()}>
                 <NewMessageModal 
                     isOpen={isNewMessageModalOpen}
                     onClose={() => setIsNewMessageModalOpen(false)}
                     vendors={users.filter(u => u.role === 'Vendor')}
                     onSend={handleSendNewMessage}
                 />
-                <ThreadList 
-                    threads={userThreads}
-                    messages={messages}
-                    currentUser={currentUser}
-                    activeThreadId={activeThreadId}
-                    onSelectThread={setActiveThreadId}
-                    onNewMessage={() => setIsNewMessageModalOpen(true)}
-                />
-                <MessagePanel 
-                    thread={activeThread || null}
-                    messages={activeThreadMessages}
-                    currentUser={currentUser}
-                    onSend={handleSendMessage}
-                />
+                {shouldShowThreads && (
+                    <ThreadList 
+                        threads={userThreads}
+                        messages={messages}
+                        currentUser={currentUser}
+                        activeThreadId={activeThreadId}
+                        onSelectThread={handleSelectThread}
+                        onNewMessage={() => setIsNewMessageModalOpen(true)}
+                        onClose={onClose}
+                    />
+                )}
+                {shouldShowMessages && (
+                    <MessagePanel 
+                        thread={activeThread || null}
+                        messages={activeThreadMessages}
+                        currentUser={currentUser}
+                        onSend={handleSendMessage}
+                        onBack={isMobile ? () => setActiveThreadId(null) : undefined}
+                        onClose={onClose}
+                        isMobile={isMobile}
+                    />
+                )}
             </div>
         </div>
     );

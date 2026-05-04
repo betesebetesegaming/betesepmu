@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { User, DepositLog, DepositRequest, Role } from '../types';
+import { TableScrollNavigator } from './TableScrollNavigator';
 
 interface CustomerDepositPanelProps {
   customers: User[];
@@ -101,6 +102,12 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
       const isHigh = recent.length >= 5 || walletAbs >= 5000 || bonusAbs >= 3000;
       return { count: recent.length, walletAbs, bonusAbs, isHigh };
   }, [depositLogs]);
+
+    const getMethodLabel = (method: DepositLog['method'] | DepositRequest['method']) => {
+            if (method === 'Cash') return 'Manual Cash (Vendor/Desk)';
+            if (method === 'Correction') return 'Correction (Admin)';
+            return method;
+    };
 
   const trackingCustomer = useMemo(
       () => (customers || []).find(c => c.id === trackingCustomerId) || null,
@@ -400,7 +407,7 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
                                     <span className={`font-bold ${log.amount < 0 ? 'text-red-600' : 'text-green-700'}`}>
                                         {log.amount > 0 ? '+' : ''}{log.amount.toFixed(2)} GMD
                                     </span>
-                                    <span className="ml-2 text-gray-500">({log.method})</span>
+                                    <span className="ml-2 text-gray-500">({getMethodLabel(log.method)})</span>
                                     {/* ADDED PROCESSOR NAME VISIBILITY HERE */}
                                     <span className="ml-2 text-xs text-blue-600 font-semibold">By: {log.processedByName}</span>
                                 </div>
@@ -517,8 +524,9 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
               )}
 
               <div className="bg-white border rounded-lg p-3">
-                  <h5 className="text-sm font-black text-gray-800 uppercase mb-2">Online Request Audit (Latest 20)</h5>
-                  <div className="overflow-x-auto">
+                  <h5 className="text-sm font-black text-gray-800 uppercase mb-1">Online Request Audit (Latest 20)</h5>
+                  <p className="text-[11px] text-gray-500 mb-2">This table is online customer requests only (Wave/AfriMoney). Manual vendor deposits are tracked in Transaction History as Manual Cash.</p>
+                  <TableScrollNavigator className="overflow-x-auto">
                       <table className="min-w-full text-xs">
                           <thead className="bg-gray-100">
                               <tr>
@@ -536,7 +544,7 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
                                       <td className="px-2 py-1 whitespace-nowrap">{req.timestamp.toLocaleString()}</td>
                                       <td className="px-2 py-1">{req.customerName}</td>
                                       <td className="px-2 py-1 text-right font-bold">{Number(req.amount || 0).toFixed(2)}</td>
-                                      <td className="px-2 py-1">{req.method}</td>
+                                      <td className="px-2 py-1">{getMethodLabel(req.method)}</td>
                                       <td className="px-2 py-1">
                                           <span className={`px-2 py-0.5 rounded-full font-bold ${req.status === 'Approved' ? 'bg-green-100 text-green-700' : req.status === 'Rejected' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
                                               {req.status}
@@ -547,7 +555,7 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
                               ))}
                           </tbody>
                       </table>
-                  </div>
+                  </TableScrollNavigator>
               </div>
 
               <div className="flex items-center justify-between bg-gray-50 p-3 rounded-lg border">
@@ -574,7 +582,7 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
                                     </div>
               </div>
 
-              <div className="overflow-x-auto">
+              <TableScrollNavigator className="overflow-x-auto">
                   <table className="min-w-full bg-white text-sm">
                       <thead className="bg-gray-200">
                           <tr>
@@ -601,7 +609,7 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
                                   </td>
                                   <td className="py-2 px-3">
                                       <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${log.method === 'Correction' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-700'}`}>
-                                          {log.method}
+                                          {getMethodLabel(log.method)}
                                       </span>
                                   </td>
                                   <td className="py-2 px-3 font-bold text-betese-dark">{log.processedByName}</td>
@@ -610,7 +618,7 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
                           ))}
                       </tbody>
                   </table>
-              </div>
+              </TableScrollNavigator>
           </div>
       )}
     </div>

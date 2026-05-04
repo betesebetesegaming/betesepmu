@@ -26,5 +26,18 @@ export default defineConfig(({ mode }) => {
         '@': resolve(__dirname, '.'),
       },
     },
+    build: {
+      sourcemap: false,
+      minify: 'esbuild',
+      chunkSizeWarningLimit: 900,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            react: ['react', 'react-dom'],
+            vendor: ['@supabase/supabase-js'],
+          },
+        },
+      },
+    },
   };
 });

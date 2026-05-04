@@ -13,7 +13,7 @@ interface TicketModalProps {
 export const TicketModal: React.FC<TicketModalProps> = ({ ticket, onClose, showPrintButton, races }) => {
   
   const handlePrint = () => {
-    triggerPrint(`p-box-${ticket.id}`);
+    triggerPrint(`ticket-receipt-${ticket.id}`);
   };
 
   const isPaid = ticket.status === 'Paid';
@@ -125,7 +125,9 @@ export const TicketModal: React.FC<TicketModalProps> = ({ ticket, onClose, showP
 
           <div className="p-2 bg-gray-200">
             <div id={`p-box-${ticket.id}`} className="bg-white p-1.5 shadow-inner mx-auto border border-gray-300 w-[195px]">
-                {isPaid ? renderPaidReceipt() : renderStandardTicket()}
+                <div id={`ticket-receipt-${ticket.id}`}>
+                  {isPaid ? renderPaidReceipt() : renderStandardTicket()}
+                </div>
             </div>
           </div>
           

@@ -66,20 +66,26 @@ const MenuGraphic: React.FC<{ kind: MenuIconKind }> = ({ kind }) => {
     };
 
     return (
-        <div className="w-14 h-14 rounded-2xl overflow-hidden border border-white/40 shadow-lg ring-2 ring-white/25">
-            <img src={photoMap[kind].src} alt={photoMap[kind].alt} className="w-full h-full object-cover" loading="lazy" />
-        </div>
+        <img
+            src={photoMap[kind].src}
+            alt={photoMap[kind].alt}
+            className="absolute inset-0 w-full h-full object-cover"
+            loading="lazy"
+        />
     );
 };
 
 const MenuButton: React.FC<{ onClick: () => void, label: string, iconKind: MenuIconKind, color: string, subtext: string, count?: number }> = ({ onClick, label, iconKind, color, subtext, count }) => (
+    <>
     <button 
         onClick={onClick}
-        className={`${color} text-white p-4 rounded-2xl shadow-lg flex flex-col items-center justify-center gap-1 transition-all active:scale-95 border-b-4 border-black/20 hover:brightness-110 relative h-32 w-full`}
+        className="bg-betese-dark text-white p-3 rounded-2xl shadow-lg flex flex-col items-center justify-end gap-1 transition-all active:scale-95 border-b-4 border-black/20 hover:brightness-110 relative h-32 w-full overflow-hidden"
     >
         <MenuGraphic kind={iconKind} />
+        <div className="absolute inset-0 bg-black/40"></div>
+        <div className="absolute inset-x-0 bottom-0 h-14" style={{ background: 'linear-gradient(to top, rgba(0, 0, 0, 0.8), rgba(0,0,0,0))' }}></div>
         <div className="text-center">
-            <span className="text-lg font-black uppercase block leading-none">{label}</span>
+            <span className="text-base font-black uppercase block leading-none">{label}</span>
             <span className="text-[10px] opacity-80 font-bold uppercase tracking-widest">{subtext}</span>
         </div>
         {count !== undefined && count > 0 && (
@@ -88,6 +94,7 @@ const MenuButton: React.FC<{ onClick: () => void, label: string, iconKind: MenuI
             </span>
         )}
     </button>
+    </>
 );
 
 const BackButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
@@ -223,9 +230,6 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
     const recentDeletableTickets = [...placedTickets]
         .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
         .slice(0, 3);
-
-    const pendingFinanceCount = ((depositRequests || []).filter(r => r && r.status === 'Pending').length) + 
-                               ((withdrawalRequests || []).filter(r => r && r.status === 'Pending').length);
 
     const toDayKey = (value: Date) => `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
     const reportDayKey = toDayKey(effectiveTime);
@@ -393,14 +397,16 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                                 ) : (
                                     <div className="space-y-3">
                                         {recentDeletableTickets.map(ticket => {
-                                            // Only allow cancel while race is still running (before end time)
+                                            // Allow cancel only before the 2-minute pre-start lock window.
                                             const raceIds = Array.from(new Set(ticket.selections.map(s => s.raceId)));
-                                            const raceStillRunning = raceIds.some(rId => {
+                                            const isWithinLockWindow = raceIds.some(rId => {
                                                 const race = races.find(r => r.id === rId);
-                                                return race && race.endDate > effectiveTime;
+                                                if (!race) return false;
+                                                const cancelDeadline = race.startDate.getTime() - BETTING_CUTOFF_MS;
+                                                return effectiveTime.getTime() >= cancelDeadline;
                                             });
-                                            const canCancel = (ticket.status === 'Active' || ticket.status === 'Booked') && raceStillRunning;
-                                            const raceEnded = (ticket.status === 'Active' || ticket.status === 'Booked') && !raceStillRunning;
+                                            const canCancel = (ticket.status === 'Active' || ticket.status === 'Booked') && !isWithinLockWindow;
+                                            const raceLocked = (ticket.status === 'Active' || ticket.status === 'Booked') && isWithinLockWindow;
                                             return (
                                                 <div key={ticket.id} className="flex items-center justify-between p-4 rounded-xl border-2 border-gray-200 bg-gray-50 hover:bg-gray-100 transition-colors gap-3">
                                                     <div className="min-w-0">
@@ -409,8 +415,8 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                                                             {ticket.timestamp.toLocaleDateString()} {ticket.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                                             {' · '}GMD {ticket.totalCost.toFixed(0)}
                                                         </p>
-                                                        {raceEnded && (
-                                                            <p className="text-[10px] text-red-500 font-black uppercase mt-0.5">Race ended — contact Admin to cancel</p>
+                                                        {raceLocked && (
+                                                            <p className="text-[10px] text-red-500 font-black uppercase mt-0.5">Locked: only cancel more than 2 min before start</p>
                                                         )}
                                                     </div>
                                                     <div className="flex items-center gap-2 flex-shrink-0">
@@ -496,7 +502,7 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 animate-fade-in">
                             <MenuButton onClick={() => setView('PLACE_BET')} label="Place Bet" subtext="New Ticket" iconKind="horse" color="bg-blue-600" />
                             <MenuButton onClick={() => setView('SCAN_PAY')} label="Scan/Pay" subtext="Payout" iconKind="money" color="bg-orange-600" />
-                            <MenuButton onClick={() => setView('FINANCE')} label="Finance" subtext="Wallets" iconKind="wallet" color="bg-indigo-600" count={pendingFinanceCount} />
+                            <MenuButton onClick={() => setView('FINANCE')} label="Finance" subtext="Wallets" iconKind="wallet" color="bg-indigo-600" />
                             <MenuButton onClick={() => setView('RAPPORTS')} label="Rapport" subtext="Print Results" iconKind="print" color="bg-cyan-600" />
                             <MenuButton onClick={() => setView('UPDATE_RESULTS')} label="Results" subtext="View Only" iconKind="results" color="bg-red-600" />
                             <MenuButton onClick={() => onOpenChat()} label="Chat" subtext="Support" iconKind="chat" color="bg-purple-600" />

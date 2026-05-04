@@ -1,6 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { Ticket, Race, BetTypeOption } from '../types';
+import { TableScrollNavigator } from './TableScrollNavigator';
 import { calculateTicketWinnings } from '../utils';
 
 interface AnalyticsDashboardProps {
@@ -556,7 +557,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
 
                                             {/* Expanded bet-type table */}
                                             {isExpanded && (
-                                                <div className="px-4 pb-4 overflow-x-auto border-t border-betese-green/30">
+                                                <TableScrollNavigator className="px-4 pb-4 overflow-x-auto border-t border-betese-green/30">
                                                     <table className="min-w-full bg-white text-sm border rounded mt-3">
                                                         <thead className="bg-betese-dark text-white">
                                                             <tr>
@@ -592,7 +593,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
                                                             )}
                                                         </tbody>
                                                     </table>
-                                                </div>
+                                                </TableScrollNavigator>
                                             )}
                                         </div>
                                     );
@@ -678,7 +679,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
                     });
 
                     const renderTicketTable = (ticketGroups: GroupedLedgerRow[]) => (
-                        <div className="overflow-x-auto">
+                        <TableScrollNavigator className="overflow-x-auto">
                             <table className="min-w-full text-sm bg-white">
                                 <thead className="bg-gray-100">
                                     <tr>
@@ -775,7 +776,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ tickets,
                                     ))}
                                 </tbody>
                             </table>
-                        </div>
+                        </TableScrollNavigator>
                     );
 
                     const renderRaceSection = (sec: (typeof sections)[0], index: number, isFirstFinished: boolean) => {

@@ -19,6 +19,62 @@ View your app in AI Studio: https://ai.studio/apps/8a0a6433-a001-4676-ac57-90372
 3. Run the app:
    `npm run dev`
 
+## Sunmi Performance Benchmark
+
+Use this to compare startup and memory between normal APK and lite APK on a real Sunmi terminal.
+
+Prerequisites:
+
+- USB debugging enabled on the device
+- `adb` available in terminal (`adb devices` must show one device)
+
+Commands:
+
+- Full build package benchmark:
+   `npm run sunmi:bench:full`
+- Lite build package benchmark:
+   `npm run sunmi:bench:lite`
+- No-device proxy benchmark (build + APK internals comparison):
+   `npm run sunmi:bench:proxy`
+- Local macrobenchmark on connected Android:
+   `npm run sunmi:bench:macro`
+
+The script runs cold starts, prints per-run `ThisTime`, `TotalTime`, `WaitTime`, and a `dumpsys meminfo` PSS snapshot, then shows averages.
+
+Optional direct script usage:
+
+`powershell -ExecutionPolicy Bypass -File scripts/sunmi-benchmark.ps1 -PackageName com.betese.pmu.poslite -Runs 7 -ClearData`
+
+If you do not have Sunmi connected over ADB, use:
+
+`powershell -ExecutionPolicy Bypass -File scripts/sunmi-proxy-benchmark.ps1`
+
+This generates:
+
+`docs/sunmi-proxy-benchmark-report.md`
+
+## Remote Real-Device Benchmark (No USB)
+
+A GitHub Actions workflow is included to run Android Macrobenchmark on Firebase Test Lab:
+
+`.github/workflows/android-macrobenchmark.yml`
+
+Set these repository secrets before running:
+
+- `GCP_PROJECT_ID`
+- `GCP_SA_KEY` (service account JSON with Firebase Test Lab permissions)
+
+How to run:
+
+1. Open Actions tab in GitHub.
+2. Run `Android Macrobenchmark (Firebase Test Lab)`.
+3. Choose target: `full` or `lite`.
+4. Keep defaults (`oriole`, API `33`) or pick another device/API.
+
+The workflow builds both APK variants, runs macrobenchmark startup tests remotely, and stores results in Firebase Test Lab under:
+
+`macrobenchmark/<github-run-id>-<target>`
+
 ## PMU Pari-Mutuel Payout Engine
 
 This repository now includes a full PMU-style payout module with:

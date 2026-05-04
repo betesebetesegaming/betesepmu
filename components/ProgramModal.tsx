@@ -1,6 +1,7 @@
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { ProgramImage } from '../types';
+import { TableScrollNavigator } from './TableScrollNavigator';
 
 // Make TypeScript aware of the html2canvas library loaded from the CDN
 declare var html2canvas: any;
@@ -95,6 +96,7 @@ const ActualProgram = React.forwardRef<HTMLDivElement, { imageSrc: string | null
             
             <div className="flex gap-1">
                 <div className="w-2/3">
+                    <TableScrollNavigator className="overflow-auto">
                     <table className="w-full border-collapse text-xs">
                         <thead>
                             <tr className="bg-gray-200">
@@ -116,6 +118,8 @@ const ActualProgram = React.forwardRef<HTMLDivElement, { imageSrc: string | null
                             ))}
                         </tbody>
                     </table>
+                    </TableScrollNavigator>
+                    <TableScrollNavigator className="overflow-auto mt-1">
                     <table className="w-full border-collapse text-xs mt-1">
                         <tbody>
                              {listTypeData.map(row => (
@@ -126,6 +130,7 @@ const ActualProgram = React.forwardRef<HTMLDivElement, { imageSrc: string | null
                             ))}
                         </tbody>
                     </table>
+                    </TableScrollNavigator>
                 </div>
                 <div className="w-1/3 flex flex-col justify-between">
                     <BeteseAd />
@@ -161,6 +166,7 @@ const ActualProgram = React.forwardRef<HTMLDivElement, { imageSrc: string | null
             
             <div className="flex gap-1 mt-1 items-end">
                 <div className="w-1/2">
+                    <TableScrollNavigator className="overflow-auto">
                     <table className="w-full border-collapse text-xs">
                         <tbody>
                             {coupDeCoeurTable.map(row => (
@@ -172,6 +178,7 @@ const ActualProgram = React.forwardRef<HTMLDivElement, { imageSrc: string | null
                             ))}
                         </tbody>
                     </table>
+                    </TableScrollNavigator>
                 </div>
                 <div className="w-1/2 flex flex-col">
                     <BeteseAd />
