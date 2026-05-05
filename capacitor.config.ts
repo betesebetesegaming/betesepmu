@@ -5,7 +5,8 @@ const config: CapacitorConfig = {
   appName: 'Betese PMU',
   webDir: 'dist',
   server: {
-    androidScheme: 'https',
+    url: 'https://betesepmu.com',
+    cleartext: false,
   },
   android: {
     buildOptions: {
