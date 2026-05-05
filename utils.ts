@@ -397,7 +397,15 @@ export const triggerPrint = (elementId: string): void => {
     };
 
     if (isAndroidTerminal) {
-        // Browser mode on Sunmi terminals (https://...) cannot use Capacitor plugins.
+        // On Sunmi in BROWSER mode: never attempt popup/system print — it causes Google Play blinking loop.
+        // Direct user to install the Betese APK which has the built-in Sunmi printer plugin.
+        if (isSunmiTerminal && !isNativeAndroid) {
+            alert('Please use the installed Betese PMU app (APK) on this terminal to print. Browser printing is not supported on Sunmi — it will open Google Play instead of printing.');
+            cleanup();
+            return;
+        }
+
+        // Browser mode on non-Sunmi Android terminals.
         // Try popup print first because many Android WebViews only print from a top-level page.
         const popupPrinted = tryAndroidBrowserPopupPrint();
         if (popupPrinted) return;
