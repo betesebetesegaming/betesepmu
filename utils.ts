@@ -171,6 +171,9 @@ export const triggerPrint = (elementId: string): void => {
 
     const isAndroidTerminal = /android|sunmi/i.test(navigator.userAgent || '');
     const isNativeAndroid = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
+    const isSunmiTerminal = /sunmi/i.test(navigator.userAgent || '') ||
+        /sunmi/i.test((window as any).SunmiModelName || '') ||
+        typeof (window as any).SunmiInnerPrinter !== 'undefined';
 
     const cleanup = () => {
         const s = document.getElementById('betese-print-stage');
@@ -329,6 +332,8 @@ export const triggerPrint = (elementId: string): void => {
 
     const tryNativeAndroidPrint = async (): Promise<boolean> => {
         if (!isNativeAndroid) return false;
+        // On Sunmi, avoid Android print spooler UI; use Sunmi/BT paths instead.
+        if (isSunmiTerminal) return false;
         try {
             await NativePrint.printHtml({
                 html: buildPrintableHtml(),
@@ -361,6 +366,8 @@ export const triggerPrint = (elementId: string): void => {
 
     const tryRawBtPrint = async (): Promise<boolean> => {
         if (!isNativeAndroid) return false;
+        // RawBT is optional on Sunmi devices; avoid launching it to prevent app crash popups.
+        if (isSunmiTerminal) return false;
         try {
             const status = await RawBtPrint.isInstalled();
             if (!status?.installed) return false;
@@ -376,10 +383,7 @@ export const triggerPrint = (elementId: string): void => {
     // Sunmi built-in printer via Sunmi Print AIDL service (direct, no Bluetooth needed)
     const trySunmiBuiltinPrint = async (): Promise<boolean> => {
         if (!isNativeAndroid) return false;
-        const isSunmi = /sunmi/i.test(navigator.userAgent || '') ||
-            /sunmi/i.test((window as any).SunmiModelName || '') ||
-            typeof (window as any).SunmiInnerPrinter !== 'undefined';
-        if (!isSunmi) return false;
+        if (!isSunmiTerminal) return false;
         try {
             const text = buildPrintableText();
             await SunmiPrint.printText({ text });
@@ -404,11 +408,16 @@ export const triggerPrint = (elementId: string): void => {
             return;
         }
 
-        // Print chain: Sunmi built-in → BT thermal → NativePrint → RawBT → web print
+        // Print chain: Sunmi built-in → BT thermal → NativePrint (non-Sunmi) → RawBT (non-Sunmi) → web print
         void trySunmiBuiltinPrint().then((sunmiPrinted) => {
             if (sunmiPrinted) return;
             void tryNativeBluetoothThermalPrint().then((btPrinted) => {
                 if (btPrinted) return;
+                if (isSunmiTerminal) {
+                    alert('Sunmi printer is unavailable. Please restart the terminal and reopen Betese app. System print/RawBT fallback is disabled on Sunmi to avoid print-loop errors.');
+                    cleanup();
+                    return;
+                }
                 void tryNativeAndroidPrint().then((printed) => {
                     if (printed) return;
                     void tryRawBtPrint().then((rawBtPrinted) => {
