@@ -163,19 +163,28 @@ const AppContent: React.FC = () => {
           if(fetchedRaces) setRaces(fetchedRaces);
           
           // Map snake_case to camelCase for requests with robust safety
-          setDepositRequests((fetchedDeposits || []).map((r: any) => ({
+          // and normalize status/method to prevent UI/report mismatches.
+          setDepositRequests((fetchedDeposits || []).map((r: any) => {
+              const rawMethod = String(r.method || '').trim().toLowerCase();
+              const normalizedMethod: 'Wave' | 'AfriMoney' = rawMethod === 'afrimoney' ? 'AfriMoney' : 'Wave';
+
+              const rawStatus = String(r.status || '').trim().toLowerCase();
+              const normalizedStatus: 'Pending' | 'Approved' | 'Rejected' =
+                  rawStatus === 'approved' ? 'Approved' : rawStatus === 'rejected' ? 'Rejected' : 'Pending';
+
+              return {
               id: r.id, 
               customerId: r.customer_id, 
               customerName: r.customer_name || 'Quick Deposit', // Added missing required property
               amount: Number(r.amount) || 0, 
-              method: r.method, 
+              method: normalizedMethod,
               transactionId: r.transaction_id, 
-              status: r.status, 
+              status: normalizedStatus,
               timestamp: r.timestamp ? new Date(r.timestamp) : new Date(),
               processedBy: r.processed_by, 
               processedByName: r.processed_by_name, 
               processedAt: r.processed_at ? new Date(r.processed_at) : undefined
-          })));
+          }}));
 
           setDepositLogs(fetchedDepositLogs || []);
 

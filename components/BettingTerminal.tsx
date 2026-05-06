@@ -233,6 +233,11 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
 
     const toDayKey = (value: Date) => `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
     const reportDayKey = toDayKey(effectiveTime);
+    const customerIdSet = new Set((customers || []).map(c => c.id));
+    const isOnlineMethod = (method: unknown) => {
+        const v = String(method || '').trim().toLowerCase();
+        return v === 'wave' || v === 'afrimoney';
+    };
 
     const todaysVendorTickets = (placedTickets || []).filter((ticket) => {
         if (!ticket || ticket.status === 'Canceled' || ticket.status === 'Booked') return false;
@@ -242,8 +247,8 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
 
     const vendorOnlineDepositLogs = (depositLogs || []).filter(log => {
         if (!log || Number(log.amount || 0) <= 0) return false;
-        const isOnlineMethod = log.method === 'Wave' || log.method === 'AfriMoney';
-        if (!isOnlineMethod) return false;
+        if (!isOnlineMethod(log.method)) return false;
+        if (!customerIdSet.has(String(log.customerId || ''))) return false;
 
         const processedByName = String(log.processedByName || '').trim().toLowerCase();
         const currentName = String(currentUser.name || '').trim().toLowerCase();
@@ -256,8 +261,8 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
 
     const vendorApprovedOnlineRequests = (depositRequests || []).filter(req => {
         if (!req || req.status !== 'Approved' || Number(req.amount || 0) <= 0) return false;
-        const isOnlineMethod = req.method === 'Wave' || req.method === 'AfriMoney';
-        if (!isOnlineMethod) return false;
+        if (!isOnlineMethod(req.method)) return false;
+        if (!customerIdSet.has(String(req.customerId || ''))) return false;
 
         const processedByName = String(req.processedByName || '').trim().toLowerCase();
         const currentName = String(currentUser.name || '').trim().toLowerCase();
@@ -364,7 +369,7 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                                 <div className="p-5 text-center">
                                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Online Sales</p>
                                     <p className="text-2xl font-black text-indigo-600 leading-none">GMD {reportOnlineSales.toFixed(0)}</p>
-                                    <p className="text-[10px] text-gray-400 mt-1">{effectiveOnlineSalesEntries.length} deposit(s)</p>
+                                    <p className="text-[10px] text-gray-400 mt-1">{effectiveOnlineSalesEntries.length} customer deposit(s)</p>
                                 </div>
                                 <div className="p-5 text-center">
                                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Sales</p>
