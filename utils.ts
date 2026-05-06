@@ -365,19 +365,8 @@ export const triggerPrint = (elementId: string): void => {
     };
 
     const tryRawBtPrint = async (): Promise<boolean> => {
-        if (!isNativeAndroid) return false;
-        // RawBT is optional on Sunmi devices; avoid launching it to prevent app crash popups.
-        if (isSunmiTerminal) return false;
-        try {
-            const status = await RawBtPrint.isInstalled();
-            if (!status?.installed) return false;
-            await RawBtPrint.printText({ text: buildPrintableText() });
-            cleanup();
-            return true;
-        } catch (e) {
-            console.warn('RawBT print unavailable, fallback to next print mode', e);
-            return false;
-        }
+        // Disabled by default to avoid Play Store/licensing popups on terminals.
+        return false;
     };
 
     // Sunmi built-in printer via Sunmi Print AIDL service (direct, no Bluetooth needed)
