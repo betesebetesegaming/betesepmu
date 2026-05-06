@@ -254,9 +254,26 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
         return toDayKey(logTime) === reportDayKey;
     });
 
+    const vendorApprovedOnlineRequests = (depositRequests || []).filter(req => {
+        if (!req || req.status !== 'Approved' || Number(req.amount || 0) <= 0) return false;
+        const isOnlineMethod = req.method === 'Wave' || req.method === 'AfriMoney';
+        if (!isOnlineMethod) return false;
+
+        const processedByName = String(req.processedByName || '').trim().toLowerCase();
+        const currentName = String(currentUser.name || '').trim().toLowerCase();
+        const isOwnedByCurrentVendor = req.processedBy === currentUser.id || (!!processedByName && processedByName === currentName);
+        if (!isOwnedByCurrentVendor) return false;
+
+        const reqTime = (req.processedAt instanceof Date ? req.processedAt : (req.processedAt ? new Date(req.processedAt) : null))
+            || (req.timestamp instanceof Date ? req.timestamp : new Date(req.timestamp));
+        return toDayKey(reqTime) === reportDayKey;
+    });
+
+    const effectiveOnlineSalesEntries = vendorOnlineDepositLogs.length > 0 ? vendorOnlineDepositLogs : vendorApprovedOnlineRequests;
+
     // Day-based totals for report calculation
     const reportTicketSales = todaysVendorTickets.reduce((sum, t) => sum + Number(t?.totalCost || 0), 0);
-    const reportOnlineSales = vendorOnlineDepositLogs.reduce((sum, log) => sum + Number(log?.amount || 0), 0);
+    const reportOnlineSales = effectiveOnlineSalesEntries.reduce((sum, entry) => sum + Number(entry?.amount || 0), 0);
     const reportSales = reportTicketSales + reportOnlineSales;
     const reportPayouts = todaysVendorTickets
         .filter(t => t?.status === 'Paid')
@@ -347,7 +364,7 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                                 <div className="p-5 text-center">
                                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Online Sales</p>
                                     <p className="text-2xl font-black text-indigo-600 leading-none">GMD {reportOnlineSales.toFixed(0)}</p>
-                                    <p className="text-[10px] text-gray-400 mt-1">{vendorOnlineDepositLogs.length} deposit(s)</p>
+                                    <p className="text-[10px] text-gray-400 mt-1">{effectiveOnlineSalesEntries.length} deposit(s)</p>
                                 </div>
                                 <div className="p-5 text-center">
                                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Sales</p>
