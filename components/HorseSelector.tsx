@@ -155,6 +155,9 @@ export const HorseSelector: React.FC<HorseSelectorProps> = ({
       <div className="flex justify-between items-start mb-2 px-1">
           <div>
             <h3 className="text-sm font-bold text-betese-dark uppercase tracking-wide">3. Select Horses</h3>
+            <p className="text-[11px] font-bold text-blue-700 mt-0.5">
+                Bet Type: <span className="uppercase">{betType}</span>
+            </p>
             <p className="text-[10px] text-gray-600 leading-tight">
                 Select in order. Use 'X' for Field/Champ.
             </p>

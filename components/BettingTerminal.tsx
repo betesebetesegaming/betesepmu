@@ -241,7 +241,15 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
     });
 
     const vendorOnlineDepositLogs = (depositLogs || []).filter(log => {
-        if (!log || log.processedById !== currentUser.id || Number(log.amount || 0) <= 0 || log.method === 'Correction') return false;
+        if (!log || Number(log.amount || 0) <= 0) return false;
+        const isOnlineMethod = log.method === 'Wave' || log.method === 'AfriMoney';
+        if (!isOnlineMethod) return false;
+
+        const processedByName = String(log.processedByName || '').trim().toLowerCase();
+        const currentName = String(currentUser.name || '').trim().toLowerCase();
+        const isOwnedByCurrentVendor = log.processedById === currentUser.id || (!!processedByName && processedByName === currentName);
+        if (!isOwnedByCurrentVendor) return false;
+
         const logTime = log.timestamp instanceof Date ? log.timestamp : new Date(log.timestamp);
         return toDayKey(logTime) === reportDayKey;
     });
