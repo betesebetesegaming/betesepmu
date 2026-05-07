@@ -37,12 +37,11 @@ export const HorseSelector: React.FC<HorseSelectorProps> = ({
           case BetTypeOption.Tierce: return 3;
           case BetTypeOption.Quarte: return 4;
           case BetTypeOption.Quinte: return 5;
-          // Multi bets allow selecting more horses than the name implies, so we default to loose limit
-          case BetTypeOption.Multi4:
-          case BetTypeOption.Multi5:
-          case BetTypeOption.Multi6:
-          case BetTypeOption.Multi7:
-              return 20; 
+          // With X (champ), Multi bets must respect their exact pattern size.
+          case BetTypeOption.Multi4: return 4;
+          case BetTypeOption.Multi5: return 5;
+          case BetTypeOption.Multi6: return 6;
+          case BetTypeOption.Multi7: return 7;
           default: return 20;
       }
   };
