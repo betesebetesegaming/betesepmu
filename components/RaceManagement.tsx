@@ -42,6 +42,7 @@ const RaceForm: React.FC<{
     const [endTime, setEndTime] = useState('00:00'); // Default to 00:00 for manual entry
     const [disabledBetTypes, setDisabledBetTypes] = useState<BetTypeOption[]>([]);
     const [jackpot, setJackpot] = useState<number | ''>(''); // New Jackpot State
+    const [isSaving, setIsSaving] = useState(false);
     
     // FIX: Removed effectiveTime from dependencies to prevent form reset on every clock tick
     useEffect(() => {
@@ -72,6 +73,7 @@ const RaceForm: React.FC<{
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        if (isSaving) return;
         
         // Replaced problematic Date string parsing with an explicit constructor to prevent timezone-related date shifts.
         const startParts = startDate.split('-').map(Number);
@@ -93,6 +95,7 @@ const RaceForm: React.FC<{
             return;
         }
         
+        setIsSaving(true);
         onSave({
             raceCode: raceCode.trim() || undefined,
             name,
@@ -103,6 +106,7 @@ const RaceForm: React.FC<{
             disabledBetTypes,
             jackpot: jackpot === '' ? undefined : Number(jackpot),
         }, editingRace?.id);
+        window.setTimeout(() => setIsSaving(false), 700);
     };
 
     const handleDisabledBetTypeChange = (betType: BetTypeOption) => {
@@ -171,7 +175,7 @@ const RaceForm: React.FC<{
 
             <div className="flex justify-end gap-3 pt-4">
                 {editingRace && <button type="button" onClick={onCancel} className="px-4 py-2 bg-gray-300 text-gray-800 font-semibold rounded-lg hover:bg-gray-400">Cancel Edit</button>}
-                <button type="submit" className="px-6 py-2 bg-betese-green text-white font-semibold rounded-lg hover:bg-green-700">
+                <button type="submit" disabled={isSaving} className="px-6 py-2 bg-betese-green text-white font-semibold rounded-lg hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed">
                     {editingRace ? 'Save Changes' : 'Save / Active'}
                 </button>
             </div>
@@ -183,6 +187,7 @@ const RaceForm: React.FC<{
 export const RaceManagement: React.FC<RaceManagementProps> = ({ races, onAddRace, onUpdateRace, onUpdateNonRunners, onDeleteRace, effectiveTime }) => {
     const [editingRace, setEditingRace] = useState<Race | null>(null);
     const [editingNonRunnersRace, setEditingNonRunnersRace] = useState<Race | null>(null);
+    const [deletingRaceIds, setDeletingRaceIds] = useState<Record<string, boolean>>({});
 
     const upcomingRaces = React.useMemo(() => {
         return races
@@ -191,6 +196,13 @@ export const RaceManagement: React.FC<RaceManagementProps> = ({ races, onAddRace
     }, [races, effectiveTime]);
 
     const handleSaveRace = (raceData: Omit<Race, 'id' | 'nonRunners' | 'result'>, id?: string) => {
+        const createRaceId = () => {
+            if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+                return `r-${crypto.randomUUID()}`;
+            }
+            return `r-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+        };
+
         if (id && editingRace) { // Editing
             onUpdateRace({
                 ...editingRace,
@@ -198,7 +210,7 @@ export const RaceManagement: React.FC<RaceManagementProps> = ({ races, onAddRace
             });
         } else { // Adding
             onAddRace({
-                id: `r-${Date.now()}`,
+                id: createRaceId(),
                 ...raceData,
                 nonRunners: [],
             });
@@ -280,7 +292,24 @@ export const RaceManagement: React.FC<RaceManagementProps> = ({ races, onAddRace
                                      <div className="flex items-center gap-2">
                                         <button onClick={() => setEditingRace(race)} className="px-3 py-1 text-sm text-white font-semibold rounded-lg bg-yellow-500 hover:bg-yellow-600">Edit</button>
                                         <button onClick={() => setEditingNonRunnersRace(race)} className="px-3 py-1 text-sm text-white font-semibold rounded-lg bg-orange-500 hover:bg-orange-600">Non-Runners</button>
-                                        <button onClick={() => onDeleteRace(race)} className="px-3 py-1 text-sm text-white font-semibold rounded-lg bg-red-600 hover:bg-red-700">Delete</button>
+                                        <button
+                                            onClick={() => {
+                                                if (deletingRaceIds[race.id]) return;
+                                                setDeletingRaceIds(prev => ({ ...prev, [race.id]: true }));
+                                                onDeleteRace(race);
+                                                window.setTimeout(() => {
+                                                    setDeletingRaceIds(prev => {
+                                                        const next = { ...prev };
+                                                        delete next[race.id];
+                                                        return next;
+                                                    });
+                                                }, 1200);
+                                            }}
+                                            disabled={Boolean(deletingRaceIds[race.id])}
+                                            className="px-3 py-1 text-sm text-white font-semibold rounded-lg bg-red-600 hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                                        >
+                                            {deletingRaceIds[race.id] ? 'Deleting...' : 'Delete'}
+                                        </button>
                                      </div>
                                 </td>
                             </tr>

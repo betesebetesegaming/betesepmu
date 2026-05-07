@@ -303,6 +303,19 @@ const AppContent: React.FC = () => {
   }, [isSunmiLite]);
 
   const handleAddRace = async (race: Race) => {
+      const normalize = (value: string) => value.trim().toLowerCase();
+      const sameCodeOrName = (r: Race) => {
+          const sameCode = race.raceCode && r.raceCode && normalize(race.raceCode) === normalize(r.raceCode);
+          const sameName = normalize(r.name || '') === normalize(race.name || '');
+          const sameEndTime = Math.abs((r.endDate?.getTime?.() || 0) - (race.endDate?.getTime?.() || 0)) < 60_000;
+          return Boolean(sameCode || (sameName && sameEndTime));
+      };
+
+      if ((races || []).some(sameCodeOrName)) {
+          alert('Duplicate race blocked: same race code or same name/time already exists.');
+          return;
+      }
+
       try {
           if (supabase) { await dbSaveRace(race); } 
           else { setRaces(prev => [...prev, race]); }
@@ -326,8 +339,12 @@ const AppContent: React.FC = () => {
   const handleDeleteRace = async (race: Race) => {
       if (!confirm("Are you sure you want to delete this race?")) return;
       try {
-          if (supabase) { await dbDeleteRace(race.id); } 
-          else { setRaces(prev => (prev || []).filter(r => r.id !== race.id)); }
+          if (supabase) {
+              await dbDeleteRace(race.id);
+              setRaces(prev => (prev || []).filter(r => r.id !== race.id));
+          } else {
+              setRaces(prev => (prev || []).filter(r => r.id !== race.id));
+          }
       } catch (e: any) { alert("Failed to delete race: " + e.message); }
   };
 
