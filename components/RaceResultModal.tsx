@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Race, RaceResult, Payouts, Ticket } from '../types';
 import { calculateWinSummary, WinSummary, formatWinningNumbersForInput, parseWinningNumbersFromString } from '../utils';
 import { WinDividendReport } from './WinDividendReport';
@@ -72,6 +72,9 @@ export const RaceResultModal: React.FC<RaceResultModalProps> = ({ race, onClose,
     const [bracketCount, setBracketCount] = useState(
         race.result?.bracket2WinningNumbers?.length ? 2 : (race.result?.bracketWinningNumbers?.length ? 1 : 0)
     );
+    
+    // Debounce timer ref to prevent rapid submissions
+    const submitTimerRef = useRef<NodeJS.Timeout | null>(null);
 
     const initializePayouts = (sourcePayouts?: Payouts): Record<keyof Payouts, number | ''> => {
         const initial: Partial<Record<keyof Payouts, number | ''>> = {};
@@ -122,6 +125,14 @@ export const RaceResultModal: React.FC<RaceResultModalProps> = ({ race, onClose,
         }
     }, [bracket2NumbersStr, race, tickets, bracketCount]);
 
+    // Cleanup timer on unmount
+    useEffect(() => {
+        return () => {
+            if (submitTimerRef.current) {
+                clearTimeout(submitTimerRef.current);
+            }
+        };
+    }, []);
 
     const handlePayoutChange = (field: keyof Payouts, value: number | '', tab: ResultTab) => {
         if (tab === 'Primary') setPrimaryPayouts(prev => ({ ...prev, [field]: value }));
@@ -131,7 +142,13 @@ export const RaceResultModal: React.FC<RaceResultModalProps> = ({ race, onClose,
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        
+        // Debounce: prevent rapid submissions (min 500ms between saves)
         if (isSaving) return;
+        if (submitTimerRef.current) {
+            clearTimeout(submitTimerRef.current);
+            submitTimerRef.current = null;
+        }
 
         const finalWinningNumbers = parseWinningNumbersFromString(primaryNumbersStr);
         

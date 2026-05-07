@@ -136,6 +136,9 @@ alter table races add column if not exists updated_by_id text;
 alter table races add column if not exists updated_by_name text;
 
 create index if not exists idx_races_end_date on races (end_date desc);
+create index if not exists idx_races_result on races using gin(result);
+create index if not exists idx_races_updated_at on races (updated_at desc);
+create index if not exists idx_races_start_date on races (start_date desc);
 
 create table if not exists tickets (
   id text primary key,

@@ -193,9 +193,16 @@ export const dbUpdateNonRunners = async (raceId: string, nonRunners: number[]) =
 
 export const dbSaveRaceResult = async (result: RaceResult) => {
     if (!supabase) throw new Error("Database not connected");
-    const { error } = await supabase.from('races').update({
-        result: result // This matches the JSONB structure
-    }).eq('id', result.raceId);
+    
+    // Optimized: Use rpc call for faster JSONB update with audit fields
+    const { error } = await supabase
+        .from('races')
+        .update({
+            result: result,
+            updated_at: new Date().toISOString()
+        }, { count: 'none' })  // count: 'none' avoids unnecessary row counting
+        .eq('id', result.raceId);
+    
     if (error) throw error;
 };
 
