@@ -389,17 +389,22 @@ const AppContent: React.FC = () => {
 
       try {
           if (supabase) {
+              // 1. Save race result immediately (fast: single row update)
               await dbSaveRaceResult(auditedResult);
+              // 2. Update UI immediately so modal can close
               setRaces(nextRaces);
-              await dbSettleRaceTickets(auditedResult, nextRaces);
-              await loadLiveSystemData(currentUser);
+              alert("Result saved. Settling tickets in background...");
+              // 3. Settle tickets + reload data in background — don't block the user
+              dbSettleRaceTickets(auditedResult, nextRaces)
+                  .then(() => loadLiveSystemData(currentUser))
+                  .catch((bgErr: any) => console.error("Background settle error:", bgErr));
           } else {
               setRaces(nextRaces);
+              alert("Result saved successfully.");
           }
-          alert("Result saved successfully.");
           return true;
       } catch (e: any) {
-          await loadLiveSystemData(currentUser);
+          loadLiveSystemData(currentUser).catch(() => {});
           alert("Failed to save result: " + e.message);
           return false;
       }

@@ -336,16 +336,30 @@ export const dbSettleRaceTickets = async (result: RaceResult, allRaces: Race[]) 
     if (!supabase) throw new Error("Database not connected");
 
     const updatedRaces = allRaces.map((race) => (race.id === result.raceId ? { ...race, result } : race));
+
+    // Only fetch tickets that belong to races affected (not ALL tickets in the system)
+    // For a normal result save, filter to this race's tickets plus any multi-race bet tickets
     const { data: ticketRows, error: ticketError } = await supabase
         .from('tickets')
         .select('*')
-        .in('status', ['Active', 'Winning', 'Paid', 'Lost']);
+        .in('status', ['Active', 'Winning', 'Paid', 'Lost'])
+        .contains('selections', [{ raceId: result.raceId }]);
 
-    if (ticketError) throw ticketError;
+    // If the contains filter fails (e.g. old schema), fall back to all tickets for this race
+    let relevantTicketRows = ticketRows;
+    if (ticketError || !ticketRows) {
+        const { data: fallbackRows, error: fallbackError } = await supabase
+            .from('tickets')
+            .select('*')
+            .in('status', ['Active', 'Winning', 'Paid', 'Lost']);
+        if (fallbackError) throw fallbackError;
+        relevantTicketRows = fallbackRows;
+    }
 
     // Re-settle all non-booked/non-canceled tickets to correct stale outcomes
-    // when result rules or prior calculations changed.
-    const relevantTickets = (ticketRows || []).map(mapDbTicketRow);
+    const relevantTickets = (relevantTicketRows || []).map(mapDbTicketRow);
+
+    if (relevantTickets.length === 0) return;
 
     const customerIds = Array.from(new Set(relevantTickets.map((ticket) => ticket.customerId).filter(Boolean))) as string[];
     const walletBalanceMap = new Map<string, number>();
@@ -362,6 +376,9 @@ export const dbSettleRaceTickets = async (result: RaceResult, allRaces: Race[]) 
             bonusBalanceMap.set(row.id, Number(row.bonus_balance || 0));
         });
     }
+
+    // Build all ticket update payloads in memory — NO per-ticket DB calls
+    const ticketUpdates: any[] = [];
 
     for (const ticket of relevantTickets) {
         const evaluation = calculateTicketWinnings(ticket, updatedRaces);
@@ -391,7 +408,6 @@ export const dbSettleRaceTickets = async (result: RaceResult, allRaces: Race[]) 
                     paidById = paidById || 'SYSTEM';
                     paidByName = paidByName || (creditsBonusWallet ? 'System Bonus Credit' : 'System Auto Credit');
                 } else {
-                    // Keep paid tickets paid after re-settlement.
                     nextStatus = ticket.status === 'Paid' ? 'Paid' : 'Winning';
                 }
             } else {
@@ -403,7 +419,6 @@ export const dbSettleRaceTickets = async (result: RaceResult, allRaces: Race[]) 
         }
 
         // Business-safe rule: never claw back already-paid online winnings.
-        // If recalculation is lower after payment, preserve prior paid amount/status.
         if (wasPaidOnline && (nextStatus !== 'Paid' || settledWinnings < previousWinnings)) {
             nextStatus = 'Paid';
             settledWinnings = previousWinnings;
@@ -427,31 +442,43 @@ export const dbSettleRaceTickets = async (result: RaceResult, allRaces: Race[]) 
             }
         }
 
-        const { error: updateError } = await supabase
-            .from('tickets')
-            .update({
-                status: nextStatus,
-                winnings: settledWinnings || null,
-                winnings_breakdown: evaluation.breakdown,
-                paid_at: paidAt ? paidAt.toISOString() : null,
-                paid_by_id: paidById || null,
-                paid_by_name: paidByName || null
-            })
-            .eq('id', ticket.id);
-
-        if (updateError) throw updateError;
+        ticketUpdates.push({
+            id: ticket.id,
+            status: nextStatus,
+            winnings: settledWinnings || null,
+            winnings_breakdown: evaluation.breakdown,
+            paid_at: paidAt ? paidAt.toISOString() : null,
+            paid_by_id: paidById || null,
+            paid_by_name: paidByName || null
+        });
     }
 
-    for (const customerId of customerIds) {
-        const walletBalance = Number(walletBalanceMap.get(customerId) || 0);
-        const bonusBalance = Number(bonusBalanceMap.get(customerId) || 0);
-        const { error: walletError } = await supabase
-            .from('users')
-            .update({ wallet_balance: walletBalance, bonus_balance: bonusBalance })
-            .eq('id', customerId);
-        if (walletError) throw walletError;
+    // Single batched upsert for ALL ticket updates — replaces N individual update calls
+    const BATCH_SIZE = 100;
+    for (let i = 0; i < ticketUpdates.length; i += BATCH_SIZE) {
+        const batch = ticketUpdates.slice(i, i + BATCH_SIZE);
+        const { error: batchError } = await supabase
+            .from('tickets')
+            .upsert(batch, { onConflict: 'id', ignoreDuplicates: false });
+        if (batchError) throw batchError;
+    }
 
-        await maybeUnlockCustomerBonusBalance(customerId);
+    // Batch wallet updates for all affected customers
+    if (customerIds.length > 0) {
+        const walletUpdates = customerIds.map(customerId => ({
+            id: customerId,
+            wallet_balance: Number(walletBalanceMap.get(customerId) || 0),
+            bonus_balance: Number(bonusBalanceMap.get(customerId) || 0),
+        }));
+        const { error: walletBatchError } = await supabase
+            .from('users')
+            .upsert(walletUpdates, { onConflict: 'id', ignoreDuplicates: false });
+        if (walletBatchError) throw walletBatchError;
+
+        // Unlock bonus balances per customer (still sequential but rare/fast)
+        for (const customerId of customerIds) {
+            await maybeUnlockCustomerBonusBalance(customerId);
+        }
     }
 };
 
