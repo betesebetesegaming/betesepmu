@@ -561,28 +561,35 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
                   </TableScrollNavigator>
               </div>
 
-              <div className="flex items-center justify-between bg-gray-50 p-3 rounded-lg border">
-                                    <span className="text-sm font-bold text-gray-700">Filter Type:</span>
-                                    <div className="flex items-center gap-2">
-                                            <select 
-                                                value={methodFilter} 
-                                                onChange={(e) => setMethodFilter(e.target.value as any)}
-                                                className="p-2 border rounded bg-white text-sm font-medium"
-                                            >
-                                                    <option value="All">All Types</option>
-                                                    <option value="Cash">Cash Deposits</option>
-                                                    <option value="Wave">Wave</option>
-                                                    <option value="AfriMoney">AfriMoney</option>
-                                                    <option value="Correction">Corrections (Debits)</option>
-                                            </select>
-                                            <button
-                                                type="button"
-                                                onClick={exportHistoryCsv}
-                                                className="px-3 py-2 bg-slate-700 text-white rounded text-xs font-bold hover:bg-slate-800"
-                                            >
-                                                Export CSV
-                                            </button>
-                                    </div>
+              <div className="flex flex-wrap items-center justify-between gap-2 bg-gray-50 p-3 rounded-lg border">
+                    <span className="text-sm font-bold text-gray-700">Filter Type:</span>
+                    <div className="flex flex-wrap items-center gap-1">
+                        {([
+                            { value: 'All',        label: 'All' },
+                            { value: 'Cash',       label: 'Cash' },
+                            { value: 'Wave',       label: 'Wave' },
+                            { value: 'AfriMoney',  label: null },
+                            { value: 'Correction', label: 'Corrections' },
+                        ] as { value: typeof methodFilter; label: string | null }[]).map(opt => (
+                            <button
+                                key={opt.value}
+                                type="button"
+                                onClick={() => setMethodFilter(opt.value)}
+                                className={`flex items-center gap-1 px-3 py-1.5 rounded-full border text-xs font-bold transition-all ${methodFilter === opt.value ? 'bg-betese-green text-white border-betese-green shadow' : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'}`}
+                            >
+                                {opt.value === 'AfriMoney'
+                                    ? <AfriMoneyLogo height={14} />
+                                    : opt.label}
+                            </button>
+                        ))}
+                        <button
+                            type="button"
+                            onClick={exportHistoryCsv}
+                            className="px-3 py-1.5 bg-slate-700 text-white rounded-full text-xs font-bold hover:bg-slate-800 ml-1"
+                        >
+                            Export CSV
+                        </button>
+                    </div>
               </div>
 
               <TableScrollNavigator className="overflow-x-auto">
