@@ -3,6 +3,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { User, DepositLog, DepositRequest, Role } from '../types';
 import { TableScrollNavigator } from './TableScrollNavigator';
 import { AfriMoneyLogo } from './AfriMoneyLogo';
+import { WaveLogo } from './WaveLogo';
 
 interface CustomerDepositPanelProps {
   customers: User[];
@@ -295,7 +296,7 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
                           {pendingRequests.map(req => (
                                 <div key={req.id} className={`p-4 border-l-8 rounded-r-lg shadow-sm bg-gray-50 border-gray-300`}>
                                     <p className="font-bold text-lg">{req.customerName}</p>
-                                    <p className="text-sm flex items-center gap-1">Request: <span className="font-bold">{req.amount} GMD</span> via {req.method === 'AfriMoney' ? <AfriMoneyLogo height={16} /> : <span className="font-bold">{req.method}</span>}</p>
+                                    <p className="text-sm flex items-center gap-1">Request: <span className="font-bold">{req.amount} GMD</span> via {req.method === 'Wave' ? <WaveLogo height={16} /> : req.method === 'AfriMoney' ? <AfriMoneyLogo height={16} /> : <span className="font-bold">{req.method}</span>}</p>
                                     <p className="text-xs text-gray-500">Phone: {req.transactionId}</p>
                                     <div className="flex gap-2 mt-3">
                                         {onApproveDepositRequest && <button onClick={() => onApproveDepositRequest(req.id)} className="bg-green-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-green-700">Approve & Credit</button>}
@@ -546,7 +547,7 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
                                       <td className="px-2 py-1">{req.customerName}</td>
                                       <td className="px-2 py-1 text-right font-bold">{Number(req.amount || 0).toFixed(2)}</td>
                                       <td className="px-2 py-1">
-                                          {req.method === 'AfriMoney' ? <AfriMoneyLogo height={14} /> : getMethodLabel(req.method)}
+                                          {req.method === 'Wave' ? <WaveLogo height={14} /> : req.method === 'AfriMoney' ? <AfriMoneyLogo height={14} /> : getMethodLabel(req.method)}
                                       </td>
                                       <td className="px-2 py-1">
                                           <span className={`px-2 py-0.5 rounded-full font-bold ${req.status === 'Approved' ? 'bg-green-100 text-green-700' : req.status === 'Rejected' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
@@ -567,7 +568,7 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
                         {([
                             { value: 'All',        label: 'All' },
                             { value: 'Cash',       label: 'Cash' },
-                            { value: 'Wave',       label: 'Wave' },
+                            { value: 'Wave',       label: null },
                             { value: 'AfriMoney',  label: null },
                             { value: 'Correction', label: 'Corrections' },
                         ] as { value: typeof methodFilter; label: string | null }[]).map(opt => (
@@ -577,7 +578,9 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
                                 onClick={() => setMethodFilter(opt.value)}
                                 className={`flex items-center gap-1 px-3 py-1.5 rounded-full border text-xs font-bold transition-all ${methodFilter === opt.value ? 'bg-betese-green text-white border-betese-green shadow' : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'}`}
                             >
-                                {opt.value === 'AfriMoney'
+                                {opt.value === 'Wave'
+                                    ? <WaveLogo height={14} />
+                                    : opt.value === 'AfriMoney'
                                     ? <AfriMoneyLogo height={14} />
                                     : opt.label}
                             </button>

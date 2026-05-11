@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { PaymentIntegrationConfig } from '../types';
 import { AfriMoneyLogo } from './AfriMoneyLogo';
+import { WaveLogo } from './WaveLogo';
 
 interface IntegrationSettingsPanelProps {
     configs: PaymentIntegrationConfig[];
@@ -135,13 +136,13 @@ export const IntegrationSettingsPanel: React.FC<IntegrationSettingsPanelProps> =
             <div className="flex mb-6 border-b">
                 <button
                     onClick={() => setActiveProvider('Wave')}
-                    className={`flex-1 py-3 text-center font-bold text-lg transition-colors ${
+                    className={`flex-1 py-3 flex items-center justify-center gap-2 font-bold text-lg transition-colors ${
                         activeProvider === 'Wave' 
-                            ? 'border-b-4 border-blue-500 text-blue-600 bg-blue-50' 
+                            ? 'border-b-4 border-blue-500 bg-blue-50' 
                             : 'text-gray-500 hover:bg-gray-50'
                     }`}
                 >
-                    Wave Mobile Money
+                    <WaveLogo height={24} />
                 </button>
                 <button
                     onClick={() => setActiveProvider('AfriMoney')}

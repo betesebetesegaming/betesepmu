@@ -5,6 +5,7 @@ import { useLanguage } from '../LanguageContext';
 import { WithdrawalCodeModal } from './WithdrawalCodeModal';
 import { normalizeGambiaPhone } from '../utils';
 import { AfriMoneyLogo } from './AfriMoneyLogo';
+import { WaveLogo } from './WaveLogo';
 
 interface WalletPanelProps {
   user: User;
@@ -284,9 +285,9 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
                           <button
                               type="button"
                               onClick={() => setDepositMethod('Wave')}
-                              className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md border-2 font-bold text-sm transition-all ${depositMethod === 'Wave' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'}`}
+                              className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md border-2 transition-all ${depositMethod === 'Wave' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}
                           >
-                              <span className="text-blue-600">📶</span> Wave
+                              <WaveLogo height={20} />
                           </button>
                           <button
                               type="button"
