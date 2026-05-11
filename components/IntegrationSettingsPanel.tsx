@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { PaymentIntegrationConfig } from '../types';
+import { AfriMoneyLogo } from './AfriMoneyLogo';
 
 interface IntegrationSettingsPanelProps {
     configs: PaymentIntegrationConfig[];
@@ -144,13 +145,13 @@ export const IntegrationSettingsPanel: React.FC<IntegrationSettingsPanelProps> =
                 </button>
                 <button
                     onClick={() => setActiveProvider('AfriMoney')}
-                    className={`flex-1 py-3 text-center font-bold text-lg transition-colors ${
+                    className={`flex-1 py-3 flex items-center justify-center gap-2 font-bold text-lg transition-colors ${
                         activeProvider === 'AfriMoney' 
-                            ? 'border-b-4 border-orange-600 text-orange-700 bg-orange-50' 
+                            ? 'border-b-4 border-purple-700 bg-purple-50' 
                             : 'text-gray-500 hover:bg-gray-50'
                     }`}
                 >
-                    AfriMoney
+                    <AfriMoneyLogo height={24} />
                 </button>
             </div>
 

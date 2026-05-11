@@ -4,6 +4,7 @@ import { User, WithdrawalRequest, DepositRequest, Ticket } from '../types';
 import { useLanguage } from '../LanguageContext';
 import { WithdrawalCodeModal } from './WithdrawalCodeModal';
 import { normalizeGambiaPhone } from '../utils';
+import { AfriMoneyLogo } from './AfriMoneyLogo';
 
 interface WalletPanelProps {
   user: User;
@@ -278,14 +279,23 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
                   </div>
                   <div>
                       <label className="block text-sm font-medium text-gray-700">{t('payment_method')}</label>
-                      <select 
-                        value={depositMethod} 
-                        onChange={e => setDepositMethod(e.target.value as any)}
-                        className="w-full p-2 border border-gray-300 rounded-md"
-                      >
-                          <option value="Wave">Wave</option>
-                          <option value="AfriMoney">AfriMoney</option>
-                      </select>
+                      {/* Custom method picker — shows logos instead of plain text */}
+                      <div className="flex gap-2 mt-1">
+                          <button
+                              type="button"
+                              onClick={() => setDepositMethod('Wave')}
+                              className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md border-2 font-bold text-sm transition-all ${depositMethod === 'Wave' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'}`}
+                          >
+                              <span className="text-blue-600">📶</span> Wave
+                          </button>
+                          <button
+                              type="button"
+                              onClick={() => setDepositMethod('AfriMoney')}
+                              className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md border-2 transition-all ${depositMethod === 'AfriMoney' ? 'border-purple-700 bg-purple-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}
+                          >
+                              <AfriMoneyLogo height={20} />
+                          </button>
+                      </div>
                   </div>
                   <div>
                       <label className="block text-sm font-medium text-gray-700">{t('sender_phone')}</label>

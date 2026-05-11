@@ -2,6 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { User, DepositLog, DepositRequest, Role } from '../types';
 import { TableScrollNavigator } from './TableScrollNavigator';
+import { AfriMoneyLogo } from './AfriMoneyLogo';
 
 interface CustomerDepositPanelProps {
   customers: User[];
@@ -294,7 +295,7 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
                           {pendingRequests.map(req => (
                                 <div key={req.id} className={`p-4 border-l-8 rounded-r-lg shadow-sm bg-gray-50 border-gray-300`}>
                                     <p className="font-bold text-lg">{req.customerName}</p>
-                                    <p className="text-sm">Request: <span className="font-bold">{req.amount} GMD</span> via {req.method}</p>
+                                    <p className="text-sm flex items-center gap-1">Request: <span className="font-bold">{req.amount} GMD</span> via {req.method === 'AfriMoney' ? <AfriMoneyLogo height={16} /> : <span className="font-bold">{req.method}</span>}</p>
                                     <p className="text-xs text-gray-500">Phone: {req.transactionId}</p>
                                     <div className="flex gap-2 mt-3">
                                         {onApproveDepositRequest && <button onClick={() => onApproveDepositRequest(req.id)} className="bg-green-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-green-700">Approve & Credit</button>}
@@ -544,7 +545,9 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
                                       <td className="px-2 py-1 whitespace-nowrap">{req.timestamp.toLocaleString()}</td>
                                       <td className="px-2 py-1">{req.customerName}</td>
                                       <td className="px-2 py-1 text-right font-bold">{Number(req.amount || 0).toFixed(2)}</td>
-                                      <td className="px-2 py-1">{getMethodLabel(req.method)}</td>
+                                      <td className="px-2 py-1">
+                                          {req.method === 'AfriMoney' ? <AfriMoneyLogo height={14} /> : getMethodLabel(req.method)}
+                                      </td>
                                       <td className="px-2 py-1">
                                           <span className={`px-2 py-0.5 rounded-full font-bold ${req.status === 'Approved' ? 'bg-green-100 text-green-700' : req.status === 'Rejected' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
                                               {req.status}
