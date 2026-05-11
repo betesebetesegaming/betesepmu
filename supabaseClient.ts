@@ -9,6 +9,7 @@ import {
     ChatThread,
     ChatMessage,
     PaymentIntegrationConfig,
+    OTPConfig,
     ProgramImage,
     ManualBetOrder,
     BetSelection,
@@ -1740,5 +1741,162 @@ export const dbFreshStart = async () => {
         return { success: true, message: 'Fresh start completed: all races, tickets cleared, wallets reset to 0' };
     } catch (err: any) {
         throw new Error(`Fresh start failed: ${err.message}`);
+    }
+};
+
+/**
+ * OTP (ONE-TIME PASSWORD) CONFIGURATION & VERIFICATION
+ * Used for customer registration with phone verification
+ * Disabled by default until SMS provider is configured
+ */
+
+export const dbFetchOTPConfig = async (): Promise<OTPConfig | null> => {
+    if (!supabase) return null;
+    const { data, error } = await supabase.from('otp_config').select('*').single();
+    if (error) return null;
+    
+    return {
+        id: data.id,
+        isEnabled: !!data.is_enabled,
+        provider: data.provider || 'builtin',
+        apiKey: data.api_key || '',
+        apiSecret: data.api_secret || '',
+        phoneFromNumber: data.phone_from_number,
+        codeLength: data.code_length || 4,
+        expiryMinutes: data.expiry_minutes || 5,
+        maxRetries: data.max_retries || 3,
+        message: data.message || 'Your BETESE verification code is: {{code}}',
+        createdAt: data.created_at ? new Date(data.created_at) : undefined,
+        updatedAt: data.updated_at ? new Date(data.updated_at) : undefined,
+    };
+};
+
+export const dbSaveOTPConfig = async (config: OTPConfig): Promise<void> => {
+    if (!supabase) throw new Error("Database not connected");
+    
+    const payload = {
+        is_enabled: config.isEnabled,
+        provider: config.provider,
+        api_key: config.apiKey,
+        api_secret: config.apiSecret,
+        phone_from_number: config.phoneFromNumber || null,
+        code_length: config.codeLength,
+        expiry_minutes: config.expiryMinutes,
+        max_retries: config.maxRetries,
+        message: config.message,
+        updated_at: new Date().toISOString()
+    };
+
+    // Try upsert (update if exists, insert if not)
+    const { error } = await supabase
+        .from('otp_config')
+        .upsert(payload, { onConflict: 'id' });
+
+    if (error) throw error;
+};
+
+/**
+ * Generate OTP and send to phone (placeholder for SMS provider)
+ * For now, returns a mock OTP that can be used in development/testing
+ */
+export const dbGenerateAndSendOTP = async (phone: string): Promise<{ success: boolean; message: string; expirySeconds?: number }> => {
+    if (!supabase) return { success: false, message: "Database not connected" };
+
+    try {
+        const config = await dbFetchOTPConfig();
+        
+        // If OTP is disabled, deny
+        if (!config?.isEnabled) {
+            return { success: false, message: "OTP verification is not enabled" };
+        }
+
+        // Generate random OTP code
+        const codeLength = config.codeLength || 4;
+        const code = String(Math.floor(Math.random() * Math.pow(10, codeLength))).padStart(codeLength, '0');
+        const expirySeconds = (config.expiryMinutes || 5) * 60;
+        const expiresAt = new Date(Date.now() + expirySeconds * 1000);
+
+        // Store OTP in otp_attempts table for verification later
+        const { error: insertError } = await supabase.from('otp_attempts').insert({
+            phone: phone,
+            code: code,
+            expires_at: expiresAt.toISOString(),
+            attempt_count: 0,
+            created_at: new Date().toISOString()
+        });
+
+        if (insertError) throw insertError;
+
+        // TODO: Integrate actual SMS provider (Twilio, AWS SNS, etc.)
+        // For now, log to console (dev mode)
+        console.log(`[OTP] Phone: ${phone}, Code: ${code}, Expires: ${expiresAt.toISOString()}`);
+
+        return {
+            success: true,
+            message: `OTP sent to ${phone}`,
+            expirySeconds
+        };
+    } catch (err: any) {
+        console.error("OTP generation error:", err);
+        return {
+            success: false,
+            message: err.message || "Failed to send OTP"
+        };
+    }
+};
+
+/**
+ * Verify OTP code for a given phone number
+ */
+export const dbVerifyOTP = async (phone: string, code: string): Promise<{ success: boolean; message: string; isValid?: boolean }> => {
+    if (!supabase) return { success: false, message: "Database not connected" };
+
+    try {
+        const config = await dbFetchOTPConfig();
+        if (!config?.isEnabled) {
+            return { success: false, message: "OTP verification is not enabled" };
+        }
+
+        const { data, error } = await supabase
+            .from('otp_attempts')
+            .select('*')
+            .eq('phone', phone)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+        if (error) throw error;
+        if (!data) {
+            return { success: false, message: "No OTP request found for this phone", isValid: false };
+        }
+
+        // Check if expired
+        const now = new Date();
+        const expiresAt = new Date(data.expires_at);
+        if (now > expiresAt) {
+            return { success: false, message: "OTP has expired", isValid: false };
+        }
+
+        // Check retry limit
+        const attemptCount = (data.attempt_count || 0) + 1;
+        const maxRetries = config.maxRetries || 3;
+        if (attemptCount > maxRetries) {
+            return { success: false, message: `Too many attempts. Maximum ${maxRetries} retries allowed`, isValid: false };
+        }
+
+        // Verify code
+        if (data.code !== code) {
+            // Update attempt count
+            await supabase.from('otp_attempts').update({ attempt_count: attemptCount }).eq('id', data.id);
+            return { success: false, message: "Invalid OTP code", isValid: false };
+        }
+
+        // Mark as verified and delete
+        await supabase.from('otp_attempts').delete().eq('id', data.id);
+
+        return { success: true, message: "OTP verified successfully", isValid: true };
+    } catch (err: any) {
+        console.error("OTP verification error:", err);
+        return { success: false, message: err.message || "Failed to verify OTP" };
     }
 };

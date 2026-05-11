@@ -500,3 +500,34 @@ values
   ('Wave', false, 'sandbox', '', '', '', '', '', '', '', 'GMD', '', 'https://api.betese.com/webhooks/wave', '', '', 30000),
   ('AfriMoney', false, 'sandbox', '', '', '', '', '', '', '', 'GMD', '', 'https://api.betese.com/webhooks/afrimoney', '', '', 30000)
 on conflict (provider) do nothing;
+
+-- ====================================================================
+-- OTP (One-Time Password) for customer registration verification
+-- ====================================================================
+
+create table if not exists otp_config (
+  id text primary key default 'otp_config',
+  is_enabled boolean not null default false,
+  provider text not null default 'builtin' check (provider in ('builtin', 'twilio', 'aws_sns', 'custom')),
+  api_key text not null default '',
+  api_secret text not null default '',
+  phone_from_number text,
+  code_length int not null default 4 check (code_length between 4 and 6),
+  expiry_minutes int not null default 5 check (expiry_minutes between 1 and 60),
+  max_retries int not null default 3 check (max_retries between 1 and 10),
+  message text not null default 'Your BETESE verification code is: {{code}}',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists otp_attempts (
+  id text primary key default gen_random_uuid()::text,
+  phone text not null,
+  code text not null,
+  expires_at timestamptz not null,
+  attempt_count int not null default 0,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_otp_attempts_phone on otp_attempts (phone);
+create index if not exists idx_otp_attempts_expires on otp_attempts (expires_at);
