@@ -495,7 +495,7 @@ export const IntegrationSettingsPanel: React.FC<IntegrationSettingsPanelProps> =
                         value={otpConfig.message}
                         onChange={(e) => handleOTPChange('message', e.target.value)}
                     />
-                    <p className="text-xs text-gray-500 mt-1">Use {{code}} as placeholder for the OTP code. Message must contain {{code}}.</p>
+                    <p className="text-xs text-gray-500 mt-1">Use {'{{code}}'} as placeholder for the OTP code. Message must contain {'{{code}}'}.</p>
                 </div>
 
                 {!otpConfig.isEnabled && (
