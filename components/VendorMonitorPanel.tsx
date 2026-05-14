@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { DepositLog, Ticket, User } from '../types';
 import { TableScrollNavigator } from './TableScrollNavigator';
+import { supabase, dbFetchVendorCommissionConfig, dbSaveVendorCommissionConfig } from '../supabaseClient';
 
 interface VendorMonitorPanelProps {
     allTickets: Ticket[];
@@ -11,6 +12,40 @@ interface VendorMonitorPanelProps {
 }
 
 type SortKey = 'name' | 'sales' | 'payouts' | 'net' | 'tickets';
+type PeriodFilter = 'today' | 'weekly' | 'monthly' | 'all';
+type SettlementPlan = 'weekly' | 'monthly';
+type AccountType = 'Terminal + Online' | 'Terminal Only' | 'Online Agent Only' | 'No Activity';
+
+interface CommissionRates {
+    terminalRate: number;
+    onlineRate: number;
+}
+
+interface VendorCommissionStorageShape {
+    defaults?: Partial<CommissionRates>;
+    overrides?: Record<string, Partial<CommissionRates>>;
+    settlementPlans?: Record<string, SettlementPlan>;
+}
+
+const normalizeRate = (value: number): number => {
+    const numeric = Number.isFinite(value) ? value : 0;
+    const bounded = Math.max(0, Math.min(100, numeric));
+    return Number(bounded.toFixed(2));
+};
+
+const getAccountType = (ticketSales: number, onlineSales: number): AccountType => {
+    if (ticketSales > 0 && onlineSales > 0) return 'Terminal + Online';
+    if (ticketSales > 0) return 'Terminal Only';
+    if (onlineSales > 0) return 'Online Agent Only';
+    return 'No Activity';
+};
+
+const accountTypeChipClass = (type: AccountType): string => {
+    if (type === 'Terminal + Online') return 'bg-emerald-100 text-emerald-700';
+    if (type === 'Terminal Only') return 'bg-green-100 text-green-700';
+    if (type === 'Online Agent Only') return 'bg-cyan-100 text-cyan-700';
+    return 'bg-gray-100 text-gray-600';
+};
 
 const statusBadge = (status: Ticket['status']) => {
     const styles: Record<Ticket['status'], string> = {
@@ -44,9 +79,77 @@ export const VendorMonitorPanel: React.FC<VendorMonitorPanelProps> = ({
     const [confirmLockId, setConfirmLockId] = useState<string | null>(null);
     const [adminCancelInput, setAdminCancelInput] = useState('');
     const [adminCancelMsg, setAdminCancelMsg] = useState<{ ok: boolean; text: string } | null>(null);
-    const [period, setPeriod] = useState<'today' | 'all'>('today');
+    const [period, setPeriod] = useState<PeriodFilter>('today');
+    const [defaultRates, setDefaultRates] = useState<CommissionRates>({ terminalRate: 8, onlineRate: 5 });
+    const [vendorRateOverrides, setVendorRateOverrides] = useState<Record<string, Partial<CommissionRates>>>({});
+    const [vendorSettlementPlans, setVendorSettlementPlans] = useState<Record<string, SettlementPlan>>({});
+    const [accountTypeFilter, setAccountTypeFilter] = useState<'All' | AccountType>('All');
+    const [commissionConfigLoaded, setCommissionConfigLoaded] = useState(false);
 
     const vendors = useMemo(() => users.filter(u => u.role === 'Vendor'), [users]);
+
+    useEffect(() => {
+        let isMounted = true;
+
+        const applyLoadedConfig = (parsed: VendorCommissionStorageShape) => {
+            if (!isMounted) return;
+            if (parsed.defaults) {
+                setDefaultRates({
+                    terminalRate: normalizeRate(Number(parsed.defaults.terminalRate ?? 8)),
+                    onlineRate: normalizeRate(Number(parsed.defaults.onlineRate ?? 5)),
+                });
+            }
+            if (parsed.overrides && typeof parsed.overrides === 'object') {
+                setVendorRateOverrides(parsed.overrides);
+            }
+            if (parsed.settlementPlans && typeof parsed.settlementPlans === 'object') {
+                const normalizedPlans = Object.entries(parsed.settlementPlans).reduce((acc, [vendorId, plan]) => {
+                    acc[vendorId] = plan === 'weekly' ? 'weekly' : 'monthly';
+                    return acc;
+                }, {} as Record<string, SettlementPlan>);
+                setVendorSettlementPlans(normalizedPlans);
+            }
+        };
+
+        const loadCommissionConfig = async () => {
+            // Load ONLY from online Supabase (required - no offline fallback)
+            if (supabase) {
+                try {
+                    const remote = await dbFetchVendorCommissionConfig();
+                    if (remote) {
+                        applyLoadedConfig(remote);
+                    }
+                } catch (err) {
+                    console.error("Failed to load commission config from Supabase:", err);
+                }
+            }
+
+            if (isMounted) setCommissionConfigLoaded(true);
+        };
+
+        loadCommissionConfig();
+
+        return () => {
+            isMounted = false;
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!commissionConfigLoaded) return;
+
+        const payload: VendorCommissionStorageShape = {
+            defaults: defaultRates,
+            overrides: vendorRateOverrides,
+            settlementPlans: vendorSettlementPlans,
+        };
+
+        // Save ONLY to online Supabase (no local storage fallback)
+        if (supabase) {
+            dbSaveVendorCommissionConfig(payload).catch((err) => {
+                console.error("Failed to save commission config to Supabase:", err);
+            });
+        }
+    }, [defaultRates, vendorRateOverrides, vendorSettlementPlans, commissionConfigLoaded]);
 
     const isSameLocalDay = (a: Date, b: Date) => (
         a.getFullYear() === b.getFullYear() &&
@@ -54,7 +157,55 @@ export const VendorMonitorPanel: React.FC<VendorMonitorPanelProps> = ({
         a.getDate() === b.getDate()
     );
     const now = new Date();
-    const periodLabel = period === 'today' ? 'today' : 'all time';
+
+    const isWithinPeriod = (date: Date): boolean => {
+        if (period === 'all') return true;
+        if (period === 'today') return isSameLocalDay(date, now);
+        if (period === 'weekly') {
+            const diffMs = now.getTime() - date.getTime();
+            return diffMs >= 0 && diffMs <= 7 * 24 * 60 * 60 * 1000;
+        }
+        return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
+    };
+
+    const periodLabel = period === 'today'
+        ? 'today'
+        : period === 'weekly'
+            ? 'weekly (last 7 days)'
+            : period === 'monthly'
+                ? 'monthly (this month)'
+                : 'all time';
+
+    const getVendorRates = (vendorId: string): CommissionRates => {
+        const overrides = vendorRateOverrides[vendorId] || {};
+        return {
+            terminalRate: normalizeRate(Number(overrides.terminalRate ?? defaultRates.terminalRate)),
+            onlineRate: normalizeRate(Number(overrides.onlineRate ?? defaultRates.onlineRate)),
+        };
+    };
+
+    const setVendorRate = (vendorId: string, key: keyof CommissionRates, value: number) => {
+        const normalized = normalizeRate(value);
+        setVendorRateOverrides(prev => ({
+            ...prev,
+            [vendorId]: {
+                ...(prev[vendorId] || {}),
+                [key]: normalized,
+            },
+        }));
+    };
+
+    const setVendorSettlementPlan = (vendorId: string, plan: SettlementPlan) => {
+        setVendorSettlementPlans(prev => ({ ...prev, [vendorId]: plan }));
+    };
+
+    const isWithinSettlementCycle = (date: Date, plan: SettlementPlan): boolean => {
+        if (plan === 'weekly') {
+            const diffMs = now.getTime() - date.getTime();
+            return diffMs >= 0 && diffMs <= 7 * 24 * 60 * 60 * 1000;
+        }
+        return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
+    };
 
     const getFundingMeta = (ticket: Ticket) => {
         const firstSelection = ticket.selections?.[0];
@@ -78,10 +229,18 @@ export const VendorMonitorPanel: React.FC<VendorMonitorPanelProps> = ({
 
     interface VendorStat {
         vendor: User;
+        accountType: AccountType;
+        settlementPlan: SettlementPlan;
         totalTickets: number;
         ticketSales: number;
         onlineSales: number;
         totalSales: number;
+        terminalRate: number;
+        onlineRate: number;
+        terminalCommission: number;
+        onlineCommission: number;
+        totalCommissionDue: number;
+        cycleCommissionDue: number;
         onlineDepositCount: number;
         totalPayouts: number;
         totalBonusLocked: number;
@@ -95,20 +254,36 @@ export const VendorMonitorPanel: React.FC<VendorMonitorPanelProps> = ({
 
     const vendorStats: VendorStat[] = useMemo(() => {
         return vendors.map(vendor => {
+            const settlementPlan = vendorSettlementPlans[vendor.id] || 'monthly';
             const vTickets = allTickets.filter(t => {
                 if (t.vendorId !== vendor.id) return false;
-                if (period === 'all') return true;
-                return isSameLocalDay(t.timestamp, now);
+                return isWithinPeriod(t.timestamp);
             });
             const vendorDeposits = (depositLogs || []).filter(log => {
                 if (log.processedById !== vendor.id) return false;
                 if (Number(log.amount || 0) <= 0 || log.method === 'Correction') return false;
-                if (period === 'all') return true;
-                return isSameLocalDay(log.timestamp, now);
+                return isWithinPeriod(log.timestamp);
             });
             const ticketSales = vTickets.reduce((s, t) => s + (t.totalCost || 0), 0);
             const onlineSales = vendorDeposits.reduce((s, log) => s + Number(log.amount || 0), 0);
             const totalSales = ticketSales + onlineSales;
+            const accountType = getAccountType(ticketSales, onlineSales);
+            const rates = getVendorRates(vendor.id);
+            const terminalCommission = Number(((ticketSales * rates.terminalRate) / 100).toFixed(2));
+            const onlineCommission = Number(((onlineSales * rates.onlineRate) / 100).toFixed(2));
+            const totalCommissionDue = Number((terminalCommission + onlineCommission).toFixed(2));
+
+            const cycleTicketSales = (allTickets || [])
+                .filter(t => t.vendorId === vendor.id)
+                .filter(t => isWithinSettlementCycle(t.timestamp, settlementPlan))
+                .reduce((sum, t) => sum + Number(t.totalCost || 0), 0);
+            const cycleOnlineSales = (depositLogs || [])
+                .filter(log => log.processedById === vendor.id)
+                .filter(log => Number(log.amount || 0) > 0 && log.method !== 'Correction')
+                .filter(log => isWithinSettlementCycle(log.timestamp, settlementPlan))
+                .reduce((sum, log) => sum + Number(log.amount || 0), 0);
+            const cycleCommissionDue = Number((((cycleTicketSales * rates.terminalRate) / 100) + ((cycleOnlineSales * rates.onlineRate) / 100)).toFixed(2));
+
             const totalPayouts = vTickets
                 .filter(t => t.status === 'Paid' && !(t.customerId && t.paidByName === 'System Bonus Credit'))
                 .reduce((s, t) => s + (t.winnings || 0), 0);
@@ -117,10 +292,18 @@ export const VendorMonitorPanel: React.FC<VendorMonitorPanelProps> = ({
                 .reduce((s, t) => s + (t.winnings || 0), 0);
             return {
                 vendor,
+                accountType,
+                settlementPlan,
                 totalTickets: vTickets.length,
                 ticketSales,
                 onlineSales,
                 totalSales,
+                terminalRate: rates.terminalRate,
+                onlineRate: rates.onlineRate,
+                terminalCommission,
+                onlineCommission,
+                totalCommissionDue,
+                cycleCommissionDue,
                 onlineDepositCount: vendorDeposits.length,
                 totalPayouts,
                 totalBonusLocked,
@@ -132,7 +315,7 @@ export const VendorMonitorPanel: React.FC<VendorMonitorPanelProps> = ({
                 paidCount: vTickets.filter(t => t.status === 'Paid').length,
             };
         });
-    }, [vendors, allTickets, depositLogs, period]);
+    }, [vendors, allTickets, depositLogs, period, defaultRates, vendorRateOverrides, vendorSettlementPlans]);
 
     const sortedVendorStats = useMemo(() => {
         const sorted = [...vendorStats].sort((a, b) => {
@@ -166,17 +349,26 @@ export const VendorMonitorPanel: React.FC<VendorMonitorPanelProps> = ({
     const grandTicketSales = vendorStats.reduce((s, v) => s + v.ticketSales, 0);
     const grandOnlineSales = vendorStats.reduce((s, v) => s + v.onlineSales, 0);
     const grandSales    = vendorStats.reduce((s, v) => s + v.totalSales, 0);
+    const grandTerminalCommission = vendorStats.reduce((s, v) => s + v.terminalCommission, 0);
+    const grandOnlineCommission = vendorStats.reduce((s, v) => s + v.onlineCommission, 0);
+    const grandCommissionDue = vendorStats.reduce((s, v) => s + v.totalCommissionDue, 0);
+    const grandCycleCommissionDue = vendorStats.reduce((s, v) => s + v.cycleCommissionDue, 0);
     const grandPayouts  = vendorStats.reduce((s, v) => s + v.totalPayouts, 0);
     const grandBonusLocked = vendorStats.reduce((s, v) => s + v.totalBonusLocked, 0);
     const grandNet      = grandSales - grandPayouts;
     const grandTickets  = vendorStats.reduce((s, v) => s + v.totalTickets, 0);
+    const accountTypeCounts = {
+        both: vendorStats.filter(v => v.accountType === 'Terminal + Online').length,
+        terminalOnly: vendorStats.filter(v => v.accountType === 'Terminal Only').length,
+        onlineOnly: vendorStats.filter(v => v.accountType === 'Online Agent Only').length,
+    };
 
     // Drill-down vendor
     const selectedStat = selectedVendorId ? vendorStats.find(v => v.vendor.id === selectedVendorId) : null;
     const drillTickets = useMemo(() => {
         if (!selectedVendorId) return [];
         let t = allTickets.filter(tt => tt.vendorId === selectedVendorId)
-            .filter(tt => period === 'all' ? true : isSameLocalDay(tt.timestamp, now))
+            .filter(tt => isWithinPeriod(tt.timestamp))
             .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
         if (ticketFilter !== 'All') t = t.filter(tt => tt.status === ticketFilter);
         if (searchTicket.trim()) {
@@ -191,12 +383,13 @@ export const VendorMonitorPanel: React.FC<VendorMonitorPanelProps> = ({
             .filter(log => {
                 if (log.processedById !== selectedVendorId) return false;
                 if (Number(log.amount || 0) <= 0 || log.method === 'Correction') return false;
-                return period === 'all' ? true : isSameLocalDay(log.timestamp, now);
+                return isWithinPeriod(log.timestamp);
             })
             .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
     }, [selectedVendorId, depositLogs, period]);
 
     const formatGMD = (n: number) => `GMD ${n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+    const filteredVendorStats = sortedVendorStats.filter(stat => accountTypeFilter === 'All' ? true : stat.accountType === accountTypeFilter);
 
     if (selectedStat) {
         const v = selectedStat.vendor;
@@ -215,6 +408,9 @@ export const VendorMonitorPanel: React.FC<VendorMonitorPanelProps> = ({
                     <span className={`px-3 py-1 rounded-full text-xs font-black uppercase ${v.isLocked ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
                         {v.isLocked ? '🔒 LOCKED' : '✅ ACTIVE'}
                     </span>
+                    <span className={`px-3 py-1 rounded-full text-xs font-black uppercase ${accountTypeChipClass(selectedStat.accountType)}`}>
+                        {selectedStat.accountType}
+                    </span>
                     <button
                         onClick={() => setConfirmLockId(v.id)}
                         className={`ml-auto px-5 py-2 rounded-lg text-sm font-black border-b-2 active:scale-95 transition-all ${v.isLocked ? 'bg-green-600 text-white border-green-800 hover:bg-green-700' : 'bg-red-600 text-white border-red-800 hover:bg-red-700'}`}
@@ -223,18 +419,13 @@ export const VendorMonitorPanel: React.FC<VendorMonitorPanelProps> = ({
                     </button>
                 </div>
 
-                {/* Stat boxes */}
-                <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
+                {/* Commission stat boxes */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     {[
-                        { label: 'Ticket Sales',    value: formatGMD(selectedStat.ticketSales),    color: 'border-green-500 text-betese-green' },
-                        { label: 'Online Sales',    value: formatGMD(selectedStat.onlineSales),    color: 'border-indigo-400 text-indigo-700' },
-                        { label: 'Total Sales',     value: formatGMD(selectedStat.totalSales),     color: 'border-emerald-500 text-emerald-700' },
-                        { label: 'Paid Out (Real)', value: formatGMD(selectedStat.totalPayouts),   color: 'border-orange-400 text-orange-600' },
-                        { label: 'Bonus Locked',    value: formatGMD(selectedStat.totalBonusLocked), color: 'border-amber-400 text-amber-700' },
-                        { label: 'Net Balance',     value: formatGMD(selectedStat.netBalance),     color: `border-blue-500 ${selectedStat.netBalance >= 0 ? 'text-blue-700' : 'text-red-600'}` },
-                        { label: 'Total Tickets',   value: String(selectedStat.totalTickets),       color: 'border-gray-400 text-gray-700' },
-                        { label: 'Online Deposits', value: String(selectedStat.onlineDepositCount), color: 'border-cyan-400 text-cyan-700' },
-                        { label: 'Canceled',        value: String(selectedStat.canceledCount),      color: 'border-red-400 text-red-600' },
+                        { label: 'Terminal Comm.',  value: formatGMD(selectedStat.terminalCommission), color: 'border-green-400 text-green-700' },
+                        { label: 'Online Comm.',    value: formatGMD(selectedStat.onlineCommission), color: 'border-cyan-400 text-cyan-700' },
+                        { label: 'Commission Due',  value: formatGMD(selectedStat.totalCommissionDue), color: 'border-fuchsia-400 text-fuchsia-700' },
+                        { label: 'Cycle Due',       value: formatGMD(selectedStat.cycleCommissionDue), color: 'border-pink-400 text-pink-700' },
                     ].map(b => (
                         <div key={b.label} className={`bg-white rounded-xl border-t-4 p-3 text-center shadow ${b.color}`}>
                             <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1">{b.label}</p>
@@ -243,174 +434,55 @@ export const VendorMonitorPanel: React.FC<VendorMonitorPanelProps> = ({
                     ))}
                 </div>
 
-                {/* Status breakdown */}
-                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 text-center">
-                    {([
-                        { label: 'Active',   count: selectedStat.activeCount,   bg: 'bg-green-50 border-green-300 text-green-700' },
-                        { label: 'Winning',  count: selectedStat.winningCount,  bg: 'bg-blue-50 border-blue-300 text-blue-700' },
-                        { label: 'Paid',     count: selectedStat.paidCount,     bg: 'bg-purple-50 border-purple-300 text-purple-700' },
-                        { label: 'Lost',     count: selectedStat.lostCount,     bg: 'bg-red-50 border-red-300 text-red-600' },
-                        { label: 'Canceled', count: selectedStat.canceledCount, bg: 'bg-gray-100 border-gray-300 text-gray-500' },
-                    ] as { label: string; count: number; bg: string }[]).map(s => (
-                        <div key={s.label} className={`border rounded-lg p-2 ${s.bg}`}>
-                            <p className="text-[10px] font-black uppercase">{s.label}</p>
-                            <p className="text-2xl font-black">{s.count}</p>
-                        </div>
-                    ))}
+                <div className="bg-fuchsia-50 border-2 border-fuchsia-200 rounded-xl p-4">
+                    <h4 className="text-sm font-black text-fuchsia-700 uppercase mb-3">Commission Setup for {v.name}</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <label className="text-xs font-bold text-gray-700">
+                            Terminal Sales Rate (%)
+                            <input
+                                type="number"
+                                min={0}
+                                max={100}
+                                step={0.1}
+                                value={selectedStat.terminalRate}
+                                onChange={(e) => setVendorRate(v.id, 'terminalRate', Number(e.target.value || 0))}
+                                className="mt-1 w-full px-3 py-2 rounded-lg border border-fuchsia-300 bg-white text-sm font-black text-fuchsia-700"
+                            />
+                        </label>
+                        <label className="text-xs font-bold text-gray-700">
+                            Online Sales Rate (%)
+                            <input
+                                type="number"
+                                min={0}
+                                max={100}
+                                step={0.1}
+                                value={selectedStat.onlineRate}
+                                onChange={(e) => setVendorRate(v.id, 'onlineRate', Number(e.target.value || 0))}
+                                className="mt-1 w-full px-3 py-2 rounded-lg border border-fuchsia-300 bg-white text-sm font-black text-fuchsia-700"
+                            />
+                        </label>
+                        <label className="text-xs font-bold text-gray-700">
+                            Settlement Plan
+                            <select
+                                value={selectedStat.settlementPlan}
+                                onChange={(e) => setVendorSettlementPlan(v.id, e.target.value as SettlementPlan)}
+                                className="mt-1 w-full px-3 py-2 rounded-lg border border-fuchsia-300 bg-white text-sm font-black text-fuchsia-700"
+                            >
+                                <option value="weekly">Weekly</option>
+                                <option value="monthly">Monthly</option>
+                            </select>
+                        </label>
+                    </div>
+                    <p className="mt-2 text-[11px] font-semibold text-fuchsia-700">
+                        Commission due for {periodLabel}: {formatGMD(selectedStat.totalCommissionDue)}
+                    </p>
+                    <p className="mt-1 text-[11px] font-semibold text-fuchsia-700">
+                        {selectedStat.settlementPlan === 'weekly' ? 'Weekly cycle due (last 7 days)' : 'Monthly cycle due (this month)'}: {formatGMD(selectedStat.cycleCommissionDue)}
+                    </p>
                 </div>
 
-                {/* Admin cancel-by-request box */}
-                <div className="bg-orange-50 border-2 border-orange-300 rounded-2xl p-5">
-                    <h4 className="text-sm font-black text-orange-700 uppercase mb-1">Cancel Ticket by Vendor Request</h4>
-                    <p className="text-[11px] text-orange-600 mb-3">If a vendor calls and asks to cancel a ticket they placed by mistake, enter the ticket ID here and confirm.</p>
-                    <div className="flex gap-2">
-                        <input
-                            type="text"
-                            value={adminCancelInput}
-                            onChange={e => { setAdminCancelInput(e.target.value); setAdminCancelMsg(null); }}
-                            placeholder="Ticket ID e.g. 36226201"
-                            className="flex-1 px-4 py-2 rounded-xl border-2 border-orange-300 text-sm font-mono focus:outline-none focus:border-orange-500"
-                        />
-                        <button
-                            onClick={() => {
-                                const id = adminCancelInput.trim();
-                                if (!id) return;
-                                const ticket = allTickets.find(t => t.id === id || t.bookingCode === id);
-                                if (!ticket) { setAdminCancelMsg({ ok: false, text: `Ticket #${id} not found.` }); return; }
-                                if (ticket.status !== 'Active' && ticket.status !== 'Booked') {
-                                    setAdminCancelMsg({ ok: false, text: `Cannot cancel — ticket is ${ticket.status}.` }); return;
-                                }
-                                setConfirmCancelId(ticket.id);
-                            }}
-                            className="px-5 py-2 bg-orange-600 text-white font-black text-sm rounded-xl hover:bg-orange-700 active:scale-95 transition-all border-b-2 border-orange-800"
-                        >
-                            Cancel Ticket
-                        </button>
-                    </div>
-                    {adminCancelMsg && (
-                        <p className={`mt-2 text-xs font-bold ${adminCancelMsg.ok ? 'text-green-600' : 'text-red-600'}`}>{adminCancelMsg.text}</p>
-                    )}
-                </div>
-
-                {/* Online deposit table */}
-                <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-200">
-                    <div className="bg-indigo-700 px-5 py-3 flex flex-wrap items-center gap-3">
-                        <h3 className="text-base font-black text-white uppercase flex-1">Online Deposit Sales ({periodLabel})</h3>
-                        <span className="text-white/70 text-sm font-bold">{drillDeposits.length} rows</span>
-                    </div>
-                    <TableScrollNavigator className="overflow-x-auto">
-                        <table className="min-w-full text-sm border-collapse">
-                            <thead className="bg-indigo-50 border-b border-indigo-100">
-                                <tr>
-                                    {['Date','Customer','Phone','Amount','Method','By'].map(h => (
-                                        <th key={h} className="py-2 px-3 text-center text-xs font-black text-gray-600 uppercase whitespace-nowrap">{h}</th>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {drillDeposits.length === 0 ? (
-                                    <tr><td colSpan={6} className="py-8 text-center text-gray-400 italic text-sm">No online deposit sales recorded for this vendor.</td></tr>
-                                ) : drillDeposits.map((log, i) => (
-                                    <tr key={log.id} className={`border-b border-gray-200 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
-                                        <td className="py-2 px-3 text-xs text-center text-gray-500 whitespace-nowrap">{log.timestamp.toLocaleDateString()} {log.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
-                                        <td className="py-2 px-3 text-xs text-center font-bold text-gray-800">{log.customerName}</td>
-                                        <td className="py-2 px-3 text-xs text-center text-gray-600">{log.customerPhone || '—'}</td>
-                                        <td className="py-2 px-3 text-xs text-center font-black text-indigo-700">{formatGMD(Number(log.amount || 0))}</td>
-                                        <td className="py-2 px-3 text-xs text-center font-semibold text-gray-700">{log.method}</td>
-                                        <td className="py-2 px-3 text-xs text-center text-gray-500">{log.processedByName}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </TableScrollNavigator>
-                </div>
-
-                {/* Drill ticket table */}
-                <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-200">
-                    <div className="bg-gray-800 px-5 py-3 flex flex-wrap items-center gap-3">
-                        <h3 className="text-base font-black text-white uppercase flex-1">Ticket Transactions ({periodLabel})</h3>
-                        <input
-                            type="text"
-                            placeholder="Search ticket ID…"
-                            value={searchTicket}
-                            onChange={e => setSearchTicket(e.target.value)}
-                            className="px-3 py-1.5 rounded-full border border-white/40 bg-white/10 text-white placeholder-white/50 text-sm w-40 focus:outline-none"
-                        />
-                        <select
-                            value={ticketFilter}
-                            onChange={e => setTicketFilter(e.target.value)}
-                            className="px-3 py-1.5 rounded-full border border-white/40 bg-white/10 text-white text-sm focus:outline-none"
-                        >
-                            {['All','Active','Winning','Paid','Lost','Canceled','Booked'].map(s => (
-                                <option key={s} value={s} className="text-gray-800">{s}</option>
-                            ))}
-                        </select>
-                        <span className="text-white/60 text-sm font-bold">{drillTickets.length} rows</span>
-                    </div>
-                    <TableScrollNavigator className="overflow-x-auto max-h-[480px] overflow-y-auto">
-                        <table className="min-w-full text-sm border-collapse">
-                            <thead className="sticky top-0 bg-gray-50 border-b border-gray-300 z-10">
-                                <tr>
-                                    {['Ticket ID','Date','Cost','Winnings','Funding','Wallet Flow','Status','Auth By','Action'].map(h => (
-                                        <th key={h} className="py-2 px-3 text-center text-xs font-black text-gray-600 uppercase whitespace-nowrap">{h}</th>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {drillTickets.length === 0 ? (
-                                    <tr><td colSpan={9} className="py-8 text-center text-gray-400 italic text-sm">No tickets match filter.</td></tr>
-                                ) : drillTickets.map((ticket, i) => {
-                                    const funding = getFundingMeta(ticket);
-                                    const canCancel = ticket.status === 'Active' || ticket.status === 'Booked';
-                                    return (
-                                        <tr key={ticket.id} className={`border-b border-gray-200 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-yellow-50`}>
-                                            <td className="py-2 px-3 font-mono text-xs text-gray-700">{ticket.id}</td>
-                                            <td className="py-2 px-3 text-xs text-gray-500 whitespace-nowrap">
-                                                {ticket.timestamp.toLocaleDateString()} {ticket.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                            </td>
-                                            <td className="py-2 px-3 text-center text-xs font-semibold text-gray-700">{formatGMD(ticket.totalCost || 0)}</td>
-                                            <td className="py-2 px-3 text-center text-xs font-bold text-blue-700">
-                                                {ticket.winnings && ticket.winnings > 0 ? formatGMD(ticket.winnings) : '—'}
-                                            </td>
-                                            <td className="py-2 px-3 text-center text-xs">
-                                                <span className={`px-2 py-0.5 rounded-full font-black ${funding.source === 'bonus' ? 'bg-amber-100 text-amber-700' : funding.source === 'mixed' ? 'bg-indigo-100 text-indigo-700' : 'bg-green-100 text-green-700'}`}>
-                                                    {funding.label}
-                                                </span>
-                                            </td>
-                                            <td className="py-2 px-3 text-center text-xs font-bold">
-                                                <span className={`${ticket.status === 'Paid' ? (ticket.customerId && ticket.paidByName === 'System Bonus Credit' ? 'text-amber-700' : 'text-blue-700') : 'text-gray-500'}`}>
-                                                    {getWalletFlowLabel(ticket)}
-                                                </span>
-                                            </td>
-                                            <td className="py-2 px-3 text-center">{statusBadge(ticket.status)}</td>
-                                            <td className="py-2 px-3 text-center">
-                                                {ticket.status === 'Paid'
-                                                    ? ticket.customerId
-                                                        ? <span className="text-[10px] text-gray-400 font-bold italic">Auto</span>
-                                                        : <span className="text-[10px] font-black text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full whitespace-nowrap">
-                                                            ✓ {ticket.paidByName || ticket.paidById || 'Unknown'}
-                                                          </span>
-                                                    : <span className="text-[10px] text-gray-300">—</span>
-                                                }
-                                            </td>
-                                            <td className="py-2 px-3 text-center">
-                                                {canCancel ? (
-                                                    <button
-                                                        onClick={() => setConfirmCancelId(ticket.id)}
-                                                        className="px-3 py-1 bg-red-600 text-white text-[10px] font-black rounded hover:bg-red-700 active:scale-95 transition-all"
-                                                    >
-                                                        Cancel
-                                                    </button>
-                                                ) : (
-                                                    <span className="text-[10px] text-gray-400 font-bold">—</span>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </TableScrollNavigator>
+                <div className="bg-fuchsia-50/70 border border-fuchsia-200 rounded-xl p-3 text-xs text-fuchsia-700 font-semibold">
+                    Commission-focused view enabled: operational ticket and deposit tables are hidden in this vendor drill-down.
                 </div>
 
                 {/* Confirm cancel modal */}
@@ -465,6 +537,18 @@ export const VendorMonitorPanel: React.FC<VendorMonitorPanelProps> = ({
                             Today
                         </button>
                         <button
+                            onClick={() => setPeriod('weekly')}
+                            className={`px-3 py-1 text-[10px] font-black rounded-full uppercase transition-all ${period === 'weekly' ? 'bg-white text-gray-900' : 'text-white/80 hover:text-white'}`}
+                        >
+                            Weekly
+                        </button>
+                        <button
+                            onClick={() => setPeriod('monthly')}
+                            className={`px-3 py-1 text-[10px] font-black rounded-full uppercase transition-all ${period === 'monthly' ? 'bg-white text-gray-900' : 'text-white/80 hover:text-white'}`}
+                        >
+                            Monthly
+                        </button>
+                        <button
                             onClick={() => setPeriod('all')}
                             className={`px-3 py-1 text-[10px] font-black rounded-full uppercase transition-all ${period === 'all' ? 'bg-white text-gray-900' : 'text-white/80 hover:text-white'}`}
                         >
@@ -472,15 +556,54 @@ export const VendorMonitorPanel: React.FC<VendorMonitorPanelProps> = ({
                         </button>
                     </div>
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-6 gap-4">
+                <div className="mb-4 bg-white/5 border border-white/10 rounded-xl p-3">
+                    <h4 className="text-[10px] font-black text-white/60 uppercase tracking-wider mb-2">Default Commission Rates</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <label className="text-[11px] text-white/80 font-bold">
+                            Terminal Sales (%)
+                            <input
+                                type="number"
+                                min={0}
+                                max={100}
+                                step={0.1}
+                                value={defaultRates.terminalRate}
+                                onChange={(e) => setDefaultRates(prev => ({ ...prev, terminalRate: normalizeRate(Number(e.target.value || 0)) }))}
+                                className="mt-1 w-full px-3 py-2 rounded-lg border border-white/30 bg-white/10 text-white text-sm font-black"
+                            />
+                        </label>
+                        <label className="text-[11px] text-white/80 font-bold">
+                            Online Sales (%)
+                            <input
+                                type="number"
+                                min={0}
+                                max={100}
+                                step={0.1}
+                                value={defaultRates.onlineRate}
+                                onChange={(e) => setDefaultRates(prev => ({ ...prev, onlineRate: normalizeRate(Number(e.target.value || 0)) }))}
+                                className="mt-1 w-full px-3 py-2 rounded-lg border border-white/30 bg-white/10 text-white text-sm font-black"
+                            />
+                        </label>
+                    </div>
+                </div>
+                <div className="mb-4 flex flex-wrap items-center gap-2 text-[10px] font-black uppercase">
+                    <span className="text-white/60">Account Filter:</span>
+                    {(['All', 'Terminal + Online', 'Terminal Only', 'Online Agent Only'] as Array<'All' | AccountType>).map(kind => (
+                        <button
+                            key={kind}
+                            onClick={() => setAccountTypeFilter(kind)}
+                            className={`px-3 py-1 rounded-full border transition-all ${accountTypeFilter === kind ? 'bg-white text-gray-900 border-white' : 'bg-white/5 text-white/80 border-white/20 hover:bg-white/10'}`}
+                        >
+                            {kind}
+                        </button>
+                    ))}
+                    <span className="ml-auto text-white/50">Both: {accountTypeCounts.both} • Terminal: {accountTypeCounts.terminalOnly} • Online Only: {accountTypeCounts.onlineOnly}</span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                     {[
                         { label: 'Vendors',       value: String(vendors.length),      sub: `${vendors.filter(v=>v.isLocked).length} blocked`,   color: 'text-white' },
-                        { label: 'Total Tickets', value: String(grandTickets),        sub: periodLabel,            color: 'text-white' },
-                        { label: 'Ticket Sales',  value: formatGMD(grandTicketSales), sub: 'ticket placements',    color: 'text-green-400' },
-                        { label: 'Online Sales',  value: formatGMD(grandOnlineSales), sub: 'vendor cash deposits', color: 'text-cyan-300' },
-                        { label: 'Total Sales',   value: formatGMD(grandSales),       sub: 'ticket + online',      color: 'text-emerald-300' },
-                        { label: 'Paid Out (Real)',value: formatGMD(grandPayouts),    sub: 'real wallet / cash',   color: 'text-orange-400' },
-                        { label: 'Bonus Locked',  value: formatGMD(grandBonusLocked), sub: 'still locked',         color: 'text-amber-300' },
+                        { label: 'Account Types', value: `${accountTypeCounts.both}/${accountTypeCounts.terminalOnly}/${accountTypeCounts.onlineOnly}`, sub: 'both / terminal / online', color: 'text-white' },
+                        { label: 'Commission Due',value: formatGMD(grandCommissionDue), sub: `${formatGMD(grandTerminalCommission)} terminal + ${formatGMD(grandOnlineCommission)} online`, color: 'text-fuchsia-300' },
+                        { label: 'Cycle Due',     value: formatGMD(grandCycleCommissionDue), sub: 'weekly/monthly plans', color: 'text-pink-300' },
                     ].map(b => (
                         <div key={b.label} className="text-center">
                             <p className="text-[10px] font-black text-white/50 uppercase tracking-wider">{b.label}</p>
@@ -489,46 +612,6 @@ export const VendorMonitorPanel: React.FC<VendorMonitorPanelProps> = ({
                         </div>
                     ))}
                 </div>
-                <div className="mt-4 pt-4 border-t border-white/10 flex items-center justify-between">
-                    <p className="text-[11px] font-black text-white/40 uppercase">Net Revenue</p>
-                    <p className={`text-3xl font-black ${grandNet >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatGMD(grandNet)}</p>
-                </div>
-            </div>
-
-            {/* Backoffice quick cancel box */}
-            <div className="bg-orange-50 border-2 border-orange-300 rounded-2xl p-5">
-                <h4 className="text-sm font-black text-orange-700 uppercase mb-1">Cancel Ticket by Vendor Request</h4>
-                <p className="text-[11px] text-orange-600 mb-3">Backoffice quick action: enter ticket ID or booking code to cancel a vendor mistake ticket.</p>
-                <div className="flex gap-2">
-                    <input
-                        type="text"
-                        value={adminCancelInput}
-                        onChange={e => { setAdminCancelInput(e.target.value); setAdminCancelMsg(null); }}
-                        placeholder="Ticket ID or booking code"
-                        className="flex-1 px-4 py-2 rounded-xl border-2 border-orange-300 text-sm font-mono focus:outline-none focus:border-orange-500"
-                    />
-                    <button
-                        onClick={() => {
-                            const id = adminCancelInput.trim();
-                            if (!id) return;
-                            const ticket = allTickets.find(t => t.id === id || t.bookingCode === id);
-                            if (!ticket) { setAdminCancelMsg({ ok: false, text: `Ticket #${id} not found.` }); return; }
-                            if (ticket.status !== 'Active' && ticket.status !== 'Booked') {
-                                setAdminCancelMsg({ ok: false, text: `Cannot cancel — ticket is ${ticket.status}.` }); return;
-                            }
-                            if (!window.confirm(`Cancel ticket #${ticket.id}? This cannot be undone.`)) return;
-                            onCancelTicket(ticket.id);
-                            setAdminCancelInput('');
-                            setAdminCancelMsg({ ok: true, text: `Ticket #${ticket.id} canceled successfully.` });
-                        }}
-                        className="px-5 py-2 bg-orange-600 text-white font-black text-sm rounded-xl hover:bg-orange-700 active:scale-95 transition-all border-b-2 border-orange-800"
-                    >
-                        Cancel Ticket
-                    </button>
-                </div>
-                {adminCancelMsg && (
-                    <p className={`mt-2 text-xs font-bold ${adminCancelMsg.ok ? 'text-green-600' : 'text-red-600'}`}>{adminCancelMsg.text}</p>
-                )}
             </div>
 
             {/* Sort header */}
@@ -546,11 +629,11 @@ export const VendorMonitorPanel: React.FC<VendorMonitorPanelProps> = ({
             </div>
 
             {/* Vendor cards grid */}
-            {sortedVendorStats.length === 0 ? (
+            {filteredVendorStats.length === 0 ? (
                 <div className="text-center py-12 text-gray-400 italic">No vendors found.</div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-                    {sortedVendorStats.map(({ vendor, totalTickets, ticketSales, onlineSales, totalSales, totalPayouts, netBalance, activeCount, winningCount, lostCount, canceledCount, paidCount, onlineDepositCount }) => (
+                    {filteredVendorStats.map(({ vendor, accountType, settlementPlan, totalCommissionDue, cycleCommissionDue, terminalRate, onlineRate }) => (
                         <div
                             key={vendor.id}
                             className={`bg-white rounded-2xl shadow-lg border-t-4 overflow-hidden transition-all hover:shadow-xl ${vendor.isLocked ? 'border-red-500' : 'border-betese-green'}`}
@@ -566,35 +649,18 @@ export const VendorMonitorPanel: React.FC<VendorMonitorPanelProps> = ({
                                 </span>
                             </div>
 
-                            {/* Main stats */}
-                            <div className="grid grid-cols-4 divide-x divide-gray-100 border-b border-gray-100">
-                                <div className="p-3 text-center">
-                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider">Ticket</p>
-                                    <p className="text-base font-black text-betese-green leading-tight">{formatGMD(ticketSales)}</p>
-                                </div>
-                                <div className="p-3 text-center">
-                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider">Online</p>
-                                    <p className="text-base font-black text-indigo-600 leading-tight">{formatGMD(onlineSales)}</p>
-                                </div>
-                                <div className="p-3 text-center">
-                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider">Total</p>
-                                    <p className="text-base font-black text-emerald-700 leading-tight">{formatGMD(totalSales)}</p>
-                                </div>
-                                <div className="p-3 text-center">
-                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider">Net</p>
-                                    <p className={`text-base font-black leading-tight ${netBalance >= 0 ? 'text-blue-700' : 'text-red-600'}`}>{formatGMD(netBalance)}</p>
-                                </div>
+                            <div className="px-4 pt-3 pb-2 flex items-center justify-between gap-2 border-b border-gray-100 bg-gray-50">
+                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-full uppercase ${accountTypeChipClass(accountType)}`}>{accountType}</span>
+                                <span className="text-[10px] font-black px-2 py-0.5 rounded-full uppercase bg-fuchsia-100 text-fuchsia-700">{settlementPlan === 'weekly' ? 'Weekly Settle' : 'Monthly Settle'}</span>
                             </div>
 
-                            {/* Ticket status pills */}
-                            <div className="px-4 py-3 flex flex-wrap gap-1.5">
-                                <span className="text-[10px] bg-gray-100 text-gray-600 font-bold px-2 py-0.5 rounded-full">🎫 {totalTickets} total</span>
-                                {onlineDepositCount > 0 && <span className="text-[10px] bg-cyan-100 text-cyan-700 font-bold px-2 py-0.5 rounded-full">📲 {onlineDepositCount} online deposits</span>}
-                                {activeCount > 0   && <span className="text-[10px] bg-green-100 text-green-700 font-bold px-2 py-0.5 rounded-full">▶ {activeCount} active</span>}
-                                {winningCount > 0  && <span className="text-[10px] bg-blue-100 text-blue-700 font-bold px-2 py-0.5 rounded-full">🏆 {winningCount} winning</span>}
-                                {paidCount > 0     && <span className="text-[10px] bg-purple-100 text-purple-700 font-bold px-2 py-0.5 rounded-full">💸 {paidCount} paid</span>}
-                                {lostCount > 0     && <span className="text-[10px] bg-red-100 text-red-600 font-bold px-2 py-0.5 rounded-full">✗ {lostCount} lost</span>}
-                                {canceledCount > 0 && <span className="text-[10px] bg-gray-200 text-gray-500 font-bold px-2 py-0.5 rounded-full">⊘ {canceledCount} canceled</span>}
+                            <div className="px-4 py-2 border-b border-gray-100 bg-fuchsia-50/60">
+                                <div className="flex items-center justify-between gap-3">
+                                    <p className="text-[10px] font-black text-fuchsia-700 uppercase">Commission Due</p>
+                                    <p className="text-sm font-black text-fuchsia-700">{formatGMD(totalCommissionDue)}</p>
+                                </div>
+                                <p className="text-[10px] text-fuchsia-700/80 mt-0.5">Terminal {terminalRate}% • Online {onlineRate}%</p>
+                                <p className="text-[10px] text-fuchsia-700/80">Cycle Due: {formatGMD(cycleCommissionDue)}</p>
                             </div>
 
                             {/* Card actions */}
@@ -603,7 +669,7 @@ export const VendorMonitorPanel: React.FC<VendorMonitorPanelProps> = ({
                                     onClick={() => setSelectedVendorId(vendor.id)}
                                     className="flex-1 py-2 bg-gray-800 text-white text-xs font-black rounded-xl hover:bg-gray-900 active:scale-95 transition-all"
                                 >
-                                    View Transactions
+                                    Commission Details
                                 </button>
                                 <button
                                     onClick={() => setConfirmLockId(vendor.id)}

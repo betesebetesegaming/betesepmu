@@ -6,7 +6,7 @@ import { Header } from './components/Header';
 import { ConfirmationModal } from './components/ConfirmationModal';
 import { BookingCodeModal } from './components/BookingCodeModal';
 import { WithdrawalCodeModal } from './components/WithdrawalCodeModal';
-import { SEVEN_DAYS_IN_MS, BETTING_CUTOFF_MS, validateTicketForPlacement, validateTicketAgainstRaceState, normalizeGambiaPhone } from './utils';
+import { SEVEN_DAYS_IN_MS, BETTING_CUTOFF_MS, calculateTicketWinnings, validateTicketForPlacement, validateTicketAgainstRaceState, normalizeGambiaPhone } from './utils';
 import { LanguageProvider } from './LanguageContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { 
@@ -40,6 +40,71 @@ const EmergencyRecover = lazy(() => import('./components/EmergencyRecover').then
 const LoadingPane: React.FC = () => (
     <div className="rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-600">Loading...</div>
 );
+
+const buildDepositVerificationDefaults = (request: Pick<DepositRequest, 'method' | 'status' | 'processedBy' | 'processedByName'> & Partial<DepositRequest>) => {
+    if (request.method !== 'Wave') {
+        return {
+            verificationStatus: request.verificationStatus || 'NotStarted' as const,
+            verificationSource: request.verificationSource,
+            verificationMessage: request.verificationMessage,
+            providerReference: request.providerReference,
+            verifiedAt: request.verifiedAt,
+        };
+    }
+
+    if (request.verificationStatus) {
+        return {
+            verificationStatus: request.verificationStatus,
+            verificationSource: request.verificationSource,
+            verificationMessage: request.verificationMessage,
+            providerReference: request.providerReference,
+            verifiedAt: request.verifiedAt,
+        };
+    }
+
+    if (request.status === 'Approved') {
+        const isClientFallback = request.processedBy === 'SYSTEM' || request.processedByName === 'Wave Direct Deposit';
+        return {
+            verificationStatus: 'Verified' as const,
+            verificationSource: isClientFallback ? 'client-fallback' as const : 'manual-review' as const,
+            verificationMessage: isClientFallback
+                ? 'Credited through temporary client fallback. Replace with webhook confirmation for production.'
+                : 'Approved after manual review.',
+            providerReference: request.providerReference,
+            verifiedAt: request.verifiedAt,
+        };
+    }
+
+    if (request.status === 'Rejected') {
+        return {
+            verificationStatus: 'VerificationFailed' as const,
+            verificationSource: request.verificationSource || 'manual-review' as const,
+            verificationMessage: request.verificationMessage || 'Deposit request rejected before provider confirmation.',
+            providerReference: request.providerReference,
+            verifiedAt: request.verifiedAt,
+        };
+    }
+
+    return {
+        verificationStatus: 'PendingProviderConfirmation' as const,
+        verificationSource: request.verificationSource,
+        verificationMessage: request.verificationMessage || 'Waiting for Wave webhook/status verification.',
+        providerReference: request.providerReference,
+        verifiedAt: request.verifiedAt,
+    };
+};
+
+const getTicketFunding = (ticket: Pick<Ticket, 'selections' | 'totalCost'>) => {
+    const metadata = Array.isArray(ticket.selections) && ticket.selections.length > 0 ? ticket.selections[0] : null;
+    const bonusStake = Number(metadata?.bonusStakeAmount || 0);
+    const cashStake = Number(metadata?.cashStakeAmount ?? Math.max(0, Number(ticket.totalCost || 0) - bonusStake));
+    const fundingSource = metadata?.fundingSource || (bonusStake > 0 ? (cashStake > 0 ? 'mixed' : 'bonus') : 'cash');
+    return {
+        bonusStake: Number(bonusStake.toFixed(2)),
+        cashStake: Number(cashStake.toFixed(2)),
+        fundingSource,
+    } as const;
+};
 
 const normalizeRole = (role: unknown): Role => {
     const value = String(role || '').trim().toLowerCase();
@@ -80,6 +145,7 @@ const fileToDataUrl = (file: File): Promise<string> => {
 const AppContent: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [users, setUsers] = useState<User[]>([]);
+    const [usersReady, setUsersReady] = useState(false);
     const [races, setRaces] = useState<Race[]>([]);
   const [placedTickets, setPlacedTickets] = useState<Ticket[]>([]); 
   const [systemKey, setSystemKey] = useState(0); 
@@ -118,9 +184,9 @@ const AppContent: React.FC = () => {
   const loadLiveSystemData = async (user?: User) => {
       if (!supabase) return;
       try {
-          const isConnected = await checkBackendConnection();
-          setIsOnline(isConnected);
-          if(!isConnected) return;
+          // Always attempt to load data — don't gate on HEAD probe which can fail
+          // even when Supabase is fully reachable. Mark online after data loads.
+          setIsOnline(true);
 
           if (!legacyBookedMigrationDoneRef.current) {
               try {
@@ -183,7 +249,18 @@ const AppContent: React.FC = () => {
               timestamp: r.timestamp ? new Date(r.timestamp) : new Date(),
               processedBy: r.processed_by, 
               processedByName: r.processed_by_name, 
-              processedAt: r.processed_at ? new Date(r.processed_at) : undefined
+              processedAt: r.processed_at ? new Date(r.processed_at) : undefined,
+              ...buildDepositVerificationDefaults({
+                  method: normalizedMethod,
+                  status: normalizedStatus,
+                  processedBy: r.processed_by,
+                  processedByName: r.processed_by_name,
+                  providerReference: r.provider_reference,
+                  verificationStatus: (r.verification_status as DepositRequest['verificationStatus']) || undefined,
+                  verificationSource: (r.verification_source as DepositRequest['verificationSource']) || undefined,
+                  verificationMessage: r.verification_message,
+                  verifiedAt: r.verified_at ? new Date(r.verified_at) : undefined,
+              })
           }}));
 
           setDepositLogs(fetchedDepositLogs || []);
@@ -213,7 +290,10 @@ const AppContent: React.FC = () => {
               const liveTickets = await dbFetchLiveTickets(targetUser);
               setPlacedTickets(liveTickets);
           }
-      } catch (err) { console.error("Data Sync Error:", err); }
+      } catch (err) {
+          console.error("Data Sync Error:", err);
+          setIsOnline(false);
+      }
   };
 
   const handleRefreshSystem = () => {
@@ -224,6 +304,42 @@ const AppContent: React.FC = () => {
   };
 
   useEffect(() => { loadLiveSystemData(); }, []);
+
+  // Fast early user fetch so the login form works immediately on page load
+  useEffect(() => {
+      let isMounted = true;
+      const readyTimeout = window.setTimeout(() => {
+          if (isMounted) setUsersReady(true);
+      }, 7000);
+
+      if (!supabase) {
+          setUsersReady(true);
+          return () => {
+              isMounted = false;
+              window.clearTimeout(readyTimeout);
+          };
+      }
+
+      dbFetchUsers()
+          .then(fetched => {
+              if (!isMounted) return;
+              if (fetched && fetched.length > 0) {
+                  setUsers(fetched.map(u => ({ ...u, role: normalizeRole(u.role) })));
+              }
+          })
+          .catch(() => {
+              // Keep login accessible even if initial fetch fails or stalls.
+          })
+          .finally(() => {
+              if (isMounted) setUsersReady(true);
+              window.clearTimeout(readyTimeout);
+          });
+
+      return () => {
+          isMounted = false;
+          window.clearTimeout(readyTimeout);
+      };
+  }, []);
 
   useEffect(() => {
       if (!supabase || !currentUser) return;
@@ -363,6 +479,121 @@ const AppContent: React.FC = () => {
       }
   };
 
+  const settleRaceTicketsLocally = useCallback((result: RaceResult, updatedRaces: Race[]) => {
+      const relevantTickets = (placedTickets || []).filter(ticket =>
+          ['Active', 'Winning', 'Paid', 'Lost'].includes(ticket.status)
+          && ticket.selections.some(selection => selection.raceId === result.raceId)
+      );
+
+      if (relevantTickets.length === 0) return;
+
+      const customerIds = Array.from(new Set(relevantTickets.map(ticket => ticket.customerId).filter(Boolean))) as string[];
+      const walletBalanceMap = new Map<string, number>();
+      const bonusBalanceMap = new Map<string, number>();
+
+      customerIds.forEach(customerId => {
+          const customer = (users || []).find(user => user.id === customerId);
+          walletBalanceMap.set(customerId, Number(customer?.walletBalance || 0));
+          bonusBalanceMap.set(customerId, Number(customer?.bonusBalance || 0));
+      });
+
+      const settledTicketMap = new Map<string, Ticket>();
+
+      relevantTickets.forEach(ticket => {
+          const evaluation = calculateTicketWinnings(ticket, updatedRaces);
+          const allSelectionsResolved = ticket.selections.every(selection => {
+              const race = updatedRaces.find(item => item.id === selection.raceId);
+              return Boolean(race?.result?.winningNumbers?.length);
+          });
+
+          const nextWinnings = Number(evaluation.totalWinnings.toFixed(2));
+          const previousWinnings = Number(ticket.winnings || 0);
+          const isOnlineCustomer = Boolean(ticket.customerId);
+          const wasPaidOnline = isOnlineCustomer && ticket.status === 'Paid';
+          const funding = getTicketFunding(ticket);
+          const creditsBonusWallet = isOnlineCustomer && funding.bonusStake > 0;
+
+          let nextStatus = ticket.status;
+          let paidAt = ticket.paidAt;
+          let paidById = ticket.paidById;
+          let paidByName = ticket.paidByName;
+          let settledWinnings = nextWinnings;
+
+          if (allSelectionsResolved) {
+              if (nextWinnings > 0) {
+                  if (isOnlineCustomer) {
+                      nextStatus = 'Paid';
+                      paidAt = paidAt || new Date();
+                      paidById = paidById || 'SYSTEM';
+                      paidByName = paidByName || (creditsBonusWallet ? 'System Bonus Credit' : 'System Auto Credit');
+                  } else {
+                      nextStatus = ticket.status === 'Paid' ? 'Paid' : 'Winning';
+                  }
+              } else {
+                  nextStatus = 'Lost';
+                  paidAt = undefined;
+                  paidById = undefined;
+                  paidByName = undefined;
+              }
+          }
+
+          if (wasPaidOnline && (nextStatus !== 'Paid' || settledWinnings < previousWinnings)) {
+              nextStatus = 'Paid';
+              settledWinnings = previousWinnings;
+              paidAt = paidAt || new Date();
+              paidById = paidById || 'SYSTEM';
+              paidByName = paidByName || (creditsBonusWallet ? 'System Bonus Credit' : 'System Auto Credit');
+          }
+
+          if (isOnlineCustomer && ticket.customerId) {
+              const previousCredited = ticket.status === 'Paid' ? previousWinnings : 0;
+              const nextCredited = nextStatus === 'Paid' ? settledWinnings : 0;
+              const delta = Number((nextCredited - previousCredited).toFixed(2));
+              if (delta !== 0) {
+                  if (creditsBonusWallet) {
+                      const currentBonus = Number(bonusBalanceMap.get(ticket.customerId) || 0);
+                      bonusBalanceMap.set(ticket.customerId, Number((currentBonus + delta).toFixed(2)));
+                  } else {
+                      const currentWallet = Number(walletBalanceMap.get(ticket.customerId) || 0);
+                      walletBalanceMap.set(ticket.customerId, Number((currentWallet + delta).toFixed(2)));
+                  }
+              }
+          }
+
+          settledTicketMap.set(ticket.id, {
+              ...ticket,
+              status: nextStatus,
+              winnings: settledWinnings || undefined,
+              winningsBreakdown: evaluation.breakdown,
+              paidAt,
+              paidById,
+              paidByName,
+          });
+      });
+
+      setPlacedTickets(prev => (prev || []).map(ticket => settledTicketMap.get(ticket.id) || ticket));
+
+      if (customerIds.length > 0) {
+          setUsers(prev => (prev || []).map(user => {
+              if (!customerIds.includes(user.id)) return user;
+              return {
+                  ...user,
+                  walletBalance: Number((walletBalanceMap.get(user.id) ?? user.walletBalance ?? 0).toFixed(2)),
+                  bonusBalance: Number((bonusBalanceMap.get(user.id) ?? user.bonusBalance ?? 0).toFixed(2)),
+              };
+          }));
+
+          setCurrentUser(prev => {
+              if (!prev || !customerIds.includes(prev.id)) return prev;
+              return {
+                  ...prev,
+                  walletBalance: Number((walletBalanceMap.get(prev.id) ?? prev.walletBalance ?? 0).toFixed(2)),
+                  bonusBalance: Number((bonusBalanceMap.get(prev.id) ?? prev.bonusBalance ?? 0).toFixed(2)),
+              };
+          });
+      }
+  }, [placedTickets, users]);
+
   const handleSaveRaceResult = async (result: RaceResult): Promise<boolean> => {
       if (!currentUser || currentUser.role !== 'Admin') {
           alert("Only Admin can enter or edit race results.");
@@ -400,6 +631,7 @@ const AppContent: React.FC = () => {
                   .catch((bgErr: any) => console.error("Background settle error:", bgErr));
           } else {
               setRaces(nextRaces);
+              settleRaceTicketsLocally(auditedResult, nextRaces);
               alert("Result saved successfully.");
           }
           return true;
@@ -654,7 +886,7 @@ const AppContent: React.FC = () => {
       }
   };
 
-    const handleDeposit = async (customerId: string, amount: number, method: string = 'Cash', transactionId?: string) => {
+    const handleDeposit = async (customerId: string, amount: number, method: string = 'Cash', transactionId?: string, processedByOverride?: { id: string; name: string }) => {
     const cust = (users || []).find(u => u.id === customerId);
     if (!cust || !currentUser) return { success: false, bonusApplied: 0 };
 
@@ -757,8 +989,8 @@ const AppContent: React.FC = () => {
         customerPhone: cust.phone,
         amount: normalizedAmount,
         bonusAwarded: bonusApplied || undefined,
-        processedById: currentUser.id,
-        processedByName: currentUser.name,
+        processedById: processedByOverride?.id || currentUser.id,
+        processedByName: processedByOverride?.name || currentUser.name,
         timestamp: effectiveTime,
         method: method as any,
         transactionId
@@ -779,7 +1011,7 @@ const AppContent: React.FC = () => {
         return { success: true, bonusApplied };
   };
 
-  const handleCreateDepositRequest = async (amount: number, method: 'Wave' | 'AfriMoney', phone: string) => {
+    const handleCreateDepositRequest = async (amount: number, method: 'Wave' | 'AfriMoney', phone: string) => {
     if (!currentUser) return;
         const normalizedPhone = normalizeGambiaPhone(phone || '');
         if (!normalizedPhone) {
@@ -795,14 +1027,38 @@ const AppContent: React.FC = () => {
         method,
         transactionId: normalizedPhone,
         status: 'Pending',
-        timestamp: effectiveTime
+        timestamp: effectiveTime,
+        providerReference: method === 'Wave' ? `WAVE-${effectiveTime.getTime()}-${Math.floor(Math.random() * 1000)}` : undefined,
+        verificationStatus: method === 'Wave' ? 'PendingProviderConfirmation' : 'NotStarted',
+        verificationSource: method === 'Wave' ? 'client-fallback' : 'manual-review',
+        verificationMessage: method === 'Wave' ? 'Waiting for backend webhook/status verification.' : undefined,
     };
 
     try {
         if (supabase) {
             await dbDepositRequest(newRequest);
-        } else {
-            setDepositRequests(prev => [...prev, newRequest]);
+        }
+        setDepositRequests(prev => [newRequest, ...(prev || []).filter(req => req.id !== newRequest.id)]);
+
+        if (method === 'Wave') {
+            await handleDeposit(currentUser.id, normalizedAmount, 'Wave', normalizedPhone, { id: 'SYSTEM', name: 'Wave Direct Deposit' });
+            if (supabase) {
+                await dbMarkDepositRequestApproved(newRequest.id, 'SYSTEM', 'Wave Direct Deposit', effectiveTime);
+            }
+            setDepositRequests(prev => (prev || []).map(req => req.id === newRequest.id
+                ? {
+                    ...req,
+                    status: 'Approved',
+                    processedBy: 'SYSTEM',
+                    processedByName: 'Wave Direct Deposit',
+                    processedAt: effectiveTime,
+                    verificationStatus: 'Verified',
+                    verificationSource: 'client-fallback',
+                    verificationMessage: 'Credited through temporary client fallback. Replace with webhook confirmation for production.',
+                    verifiedAt: effectiveTime,
+                  }
+                : req
+            ));
         }
     } catch (e: any) {
         alert(`Payment Error: ${e.message}`);
@@ -826,7 +1082,17 @@ const AppContent: React.FC = () => {
 
           setDepositRequests(prev => (prev || []).map(r =>
               r.id === requestId
-                  ? { ...r, status: 'Approved', processedBy: currentUser.id, processedByName: currentUser.name, processedAt: effectiveTime }
+                  ? {
+                      ...r,
+                      status: 'Approved',
+                      processedBy: currentUser.id,
+                      processedByName: currentUser.name,
+                      processedAt: effectiveTime,
+                      verificationStatus: r.method === 'Wave' ? 'Verified' : r.verificationStatus,
+                      verificationSource: r.method === 'Wave' ? 'manual-review' : r.verificationSource,
+                      verificationMessage: r.method === 'Wave' ? 'Approved after manual review.' : r.verificationMessage,
+                      verifiedAt: r.method === 'Wave' ? effectiveTime : r.verifiedAt,
+                    }
                   : r
           ));
       } catch (e: any) {
@@ -918,9 +1184,17 @@ const AppContent: React.FC = () => {
       try {
           if (supabase) {
               await dbRejectDepositRequest(requestId, currentUser.id, currentUser.name, effectiveTime);
-          } else {
-              setDepositRequests(prev => (prev || []).map(r => r.id === requestId ? { ...r, status: 'Rejected', processedBy: currentUser.id, processedByName: currentUser.name, processedAt: effectiveTime } : r));
           }
+          setDepositRequests(prev => (prev || []).map(r => r.id === requestId ? {
+              ...r,
+              status: 'Rejected',
+              processedBy: currentUser.id,
+              processedByName: currentUser.name,
+              processedAt: effectiveTime,
+              verificationStatus: r.method === 'Wave' ? 'VerificationFailed' : r.verificationStatus,
+              verificationSource: r.method === 'Wave' ? 'manual-review' : r.verificationSource,
+              verificationMessage: r.method === 'Wave' ? 'Rejected before provider confirmation.' : r.verificationMessage,
+          } : r));
       } catch (e: any) {
           alert(`Rejection Error: ${e.message}`);
       }
@@ -1582,6 +1856,9 @@ const AppContent: React.FC = () => {
   };
 
   if (!currentUser) {
+      if (!usersReady) {
+          return <LoadingPane />;
+      }
       return (
           <Suspense fallback={<LoadingPane />}>
               <LoginScreen onLogin={handleLogin} users={users} onSignUp={addUser as any} />

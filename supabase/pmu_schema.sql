@@ -248,7 +248,7 @@ create table if not exists program_images (
 );
 
 create table if not exists payment_configs (
-  provider text primary key check (provider in ('Wave', 'AfriMoney')),
+  provider text primary key check (provider in ('Wave', 'AfriMoney', 'VendorCommission')),
   is_enabled boolean not null default false,
   environment text not null default 'sandbox' check (environment in ('sandbox', 'production')),
   api_key text not null default '',

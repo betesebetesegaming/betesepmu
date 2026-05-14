@@ -44,8 +44,19 @@ export const checkBackendConnection = async () => {
     if (!supabase) return false;
     try {
         const { error } = await supabase.from('users').select('count', { count: 'exact', head: true }).limit(1);
-        return !error;
-    } catch (e) { return false; }
+        if (!error) return true;
+
+        // Some environments/proxies intermittently reject HEAD probes. Fallback to a tiny GET probe.
+        const { error: fallbackError } = await supabase.from('users').select('id').limit(1);
+        return !fallbackError;
+    } catch (e) {
+        try {
+            const { error: fallbackError } = await supabase.from('users').select('id').limit(1);
+            return !fallbackError;
+        } catch {
+            return false;
+        }
+    }
 };
 
 const isMissingRaceMetadataColumnError = (error: any): boolean => {
@@ -1587,7 +1598,11 @@ export const dbDeleteProgramImage = async (id: string) => {
 
 export const dbFetchPaymentConfigs = async (): Promise<PaymentIntegrationConfig[]> => {
     if (!supabase) return [];
-    const { data, error } = await supabase.from('payment_configs').select('*').order('provider', { ascending: true });
+    const { data, error } = await supabase
+        .from('payment_configs')
+        .select('*')
+        .in('provider', ['Wave', 'AfriMoney'])
+        .order('provider', { ascending: true });
     if (error) return [];
     return (data || []).map((row: any) => ({
         provider: row.provider,
@@ -1644,6 +1659,79 @@ export const dbSavePaymentConfig = async (config: PaymentIntegrationConfig) => {
         merchant_id: config.merchantId,
         webhook_url: config.webhookUrl,
         updated_at: new Date().toISOString()
+    });
+    if (fallbackError) throw fallbackError;
+};
+
+type VendorCommissionConfigRecord = {
+    defaults?: {
+        terminalRate?: number;
+        onlineRate?: number;
+    };
+    overrides?: Record<string, {
+        terminalRate?: number;
+        onlineRate?: number;
+    }>;
+    settlementPlans?: Record<string, 'weekly' | 'monthly'>;
+};
+
+export const dbFetchVendorCommissionConfig = async (): Promise<VendorCommissionConfigRecord | null> => {
+    if (!supabase) return null;
+
+    const { data, error } = await supabase
+        .from('payment_configs')
+        .select('provider, api_key, callback_auth_token')
+        .eq('provider', 'VendorCommission')
+        .maybeSingle();
+
+    if (error) {
+        if (isMissingPaymentConfigColumnError(error)) return null;
+        throw error;
+    }
+    if (!data) return null;
+
+    const raw = String((data as any).callback_auth_token || (data as any).api_key || '').trim();
+    if (!raw) return null;
+
+    try {
+        const parsed = JSON.parse(raw) as VendorCommissionConfigRecord;
+        return {
+            defaults: parsed.defaults || {},
+            overrides: parsed.overrides || {},
+            settlementPlans: parsed.settlementPlans || {},
+        };
+    } catch {
+        return null;
+    }
+};
+
+export const dbSaveVendorCommissionConfig = async (config: VendorCommissionConfigRecord) => {
+    if (!supabase) throw new Error("Database not connected");
+
+    const serialized = JSON.stringify({
+        defaults: config.defaults || {},
+        overrides: config.overrides || {},
+        settlementPlans: config.settlementPlans || {},
+    });
+
+    const fullPayload = {
+        provider: 'VendorCommission',
+        is_enabled: false,
+        environment: 'sandbox',
+        api_key: serialized,
+        callback_auth_token: serialized,
+        updated_at: new Date().toISOString(),
+    };
+
+    const { error } = await supabase.from('payment_configs').upsert(fullPayload);
+    if (!error) return;
+
+    if (!isMissingPaymentConfigColumnError(error)) throw error;
+
+    const { error: fallbackError } = await supabase.from('payment_configs').upsert({
+        provider: 'VendorCommission',
+        api_key: serialized,
+        updated_at: new Date().toISOString(),
     });
     if (fallbackError) throw fallbackError;
 };
