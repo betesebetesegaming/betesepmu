@@ -83,16 +83,23 @@ export const TestPrintPanel: React.FC = () => {
     const [paperWidth, setPaperWidth] = useState<number>(getPrintPaperWidthMm());
     const [saveMessage, setSaveMessage] = useState<string>('');
 
+    const PRESETS = [
+        { label: '57 mm (C8 — Thermer)', value: 57 },
+        { label: '58 mm (Standard BT)', value: 58 },
+        { label: '72 mm', value: 72 },
+        { label: '80 mm', value: 80 },
+    ];
+
     const showTicket = (ticket: Ticket) => setModalContent(<TicketModal ticket={ticket} onClose={() => setModalContent(null)} showPrintButton={true} races={[mockRaceWithResult]} />);
     const showBooking = (ticket: Ticket) => setModalContent(<BookingCodeModal ticket={ticket} onClose={() => setModalContent(null)} />);
     const showRapport = (race: Race) => setModalContent(<RapportModal race={race} onClose={() => setModalContent(null)} showPrintButton={true} />);
 
     const handleSavePrintSettings = () => {
-        const normalizedWidth = Math.min(112, Math.max(48, Math.round(Number(paperWidth) || 58)));
+        const normalizedWidth = Math.min(112, Math.max(48, Math.round(Number(paperWidth) || 57)));
         setPrintPaperMode(paperMode);
         setPrintPaperWidthMm(normalizedWidth);
         setPaperWidth(normalizedWidth);
-        setSaveMessage(`Saved: ${paperMode === 'auto' ? 'Auto width' : `Fixed width ${normalizedWidth}mm`}`);
+        setSaveMessage(`✅ Saved: ${paperMode === 'auto' ? 'Auto width' : `Fixed width ${normalizedWidth}mm`}`);
     };
 
     return (
@@ -102,6 +109,21 @@ export const TestPrintPanel: React.FC = () => {
                 <h2 className="text-xl font-bold text-betese-dark mb-4">Printing Tests</h2>
                 <div className="mb-5 p-4 rounded-lg border border-gray-200 bg-gray-50">
                     <h3 className="text-sm font-black text-gray-800 uppercase tracking-wide mb-3">Permanent Paper Size</h3>
+                    <div className="flex gap-2 flex-wrap mb-3">
+                        {PRESETS.map(p => (
+                            <button
+                                key={p.value}
+                                onClick={() => { setPaperWidth(p.value); setPaperMode('fixed'); }}
+                                className={`px-3 py-1.5 rounded-md text-sm font-bold border ${
+                                    paperWidth === p.value && paperMode === 'fixed'
+                                        ? 'bg-betese-green text-white border-betese-green'
+                                        : 'bg-white text-gray-700 border-gray-300 hover:border-betese-green'
+                                }`}
+                            >
+                                {p.label}
+                            </button>
+                        ))}
+                    </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
                         <label className="flex flex-col gap-1 text-sm text-gray-700">
                             <span className="font-semibold">Mode</span>

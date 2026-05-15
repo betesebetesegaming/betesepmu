@@ -108,13 +108,13 @@ export const setPrintPaperMode = (mode: PrintPaperMode): void => {
 };
 
 export const getPrintPaperWidthMm = (): number => {
-    const raw = Number(localStorage.getItem(PRINT_PAPER_WIDTH_MM_KEY) || '58');
-    if (!Number.isFinite(raw)) return 58;
+    const raw = Number(localStorage.getItem(PRINT_PAPER_WIDTH_MM_KEY) || '57');
+    if (!Number.isFinite(raw)) return 57;
     return clamp(Math.round(raw), 48, 112);
 };
 
 export const setPrintPaperWidthMm = (widthMm: number): void => {
-    const normalized = clamp(Math.round(Number(widthMm) || 58), 48, 112);
+    const normalized = clamp(Math.round(Number(widthMm) || 57), 48, 112);
     localStorage.setItem(PRINT_PAPER_WIDTH_MM_KEY, String(normalized));
 };
 
@@ -285,9 +285,25 @@ export const triggerPrint = (elementId: string): void => {
                 <head>
                     <meta charset="utf-8" />
                     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-                    <style>${printStyle.textContent || ''}</style>
+                    <meta name="thermal-paper-width" content="${paperWidthMm}mm" />
+                    <style>${printStyle.textContent || ''}
+                    /* Thermer guide overlay — visible on screen, hidden when printing */
+                    #betese-print-guide {
+                        position: fixed; top: 0; left: 0; right: 0;
+                        background: #1a1a1a; color: #fff;
+                        font-family: sans-serif; font-size: 14px;
+                        padding: 10px 14px; z-index: 9999;
+                        display: flex; align-items: center; gap: 10px;
+                    }
+                    #betese-print-guide b { color: #fbbf24; }
+                    @media print { #betese-print-guide { display: none !important; } }
+                    </style>
                 </head>
                 <body>
+                    <div id="betese-print-guide">
+                        <span style="font-size:20px">🖨️</span>
+                        <span>At the top tap <b>"Save as PDF"</b> → change to <b>"Thermal Printer"</b>. Paper size: <b>Custom ${paperWidthMm}mm</b> (auto length).</span>
+                    </div>
                     ${stage.outerHTML}
                 </body>
             </html>
@@ -375,10 +391,11 @@ export const triggerPrint = (elementId: string): void => {
             ${html}
             <script>
                 (function () {
-                    const run = function () {
+                    var run = function () {
+                        // Give guide a moment to render, then open print dialog
                         setTimeout(function () {
                             try { window.focus(); window.print(); } catch (e) {}
-                        }, 150);
+                        }, 400);
                     };
                     if (document.readyState === 'complete') run();
                     else window.addEventListener('load', run);
