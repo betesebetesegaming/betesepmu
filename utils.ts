@@ -175,10 +175,12 @@ export const triggerPrint = (elementId: string): void => {
             print-color-adjust: exact !important;
             page-break-inside: avoid !important;
             break-inside: avoid-page !important;
+            font-weight: 900 !important;
+            font-size: 18px !important;
         }
         #betese-print-stage .c { text-align: center !important; }
-        #betese-print-stage .b { font-weight: 900 !important; }
-        #betese-print-stage .huge { font-size: 30px !important; letter-spacing: -1px; line-height: 0.9; margin: 4px 0; }
+        #betese-print-stage .b { font-weight: 900 !important; font-size: 18px !important; }
+        #betese-print-stage .huge { font-size: 32px !important; font-weight: 900 !important; letter-spacing: -1px; line-height: 1.1; margin: 6px 0; }
         #betese-print-stage .solid { border-top: 2px solid black !important; margin: 5px 0 !important; }
         #betese-print-stage .dashed { border-top: 1px dashed black !important; margin: 5px 0 !important; }
         #betese-print-stage .flex { display: flex !important; justify-content: space-between !important; align-items: center !important; }
@@ -198,8 +200,9 @@ export const triggerPrint = (elementId: string): void => {
                 padding: 2mm !important;
                 overflow: visible !important;
                 font-family: 'Courier New', Courier, monospace !important;
-                font-size: 12px !important;
-                line-height: 1.1 !important;
+                font-size: 18px !important;
+                font-weight: 900 !important;
+                line-height: 1.4 !important;
                 color: #000 !important;
                 text-shadow: 0 0 0 #000 !important;
                 page-break-before: avoid !important;
