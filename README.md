@@ -8,6 +8,17 @@ This contains everything you need to run your app locally.
 
 View your app in AI Studio: https://ai.studio/apps/8a0a6433-a001-4676-ac57-90372e4ae581
 
+## Printer Support
+
+**Supported Thermal Printers:**
+- ✅ **Sunmi built-in** - Native AIDL service (recommended for Sunmi v2Pro)
+- ✅ **Mate Bluetooth Printer** - External Bluetooth thermal printer
+- ✅ **Bluetooth Thermal Print** - Generic Bluetooth printers
+- ✅ **RawBT** - RawBT Android app support
+- ✅ **Android native** - System print dialog fallback
+
+**Setup Guide:** See [MATE_BLUETOOTH_PRINTER_SETUP.md](docs/MATE_BLUETOOTH_PRINTER_SETUP.md) for Sunmi v2Pro with Mate app integration.
+
 ## Run Locally
 
 **Prerequisites:**  Node.js
