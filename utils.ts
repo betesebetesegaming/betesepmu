@@ -22,10 +22,16 @@ interface SunmiPrintPlugin {
     cutPaper(): Promise<{ success: boolean }>;
 }
 
+interface MateBTPrintPlugin {
+    printText(options: { text: string; address?: string }): Promise<{ success: boolean; printerName?: string }>;
+    listPrinters(): Promise<{ printers: Array<{ name: string; address: string }> }>;
+}
+
 const NativePrint = registerPlugin<NativePrintPlugin>('NativePrint');
 const BluetoothThermalPrint = registerPlugin<BluetoothThermalPrintPlugin>('BluetoothThermalPrint');
 const RawBtPrint = registerPlugin<RawBtPrintPlugin>('RawBtPrint');
 const SunmiPrint = registerPlugin<SunmiPrintPlugin>('SunmiPrint');
+const MateBTPrint = registerPlugin<MateBTPrintPlugin>('MateBTPrint');
 import { BET_PRICING } from './constants';
 
 // Returns the price for ONE base combination unit (e.g. 30 for CoupleGagnant, 25 for Tiercé)
@@ -384,6 +390,27 @@ export const triggerPrint = (elementId: string): void => {
         return false;
     };
 
+    // Mate Technologies Bluetooth Printer (third-party APK support)
+    const tryMateBTPrint = async (): Promise<boolean> => {
+        if (!isNativeAndroid) return false;
+        try {
+            const preferredAddress = localStorage.getItem('betese_mate_bt_printer_address') || undefined;
+            const result = await MateBTPrint.printText({
+                text: buildPrintableText(),
+                address: preferredAddress
+            });
+            if (result.success) {
+                console.log('Mate BT printer success:', result.printerName);
+                cleanup();
+                return true;
+            }
+            return false;
+        } catch (e) {
+            console.warn('Mate BT print unavailable, fallback to next print mode', e);
+            return false;
+        }
+    };
+
     // Sunmi built-in printer via Sunmi Print AIDL service (direct, no Bluetooth needed)
     const trySunmiBuiltinPrint = async (): Promise<boolean> => {
         if (!isNativeAndroid) return false;
@@ -420,20 +447,23 @@ export const triggerPrint = (elementId: string): void => {
             return;
         }
 
-        // Print chain: Sunmi built-in → BT thermal → NativePrint (non-Sunmi) → RawBT (non-Sunmi) → web print
+        // Print chain: Sunmi built-in → BT thermal → Mate BT → NativePrint (non-Sunmi) → RawBT (non-Sunmi) → web print
         void trySunmiBuiltinPrint().then((sunmiPrinted) => {
             if (sunmiPrinted) return;
             void tryNativeBluetoothThermalPrint().then((btPrinted) => {
                 if (btPrinted) return;
-                if (isSunmiTerminal) {
-                    alert('Sunmi printer is unavailable. Please restart the terminal and reopen Betese app. System print/RawBT fallback is disabled on Sunmi to avoid print-loop errors.');
-                    cleanup();
-                    return;
-                }
-                void tryNativeAndroidPrint().then((printed) => {
-                    if (printed) return;
-                    void tryRawBtPrint().then((rawBtPrinted) => {
-                        if (!rawBtPrinted) doPrint();
+                void tryMateBTPrint().then((matePrinted) => {
+                    if (matePrinted) return;
+                    if (isSunmiTerminal) {
+                        alert('Sunmi printer is unavailable. Please restart the terminal and reopen Betese app. System print/RawBT fallback is disabled on Sunmi to avoid print-loop errors.');
+                        cleanup();
+                        return;
+                    }
+                    void tryNativeAndroidPrint().then((printed) => {
+                        if (printed) return;
+                        void tryRawBtPrint().then((rawBtPrinted) => {
+                            if (!rawBtPrinted) doPrint();
+                        });
                     });
                 });
             });
@@ -454,6 +484,24 @@ export const listPairedThermalPrinters = async (): Promise<Array<{ name: string;
     } catch {
         return [];
     }
+};
+
+export const listMateBTPrinters = async (): Promise<Array<{ name: string; address: string }>> => {
+    if (!(Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android')) return [];
+    try {
+        const result = await MateBTPrint.listPrinters();
+        return result?.printers || [];
+    } catch {
+        return [];
+    }
+};
+
+export const saveMateBluetoothPrinterAddress = (address: string): void => {
+    localStorage.setItem('betese_mate_bt_printer_address', address);
+};
+
+export const getMateBluetoothPrinterAddress = (): string | null => {
+    return localStorage.getItem('betese_mate_bt_printer_address');
 };
 
 export interface WinSummary {

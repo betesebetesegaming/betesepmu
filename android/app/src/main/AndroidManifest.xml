@@ -35,6 +35,11 @@
         </provider>
     </application>
 
+    <!-- Queries for API 30+ -->
+    <queries>
+        <package android:name="com.mateglobal.hardwarelib" />
+    </queries>
+
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />

@@ -7,6 +7,8 @@ import { normalizeGambiaPhone } from '../utils';
 import { AfriMoneyLogo } from './AfriMoneyLogo';
 import { WaveLogo } from './WaveLogo';
 
+const WAVE_MERCHANT_URL = 'https://pay.wave.com/m/M_gm_W5puv7Atyy-N/c/gm/';
+
 interface WalletPanelProps {
   user: User;
     onWithdrawalRequest: (amount: number) => Promise<WithdrawalRequest | null>;
@@ -29,6 +31,23 @@ const getStatusChipStyle = (status: string) => {
     }
 }
 
+const getVerificationBadge = (request: DepositRequest) => {
+    if (request.method !== 'Wave') return null;
+    if (request.verificationStatus === 'PendingProviderConfirmation') {
+        return <span className="inline-flex mt-1 items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-amber-700">Wave Pending Verification</span>;
+    }
+    if (request.verificationStatus === 'Verified' && (request.processedBy === 'SYSTEM' || request.processedByName === 'Wave Direct Deposit')) {
+        return <span className="inline-flex mt-1 items-center rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-blue-700">Wave Direct - Instant Credit</span>;
+    }
+    if (request.verificationStatus === 'Verified') {
+        return <span className="inline-flex mt-1 items-center rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-green-700">Wave Verified</span>;
+    }
+    if (request.verificationStatus === 'VerificationFailed') {
+        return <span className="inline-flex mt-1 items-center rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-red-700">Wave Verification Failed</span>;
+    }
+    return null;
+};
+
 export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequest, withdrawalRequests, onWalletFlash, onDepositRequest, depositRequests, tickets, onCancelWithdrawal }) => {
   const [activeTab, setActiveTab] = useState<'deposit' | 'withdraw'>('deposit');
   
@@ -38,12 +57,18 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
   const [depositPhone, setDepositPhone] = useState(''); // Renamed logic var, used to be txnId
   const [depositMessage, setDepositMessage] = useState('');
   const [lastDepositData, setLastDepositData] = useState<{amount: number, method: string, phone: string} | null>(null);
+    const [waveCheckoutOpen, setWaveCheckoutOpen] = useState(false);
 
   // Withdrawal Form State
   const [withdrawAmount, setWithdrawAmount] = useState<number | ''>('');
   const [withdrawError, setWithdrawError] = useState('');
     const [latestWithdrawalRequest, setLatestWithdrawalRequest] = useState<WithdrawalRequest | null>(null);
   const { t } = useLanguage();
+
+    const isMobileDevice = useMemo(() => {
+            if (typeof navigator === 'undefined') return false;
+            return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+    }, []);
 
     useEffect(() => {
         if (!latestWithdrawalRequest) return;
@@ -95,6 +120,7 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
       e.preventDefault();
       setDepositMessage('');
       setLastDepositData(null);
+      setWaveCheckoutOpen(false);
 
       if (typeof depositAmount !== 'number' || depositAmount <= 0) {
           setDepositMessage('Please enter a valid deposit amount.');
@@ -115,10 +141,29 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
       onDepositRequest(depositAmount, depositMethod, normalizedSenderPhone);
       
       setLastDepositData({ amount: depositAmount, method: depositMethod, phone: normalizedSenderPhone });
-      setDepositMessage(t('success_deposit'));
+      setDepositMessage(
+          depositMethod === 'Wave'
+              ? 'Wave deposit credited to your wallet instantly.'
+              : t('success_deposit')
+      );
+      if (depositMethod === 'Wave') {
+          if (isMobileDevice) {
+              window.location.href = WAVE_MERCHANT_URL;
+          } else {
+              setWaveCheckoutOpen(true);
+          }
+      }
       setDepositAmount('');
       setDepositPhone('');
   }
+
+  const openWaveCheckout = () => {
+      if (isMobileDevice) {
+          window.location.href = WAVE_MERCHANT_URL;
+          return;
+      }
+      window.open(WAVE_MERCHANT_URL, '_blank', 'noopener,noreferrer');
+  };
 
     const handleWithdrawalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -156,6 +201,48 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
                     onClose={() => setLatestWithdrawalRequest(null)}
                 />
             )}
+      {waveCheckoutOpen && lastDepositData && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+              <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+                  <div className="flex items-center justify-between gap-3 border-b pb-4 mb-4">
+                      <div>
+                          <p className="text-xs font-black uppercase tracking-widest text-blue-600">Wave Checkout</p>
+                          <h4 className="text-2xl font-black text-betese-dark">Pay {lastDepositData.amount.toFixed(2)} GMD</h4>
+                      </div>
+                      <WaveLogo height={34} />
+                  </div>
+                  <p className="text-sm text-gray-600 mb-4">
+                      On desktop, scan the QR code below. On phone, use the button to open Wave directly if the app is installed.
+                  </p>
+                  <div className="flex justify-center mb-4">
+                      <img
+                          src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(WAVE_MERCHANT_URL)}`}
+                          alt="Wave payment QR"
+                          className="rounded-2xl border border-gray-200 shadow-lg bg-white p-2"
+                      />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <button
+                          type="button"
+                          onClick={openWaveCheckout}
+                          className="w-full rounded-xl bg-blue-600 px-4 py-3 font-black text-white shadow-lg hover:bg-blue-700 active:scale-95 transition-all"
+                      >
+                          {isMobileDevice ? 'Open Wave App' : 'Open Wave Page'}
+                      </button>
+                      <button
+                          type="button"
+                          onClick={() => setWaveCheckoutOpen(false)}
+                          className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 font-black text-gray-700 hover:bg-gray-50 active:scale-95 transition-all"
+                      >
+                          Close
+                      </button>
+                  </div>
+                  <p className="mt-4 text-xs text-gray-500 break-all">
+                      Betese payment link: <a href={WAVE_MERCHANT_URL} target="_blank" rel="noreferrer" className="font-bold text-blue-600 underline">{WAVE_MERCHANT_URL}</a>
+                  </p>
+              </div>
+          </div>
+      )}
       <h3 className="text-xl font-bold text-betese-dark mb-4">{t('tab_wallet')}</h3>
       
             <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -251,11 +338,11 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
                   <p className="font-bold mb-2">{t('how_to_deposit')}</p>
                   
                   <div className="my-3 p-3 bg-white rounded border border-blue-100 text-center shadow-sm">
-                        <p className="text-xs text-gray-500 uppercase font-bold mb-1">Official Deposit Number</p>
-                        <p className="text-3xl font-black text-betese-dark tracking-wider">4176003</p>
+                        <p className="text-xs text-gray-500 uppercase font-bold mb-1">Wave Payment Link</p>
+                        <p className="text-sm font-black text-betese-dark break-all px-2">{WAVE_MERCHANT_URL}</p>
                         <div className="flex items-center justify-center gap-2 mt-1">
                             <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-                            <p className="text-sm text-blue-700 font-bold">Wave Only</p>
+                            <p className="text-sm text-blue-700 font-bold">Desktop shows QR, phone opens Wave app</p>
                         </div>
                   </div>
 
@@ -328,7 +415,7 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
                   )}
                   {!depositMessage && (
                     <button type="submit" className="w-full px-4 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700">
-                        {t('submit_deposit')}
+                                                {depositMethod === 'Wave' ? 'Continue to Wave Checkout' : t('submit_deposit')}
                     </button>
                   )}
               </form>
@@ -342,6 +429,7 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
                                   <p className="font-bold">{req.amount.toFixed(2)} GMD <span className="text-xs font-normal text-gray-500">({req.method})</span></p>
                                   <p className="text-xs text-gray-500">Phone: {req.transactionId}</p>
                                   <p className="text-xs text-gray-400">{new Date(req.timestamp).toLocaleDateString()}</p>
+                                  {getVerificationBadge(req)}
                               </div>
                               <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusChipStyle(req.status)}`}>{req.status}</span>
                           </div>

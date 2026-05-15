@@ -65,54 +65,6 @@ export const TableScrollNavigator: React.FC<TableScrollNavigatorProps> = ({
 
   return (
     <div className="relative">
-      {canScrollUp && (
-        <button
-          type="button"
-          onClick={() => scrollBy(0, -stepY)}
-          className="print:hidden absolute left-1/2 -translate-x-1/2 top-2 z-20 h-8 w-8 rounded-full bg-betese-green text-white font-black shadow-md hover:bg-green-700"
-          aria-label="Scroll up"
-          title="Move up"
-        >
-          ▲
-        </button>
-      )}
-
-      {canScrollLeft && (
-        <button
-          type="button"
-          onClick={() => scrollBy(-stepX, 0)}
-          className="print:hidden absolute left-2 top-1/2 -translate-y-1/2 z-20 h-8 w-8 rounded-full bg-betese-green text-white font-black shadow-md hover:bg-green-700"
-          aria-label="Scroll left"
-          title="Move left"
-        >
-          ◀
-        </button>
-      )}
-
-      {canScrollRight && (
-        <button
-          type="button"
-          onClick={() => scrollBy(stepX, 0)}
-          className="print:hidden absolute right-2 top-1/2 -translate-y-1/2 z-20 h-8 w-8 rounded-full bg-betese-green text-white font-black shadow-md hover:bg-green-700"
-          aria-label="Scroll right"
-          title="Move right"
-        >
-          ▶
-        </button>
-      )}
-
-      {canScrollDown && (
-        <button
-          type="button"
-          onClick={() => scrollBy(0, stepY)}
-          className="print:hidden absolute left-1/2 -translate-x-1/2 bottom-2 z-20 h-8 w-8 rounded-full bg-betese-green text-white font-black shadow-md hover:bg-green-700"
-          aria-label="Scroll down"
-          title="Move down"
-        >
-          ▼
-        </button>
-      )}
-
       <div ref={viewportRef} className={className}>
         {children}
       </div>

@@ -12,5 +12,6 @@ public class MainActivity extends BridgeActivity {
 		registerPlugin(BluetoothThermalPrintPlugin.class);
 		registerPlugin(RawBtPrintPlugin.class);
 		registerPlugin(SunmiPrintPlugin.class);
+		registerPlugin(MateBTPrintPlugin.class);
 	}
 }

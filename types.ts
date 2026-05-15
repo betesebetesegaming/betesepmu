@@ -183,6 +183,11 @@ export interface DepositRequest {
     processedBy?: string;
     processedByName?: string; // Added to track the name of the staff who processed it
     processedAt?: Date;
+  providerReference?: string;
+  verificationStatus?: 'NotStarted' | 'PendingProviderConfirmation' | 'Verified' | 'VerificationFailed';
+  verificationSource?: 'manual-review' | 'client-fallback' | 'webhook' | 'status-poll';
+  verificationMessage?: string;
+  verifiedAt?: Date;
 }
 
 export interface DepositLog {

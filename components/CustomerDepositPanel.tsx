@@ -298,6 +298,11 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
                                     <p className="font-bold text-lg">{req.customerName}</p>
                                     <p className="text-sm flex items-center gap-1">Request: <span className="font-bold">{req.amount} GMD</span> via {req.method === 'Wave' ? <WaveLogo height={16} /> : req.method === 'AfriMoney' ? <AfriMoneyLogo height={16} /> : <span className="font-bold">{req.method}</span>}</p>
                                     <p className="text-xs text-gray-500">Phone: {req.transactionId}</p>
+                                    {req.method === 'Wave' && (
+                                        <p className="text-xs text-amber-700 font-semibold mt-1">
+                                            Verification: {req.verificationStatus || 'PendingProviderConfirmation'}
+                                        </p>
+                                    )}
                                     <div className="flex gap-2 mt-3">
                                         {onApproveDepositRequest && <button onClick={() => onApproveDepositRequest(req.id)} className="bg-green-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-green-700">Approve & Credit</button>}
                                         {onRejectDepositRequest && <button onClick={() => onRejectDepositRequest(req.id)} className="bg-red-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-red-700">Reject</button>}
@@ -553,6 +558,9 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
                                           <span className={`px-2 py-0.5 rounded-full font-bold ${req.status === 'Approved' ? 'bg-green-100 text-green-700' : req.status === 'Rejected' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
                                               {req.status}
                                           </span>
+                                          {req.method === 'Wave' && req.verificationStatus && (
+                                              <span className="ml-2 text-[10px] font-black uppercase text-blue-700">{req.verificationStatus}</span>
+                                          )}
                                       </td>
                                       <td className="px-2 py-1">{req.processedByName || '-'}</td>
                                   </tr>
