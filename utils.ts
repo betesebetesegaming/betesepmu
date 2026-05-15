@@ -91,6 +91,33 @@ export const isValidGambiaPhone = (input: string): boolean => {
 export const SEVEN_DAYS_IN_MS = 7 * 24 * 60 * 60 * 1000;
 export const BETTING_CUTOFF_MS = 120000; // Strict 2 Minutes
 
+const PRINT_PAPER_MODE_KEY = 'betese_print_paper_mode';
+const PRINT_PAPER_WIDTH_MM_KEY = 'betese_print_paper_width_mm';
+
+type PrintPaperMode = 'auto' | 'fixed';
+
+const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
+
+export const getPrintPaperMode = (): PrintPaperMode => {
+    const raw = localStorage.getItem(PRINT_PAPER_MODE_KEY);
+    return raw === 'fixed' ? 'fixed' : 'auto';
+};
+
+export const setPrintPaperMode = (mode: PrintPaperMode): void => {
+    localStorage.setItem(PRINT_PAPER_MODE_KEY, mode === 'fixed' ? 'fixed' : 'auto');
+};
+
+export const getPrintPaperWidthMm = (): number => {
+    const raw = Number(localStorage.getItem(PRINT_PAPER_WIDTH_MM_KEY) || '58');
+    if (!Number.isFinite(raw)) return 58;
+    return clamp(Math.round(raw), 48, 112);
+};
+
+export const setPrintPaperWidthMm = (widthMm: number): void => {
+    const normalized = clamp(Math.round(Number(widthMm) || 58), 48, 112);
+    localStorage.setItem(PRINT_PAPER_WIDTH_MM_KEY, String(normalized));
+};
+
 export const getEffectiveTicketStatus = (ticket: Ticket, now: Date): Ticket['status'] | 'Expired' => {
   const ticketAge = now.getTime() - ticket.timestamp.getTime();
   if (['Winning', 'Active'].includes(ticket.status) && ticketAge > SEVEN_DAYS_IN_MS) {
@@ -110,6 +137,18 @@ export const triggerPrint = (elementId: string): void => {
         return;
     }
 
+    const pxPerMm = 96 / 25.4;
+    const sourceRect = sourceElement.getBoundingClientRect();
+    const measuredSourceWidthPx = Math.max(sourceElement.scrollWidth || 0, Math.ceil(sourceRect.width || 0));
+    const measuredContentWidthMm = Math.ceil(measuredSourceWidthPx / pxPerMm) + 4;
+    const paperMode = getPrintPaperMode();
+    const fixedPaperWidthMm = getPrintPaperWidthMm();
+    const paperWidthMm = paperMode === 'fixed'
+        ? fixedPaperWidthMm
+        : clamp(measuredContentWidthMm, 48, 112);
+    const qrWidthMm = clamp(Math.round(paperWidthMm * 0.68), 30, 72);
+    const textColumns = clamp(Math.round(paperWidthMm * (32 / 58)), 24, 64);
+
     const oldStage = document.getElementById('betese-print-stage');
     if (oldStage) oldStage.remove();
     const oldStyle = document.getElementById('betese-print-style');
@@ -122,7 +161,7 @@ export const triggerPrint = (elementId: string): void => {
             position: fixed;
             left: -10000px;
             top: 0;
-            width: 58mm;
+            width: ${paperWidthMm}mm;
             padding: 0;
             margin: 0;
             background: #fff;
@@ -143,7 +182,7 @@ export const triggerPrint = (elementId: string): void => {
         #betese-print-stage .solid { border-top: 2px solid black !important; margin: 5px 0 !important; }
         #betese-print-stage .dashed { border-top: 1px dashed black !important; margin: 5px 0 !important; }
         #betese-print-stage .flex { display: flex !important; justify-content: space-between !important; align-items: center !important; }
-        #betese-print-stage img { display: block !important; margin: 5px auto !important; max-width: 40mm !important; }
+        #betese-print-stage img { display: block !important; margin: 5px auto !important; max-width: ${qrWidthMm}mm !important; }
         #betese-print-stage, #betese-print-stage * { visibility: visible !important; }
         @media print {
             body > *:not(#betese-print-stage):not(script):not(style) {
@@ -152,7 +191,9 @@ export const triggerPrint = (elementId: string): void => {
             #betese-print-stage {
                 position: static !important;
                 left: 0 !important;
-                width: 58mm !important;
+                width: ${paperWidthMm}mm !important;
+                min-height: 0 !important;
+                height: auto !important;
                 margin: 0 !important;
                 padding: 2mm !important;
                 overflow: visible !important;
@@ -166,7 +207,7 @@ export const triggerPrint = (elementId: string): void => {
                 page-break-inside: avoid !important;
                 break-inside: avoid-page !important;
             }
-            @page { margin: 0; size: 58mm auto; }
+            @page { margin: 0; size: ${paperWidthMm}mm auto; }
         }
     `;
     document.head.appendChild(printStyle);
@@ -254,8 +295,8 @@ export const triggerPrint = (elementId: string): void => {
     };
 
     const buildPrintableText = (): string => {
-        // 58mm Bluetooth thermal paper = 32 characters wide at standard font size
-        const W = 32;
+        // Scale character width with configured paper width.
+        const W = textColumns;
         const divider = (ch = '-') => ch.repeat(W);
         const center = (s: string) => {
             const padded = s.slice(0, W);

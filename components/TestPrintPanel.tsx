@@ -4,6 +4,7 @@ import { TicketModal } from './TicketModal';
 import { RapportModal } from './RapportModal';
 import { BookingCodeModal } from './BookingCodeModal';
 import { Ticket, Race, BetTypeOption, Payouts } from '../types';
+import { getPrintPaperMode, getPrintPaperWidthMm, setPrintPaperMode, setPrintPaperWidthMm } from '../utils';
 
 // Mock data for generating printable samples
 const MOCK_VENDOR = { id: 'VEND-TEST', name: 'Test Vendor' };
@@ -78,16 +79,64 @@ const mockRaceWithResult: Race = {
 
 export const TestPrintPanel: React.FC = () => {
     const [modalContent, setModalContent] = useState<React.ReactNode | null>(null);
+    const [paperMode, setPaperMode] = useState<'auto' | 'fixed'>(getPrintPaperMode());
+    const [paperWidth, setPaperWidth] = useState<number>(getPrintPaperWidthMm());
+    const [saveMessage, setSaveMessage] = useState<string>('');
 
     const showTicket = (ticket: Ticket) => setModalContent(<TicketModal ticket={ticket} onClose={() => setModalContent(null)} showPrintButton={true} races={[mockRaceWithResult]} />);
     const showBooking = (ticket: Ticket) => setModalContent(<BookingCodeModal ticket={ticket} onClose={() => setModalContent(null)} />);
     const showRapport = (race: Race) => setModalContent(<RapportModal race={race} onClose={() => setModalContent(null)} showPrintButton={true} />);
+
+    const handleSavePrintSettings = () => {
+        const normalizedWidth = Math.min(112, Math.max(48, Math.round(Number(paperWidth) || 58)));
+        setPrintPaperMode(paperMode);
+        setPrintPaperWidthMm(normalizedWidth);
+        setPaperWidth(normalizedWidth);
+        setSaveMessage(`Saved: ${paperMode === 'auto' ? 'Auto width' : `Fixed width ${normalizedWidth}mm`}`);
+    };
 
     return (
         <>
             {modalContent}
             <div className="bg-white p-6 rounded-lg shadow-lg">
                 <h2 className="text-xl font-bold text-betese-dark mb-4">Printing Tests</h2>
+                <div className="mb-5 p-4 rounded-lg border border-gray-200 bg-gray-50">
+                    <h3 className="text-sm font-black text-gray-800 uppercase tracking-wide mb-3">Permanent Paper Size</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                        <label className="flex flex-col gap-1 text-sm text-gray-700">
+                            <span className="font-semibold">Mode</span>
+                            <select
+                                value={paperMode}
+                                onChange={(e) => setPaperMode(e.target.value as 'auto' | 'fixed')}
+                                className="px-3 py-2 rounded-md border border-gray-300 bg-white"
+                            >
+                                <option value="auto">Auto (fit content width)</option>
+                                <option value="fixed">Fixed width</option>
+                            </select>
+                        </label>
+                        <label className="flex flex-col gap-1 text-sm text-gray-700">
+                            <span className="font-semibold">Paper Width (mm)</span>
+                            <input
+                                type="number"
+                                min={48}
+                                max={112}
+                                step={1}
+                                value={paperWidth}
+                                onChange={(e) => setPaperWidth(Number(e.target.value))}
+                                disabled={paperMode !== 'fixed'}
+                                className="px-3 py-2 rounded-md border border-gray-300 bg-white disabled:bg-gray-100"
+                            />
+                        </label>
+                        <button
+                            onClick={handleSavePrintSettings}
+                            className="px-4 py-2 bg-betese-green text-white font-bold rounded-md hover:brightness-110"
+                        >
+                            Save Printer Size
+                        </button>
+                    </div>
+                    <p className="mt-2 text-xs text-gray-600">Auto mode calculates the exact content width per ticket and keeps paper length flexible for long printouts.</p>
+                    {saveMessage && <p className="mt-2 text-xs font-bold text-green-700">{saveMessage}</p>}
+                </div>
                 <p className="text-sm text-gray-600 mb-6">
                     Click a button to open a sample document. Use the "Print" button inside the popup to test your printer and print layouts.
                 </p>
