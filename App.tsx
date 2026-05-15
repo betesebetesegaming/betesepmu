@@ -1453,50 +1453,32 @@ const AppContent: React.FC = () => {
         return null;
     }
 
+    const trimmedName = String(name || '').trim();
+    if (!trimmedName) {
+        alert('Name is required.');
+        return null;
+    }
+
     if (role === 'Admin') {
         if (currentUser.role !== 'Admin') {
             alert('Only Admin can create another Admin account.');
             return null;
         }
 
-        const acceptedCurrentSecrets = new Set(
-            [
-                String(currentUser.correctionPin || '').trim(),
-                String(currentUser.password || '').trim()
-            ].filter(Boolean)
-        );
-        const acceptedPins = new Set([
-            ...acceptedCurrentSecrets,
-            String(correctionPin || '').trim()
-        ].filter(Boolean));
+        const latestUsers = supabase
+            ? await dbFetchUsers().catch(() => users)
+            : users;
+        const normalizedLatestUsers = (latestUsers || []).map(u => ({ ...u, role: normalizeRole(u.role) }));
+        const adminUsers = normalizedLatestUsers.filter(u => u.role === 'Admin');
 
-        const isSeedAdmin = !String(currentUser.createdById || '').trim();
-
-        if (acceptedCurrentSecrets.size > 0) {
-            const approvalPin = window.prompt('Security check: enter your current Admin password/PIN (or the new Admin correction PIN you just entered).');
-            if (!acceptedPins.has(String(approvalPin || '').trim())) {
-                if (isSeedAdmin) {
-                    const proceedSeedFallback = window.confirm('PIN mismatch detected. As original Admin, continue with confirmation phrase only?');
-                    if (!proceedSeedFallback) {
-                        alert('Admin account creation canceled.');
-                        return null;
-                    }
-                } else {
-                    alert('Invalid PIN. Use current Admin password/PIN, or the new Admin correction PIN field value. Admin account creation canceled.');
-                    return null;
-                }
-            }
-        } else {
-            const proceedWithoutPin = window.confirm('No Admin PIN is configured on this original account. Continue with confirmation phrase only?');
-            if (!proceedWithoutPin) {
-                alert('Admin account creation canceled.');
-                return null;
-            }
+        if (adminUsers.length >= 3) {
+            alert('Maximum Admin accounts reached (3). Remove or change an existing Admin before creating another.');
+            return null;
         }
 
-        const confirmation = window.prompt('Type CREATE ADMIN to confirm this high-privilege action.');
-        if (String(confirmation || '').trim().toUpperCase() !== 'CREATE ADMIN') {
-            alert('Confirmation phrase mismatch. Admin account creation canceled.');
+        const duplicateAdminName = adminUsers.some(u => String(u.name || '').trim().toLowerCase() === trimmedName.toLowerCase());
+        if (duplicateAdminName) {
+            alert('An Admin with this name already exists. Use a different Admin name.');
             return null;
         }
     }
@@ -1527,8 +1509,8 @@ const AppContent: React.FC = () => {
     }
 
     const newUser: User = {
-      id: role === 'Customer' ? (normalizedPhone || Math.floor(10000000 + Math.random() * 90000000).toString()) : (role.toUpperCase().slice(0, 3) + '-' + name.toUpperCase()),
-      name,
+            id: role === 'Customer' ? (normalizedPhone || Math.floor(10000000 + Math.random() * 90000000).toString()) : (role.toUpperCase().slice(0, 3) + '-' + trimmedName.toUpperCase()),
+            name: trimmedName,
       role,
       isLocked: false,
       phone: normalizedPhone,
