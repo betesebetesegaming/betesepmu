@@ -137,15 +137,22 @@ export const triggerPrint = (elementId: string): void => {
         return;
     }
 
+    const isAndroidTerminal = /android|sunmi/i.test(navigator.userAgent || '');
+    const isNativeAndroid = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
+    const isSunmiTerminal = /sunmi/i.test(navigator.userAgent || '') ||
+        /sunmi/i.test((window as any).SunmiModelName || '') ||
+        typeof (window as any).SunmiInnerPrinter !== 'undefined';
+
     const pxPerMm = 96 / 25.4;
     const sourceRect = sourceElement.getBoundingClientRect();
     const measuredSourceWidthPx = Math.max(sourceElement.scrollWidth || 0, Math.ceil(sourceRect.width || 0));
     const measuredContentWidthMm = Math.ceil(measuredSourceWidthPx / pxPerMm) + 4;
     const paperMode = getPrintPaperMode();
     const fixedPaperWidthMm = getPrintPaperWidthMm();
+    const minimumPaperWidthMm = isAndroidTerminal ? 57 : 48;
     const paperWidthMm = paperMode === 'fixed'
-        ? fixedPaperWidthMm
-        : clamp(measuredContentWidthMm, 48, 112);
+        ? clamp(fixedPaperWidthMm, minimumPaperWidthMm, 112)
+        : clamp(measuredContentWidthMm, minimumPaperWidthMm, 112);
     const qrWidthMm = clamp(Math.round(paperWidthMm * 0.68), 30, 72);
     const textColumns = clamp(Math.round(paperWidthMm * (32 / 58)), 24, 64);
 
@@ -233,12 +240,6 @@ export const triggerPrint = (elementId: string): void => {
         });
     }
     document.body.appendChild(stage);
-
-    const isAndroidTerminal = /android|sunmi/i.test(navigator.userAgent || '');
-    const isNativeAndroid = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
-    const isSunmiTerminal = /sunmi/i.test(navigator.userAgent || '') ||
-        /sunmi/i.test((window as any).SunmiModelName || '') ||
-        typeof (window as any).SunmiInnerPrinter !== 'undefined';
 
     const cleanup = () => {
         const s = document.getElementById('betese-print-stage');
@@ -497,13 +498,9 @@ export const triggerPrint = (elementId: string): void => {
             return;
         }
 
-        // Browser mode on non-Sunmi Android terminals.
-        // Try popup print first because many Android WebViews only print from a top-level page.
-        const popupPrinted = tryAndroidBrowserPopupPrint();
-        if (popupPrinted) return;
-
         if (!isNativeAndroid) {
-            alert('Printing is blocked by terminal browser popup settings. Please allow popups for this site or use the installed Betese APK for stable thermal printing.');
+            // On Android browser terminals, print from the current page.
+            // Popup mode often resets destination to Save as PDF (A4) and shrinks tickets.
             doPrint();
             return;
         }
