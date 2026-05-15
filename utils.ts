@@ -138,6 +138,7 @@ export const triggerPrint = (elementId: string): void => {
         #betese-print-stage .dashed { border-top: 1px dashed black !important; margin: 5px 0 !important; }
         #betese-print-stage .flex { display: flex !important; justify-content: space-between !important; align-items: center !important; }
         #betese-print-stage img { display: block !important; margin: 5px auto !important; max-width: 40mm !important; }
+        #betese-print-stage, #betese-print-stage * { visibility: visible !important; }
         @media print {
             body > *:not(#betese-print-stage):not(script):not(style) {
                 display: none !important;
@@ -167,6 +168,20 @@ export const triggerPrint = (elementId: string): void => {
     const stage = document.createElement('div');
     stage.id = 'betese-print-stage';
     stage.innerHTML = sourceElement.outerHTML;
+    // Strip off-screen / hidden styles from the cloned root so print isn't blank
+    const clonedRoot = stage.firstElementChild as HTMLElement | null;
+    if (clonedRoot) {
+        clonedRoot.style.visibility = 'visible';
+        clonedRoot.style.position = 'static';
+        clonedRoot.style.left = '0';
+        clonedRoot.style.top = '0';
+        clonedRoot.style.opacity = '1';
+        // Also remove Tailwind off-screen classes that survive the clone
+        clonedRoot.classList.remove('absolute', 'pointer-events-none');
+        clonedRoot.classList.forEach(cls => {
+            if (cls.startsWith('left-[') || cls.startsWith('-left-')) clonedRoot.classList.remove(cls);
+        });
+    }
     document.body.appendChild(stage);
 
     const isAndroidTerminal = /android|sunmi/i.test(navigator.userAgent || '');
