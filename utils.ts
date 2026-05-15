@@ -150,9 +150,11 @@ export const triggerPrint = (elementId: string): void => {
     const paperMode = getPrintPaperMode();
     const fixedPaperWidthMm = getPrintPaperWidthMm();
     const minimumPaperWidthMm = isAndroidTerminal ? 57 : 48;
-    const paperWidthMm = paperMode === 'fixed'
+    const requestedPaperWidthMm = paperMode === 'fixed'
         ? clamp(fixedPaperWidthMm, minimumPaperWidthMm, 112)
         : clamp(measuredContentWidthMm, minimumPaperWidthMm, 112);
+    // Android terminal print services are most stable at ISO C8-equivalent 57mm width.
+    const paperWidthMm = isAndroidTerminal ? 57 : requestedPaperWidthMm;
     const qrWidthMm = clamp(Math.round(paperWidthMm * 0.68), 30, 72);
     const textColumns = clamp(Math.round(paperWidthMm * (32 / 58)), 24, 64);
 
@@ -306,7 +308,7 @@ export const triggerPrint = (elementId: string): void => {
                 <body>
                     <div id="betese-print-guide">
                         <span style="font-size:20px">🖨️</span>
-                        <span>At the top tap <b>"Save as PDF"</b> → change to <b>"Thermal Printer"</b>. Paper size: <b>Custom ${paperWidthMm}mm</b> (auto length).</span>
+                        <span>Select <b>Thermal Printer</b>. Paper size: <b>ISO C8 / 57mm</b>. Length: <b>Auto</b>. Do not use A4.</span>
                     </div>
                     ${stage.outerHTML}
                 </body>
