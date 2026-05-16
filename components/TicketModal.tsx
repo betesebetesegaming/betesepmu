@@ -26,57 +26,35 @@ export const TicketModal: React.FC<TicketModalProps> = ({ ticket, onClose, showP
   });
 
   const renderStandardTicket = () => (
-    <div className="text-black bg-white font-mono leading-[0.85] overflow-hidden">
-      <div className="c b text-base border-b border-black text-center pb-0.5 uppercase">Betese PMU</div>
-      
-      {/* 75% Layout: Reference and Time merged */}
-      <div className="flex b text-[8px] my-0.5 justify-between px-0.5">
-        <span>REF:#{ticket.id}</span>
-        <span>{ticket.timestamp.toLocaleDateString([], {day:'2-digit', month:'2-digit'})} {ticket.timestamp.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
-      </div>
-      <div className="flex b text-[7px] my-0.5 justify-between px-0.5 uppercase">
-        <span>VENDOR:</span>
-        <span className="truncate ml-2">{ticket.vendorName || ticket.vendorId || 'N/A'}</span>
-      </div>
+    <div className="text-black bg-white font-mono leading-tight overflow-hidden px-1 py-1">
+      <div className="c b text-lg border-b border-black text-center pb-1 uppercase">Betese PMU</div>
 
-      <div className="border-t border-b border-black py-0.5">
+      <div className="c b text-sm mt-1">Ticket #{ticket.id}</div>
+      <div className="c b text-sm">{ticket.timestamp.toLocaleDateString([], { day: '2-digit', month: '2-digit', year: 'numeric' })} at {ticket.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+      <div className="c b text-xl mt-1">{ticket.vendorName || ticket.vendorId || 'N/A'}</div>
+
+      <div className="border-y border-black my-1 py-1">
         {ticket.selections.map((sel, i) => (
-          <div key={i} className="mb-0.5 last:mb-0">
-            <div className="flex b text-[7.5px] justify-between uppercase leading-none px-0.5">
-              <span>{sel.raceName.slice(0,14)}</span>
-              <span>{sel.betType}</span>
+          <div key={i} className="mb-2 last:mb-0">
+            <div className="c b text-xl uppercase">{sel.raceName}</div>
+            <div className="c b text-base uppercase">{sel.betType}</div>
+            <div className="c b huge mt-1">
+              {sel.pattern && sel.pattern.length > 0
+                ? sel.pattern.join('-')
+                : (sel.xCount > 0 ? 'X-'.repeat(sel.xCount) : '') + sel.numbers.join('-')}
             </div>
-            
-            <div className="c bg-black text-white px-1 my-0.5 text-center">
-                {/* Massive Bold Numbers for Thermal Sharpness */}
-                <div className="huge b tracking-tighter py-0.5">
-                {sel.pattern && sel.pattern.length > 0 
-                    ? sel.pattern.join('-') 
-                    : (sel.xCount > 0 ? 'X-'.repeat(sel.xCount) : '') + sel.numbers.join('-')
-                }
-                </div>
-            </div>
-
-            <div className="flex text-[8px] justify-between px-0.5 leading-none">
-              <span className="opacity-80 uppercase font-bold">STAKE x{sel.multiplier}</span>
-              <span className="b">GMD {(sel.cost * sel.multiplier).toFixed(0)}</span>
-            </div>
+            <div className="c b text-lg">{sel.multiplier} ticket(s)</div>
+            <div className="c b text-2xl">Amount {(sel.cost * sel.multiplier).toFixed(0)} GMD</div>
           </div>
         ))}
       </div>
 
-      {/* Merged Total row */}
-      <div className="flex justify-between items-center b mt-1 px-1">
-        <span className="text-[7.5px] uppercase">T.COST:</span>
-        <span className="text-lg leading-none">GMD {ticket.totalCost.toFixed(0)}</span>
-      </div>
+      <div className="c b text-3xl mt-1">Total {ticket.totalCost.toFixed(0)} GMD</div>
+      <div className="c b text-base mt-3">*** Valid for 7 days ***</div>
+      <div className="c b text-base">#{ticket.id}</div>
 
-      <div className="text-center b uppercase text-[5.5px] border-y border-black py-0.5 my-1">
-        No Refund. Official Betese Receipt.
-      </div>
-
-      <div className="text-center pb-0.5">
-        <img src={qrUrl} alt="QR" className="w-[42px] h-[42px] mx-auto block" />
+      <div className="text-center mt-2 pb-1">
+        <img src={qrUrl} alt="QR" className="w-[70px] h-[70px] mx-auto block" />
       </div>
     </div>
   );
