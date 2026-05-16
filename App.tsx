@@ -176,6 +176,13 @@ const AppContent: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [users, setUsers] = useState<User[]>([]);
     const [usersReady, setUsersReady] = useState(false);
+    const [sessionRestorePending, setSessionRestorePending] = useState(() => {
+        try {
+            return Boolean(localStorage.getItem(ACTIVE_USER_ID_KEY));
+        } catch {
+            return false;
+        }
+    });
     const [races, setRaces] = useState<Race[]>([]);
   const [placedTickets, setPlacedTickets] = useState<Ticket[]>([]); 
   const [systemKey, setSystemKey] = useState(0); 
@@ -381,11 +388,15 @@ const AppContent: React.FC = () => {
   useEffect(() => {
       let isMounted = true;
       const readyTimeout = window.setTimeout(() => {
-          if (isMounted) setUsersReady(true);
+          if (isMounted) {
+              setUsersReady(true);
+              setSessionRestorePending(false);
+          }
       }, 7000);
 
       if (!supabase) {
           setUsersReady(true);
+          setSessionRestorePending(false);
           return () => {
               isMounted = false;
               window.clearTimeout(readyTimeout);
@@ -413,7 +424,10 @@ const AppContent: React.FC = () => {
               // Keep login accessible even if initial fetch fails or stalls.
           })
           .finally(() => {
-              if (isMounted) setUsersReady(true);
+              if (isMounted) {
+                  setUsersReady(true);
+                  setSessionRestorePending(false);
+              }
               window.clearTimeout(readyTimeout);
           });
 
@@ -1926,7 +1940,7 @@ const AppContent: React.FC = () => {
   };
 
   if (!currentUser) {
-      if (!usersReady) {
+      if (!usersReady || sessionRestorePending) {
           return <LoadingPane />;
       }
       return (
