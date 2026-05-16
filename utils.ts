@@ -490,13 +490,8 @@ export const triggerPrint = (elementId: string): void => {
     };
 
     if (isAndroidTerminal) {
-        // On Sunmi in BROWSER mode: never attempt popup/system print — it causes Google Play blinking loop.
-        // Direct user to install the Betese APK which has the built-in Sunmi printer plugin.
-        if (isSunmiTerminal && !isNativeAndroid) {
-            alert('Please use the installed Betese PMU app (APK) on this terminal to print. Browser printing is not supported on Sunmi — it will open Google Play instead of printing.');
-            cleanup();
-            return;
-        }
+        // Android browser mode should keep a simple web-print path for terminals.
+        // This matches the original behavior users rely on.
 
         if (!isNativeAndroid) {
             // Use dedicated popup print page on Android browsers so we print ticket/report only.
@@ -514,11 +509,6 @@ export const triggerPrint = (elementId: string): void => {
                 if (btPrinted) return;
                 void tryMateBTPrint().then((matePrinted) => {
                     if (matePrinted) return;
-                    if (isSunmiTerminal) {
-                        alert('Sunmi printer is unavailable. Please restart the terminal and reopen Betese app. System print/RawBT fallback is disabled on Sunmi to avoid print-loop errors.');
-                        cleanup();
-                        return;
-                    }
                     void tryNativeAndroidPrint().then((printed) => {
                         if (printed) return;
                         void tryRawBtPrint().then((rawBtPrinted) => {
