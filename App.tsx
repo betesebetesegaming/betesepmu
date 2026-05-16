@@ -28,14 +28,43 @@ import {
     dbMigrateLegacyBookedTicketsToActive, dbFetchDepositLogs, dbInsertDepositLog
 } from './supabaseClient';
 
-const LoginScreen = lazy(() => import('./components/LoginScreen').then(m => ({ default: m.LoginScreen })));
-const BettingTerminal = lazy(() => import('./components/BettingTerminal').then(m => ({ default: m.BettingTerminal })));
-const AdminDashboard = lazy(() => import('./components/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
-const SupervisorDashboard = lazy(() => import('./components/SupervisorDashboard').then(m => ({ default: m.SupervisorDashboard })));
-const CustomerDashboard = lazy(() => import('./components/CustomerDashboard').then(m => ({ default: m.CustomerDashboard })));
-const TicketModal = lazy(() => import('./components/TicketModal').then(m => ({ default: m.TicketModal })));
-const ChatPanel = lazy(() => import('./components/ChatSystem').then(m => ({ default: m.ChatPanel })));
-const EmergencyRecover = lazy(() => import('./components/EmergencyRecover').then(m => ({ default: m.EmergencyRecover })));
+const LAZY_CHUNK_RETRY_KEY = 'betese_lazy_chunk_retry';
+
+const lazyWithChunkRecovery = <T,>(importer: () => Promise<{ default: T }>) =>
+    lazy(async () => {
+        try {
+            const mod = await importer();
+            try { sessionStorage.removeItem(LAZY_CHUNK_RETRY_KEY); } catch {}
+            return mod;
+        } catch (error) {
+            const msg = String((error as any)?.message || error || '');
+            const isChunkLoadError = /failed to fetch dynamically imported module|loading chunk|chunkloaderror|importing a module script failed/i.test(msg);
+            if (isChunkLoadError && typeof window !== 'undefined') {
+                let hasRetried = false;
+                try {
+                    hasRetried = sessionStorage.getItem(LAZY_CHUNK_RETRY_KEY) === '1';
+                } catch {}
+                if (!hasRetried) {
+                    try { sessionStorage.setItem(LAZY_CHUNK_RETRY_KEY, '1'); } catch {}
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('refresh', Date.now().toString());
+                    window.location.replace(url.toString());
+                    await new Promise(() => {});
+                }
+                try { sessionStorage.removeItem(LAZY_CHUNK_RETRY_KEY); } catch {}
+            }
+            throw error;
+        }
+    });
+
+const LoginScreen = lazyWithChunkRecovery(() => import('./components/LoginScreen').then(m => ({ default: m.LoginScreen })));
+const BettingTerminal = lazyWithChunkRecovery(() => import('./components/BettingTerminal').then(m => ({ default: m.BettingTerminal })));
+const AdminDashboard = lazyWithChunkRecovery(() => import('./components/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
+const SupervisorDashboard = lazyWithChunkRecovery(() => import('./components/SupervisorDashboard').then(m => ({ default: m.SupervisorDashboard })));
+const CustomerDashboard = lazyWithChunkRecovery(() => import('./components/CustomerDashboard').then(m => ({ default: m.CustomerDashboard })));
+const TicketModal = lazyWithChunkRecovery(() => import('./components/TicketModal').then(m => ({ default: m.TicketModal })));
+const ChatPanel = lazyWithChunkRecovery(() => import('./components/ChatSystem').then(m => ({ default: m.ChatPanel })));
+const EmergencyRecover = lazyWithChunkRecovery(() => import('./components/EmergencyRecover').then(m => ({ default: m.EmergencyRecover })));
 
 const LoadingPane: React.FC = () => (
     <div className="rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-600">Loading...</div>
