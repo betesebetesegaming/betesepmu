@@ -30,6 +30,56 @@ import {
 
 const LAZY_CHUNK_RETRY_KEY = 'betese_lazy_chunk_retry';
 const ACTIVE_USER_ID_KEY = 'betese_active_user_id';
+const ACTIVE_USER_CACHE_KEY = 'betese_active_user_cache';
+
+const normalizeCachedUser = (value: any): User | null => {
+    if (!value || typeof value !== 'object') return null;
+    const id = String(value.id || '').trim();
+    const name = String(value.name || '').trim();
+    const role = normalizeRole(value.role);
+    if (!id || !name) return null;
+
+    return {
+        id,
+        name,
+        role,
+        isLocked: Boolean(value.isLocked),
+        phone: value.phone || undefined,
+        password: value.password || undefined,
+        correctionPin: value.correctionPin || undefined,
+        walletBalance: Number(value.walletBalance ?? 0),
+        bonusBalance: Number(value.bonusBalance ?? 0),
+        totalDepositedAmount: Number(value.totalDepositedAmount ?? 0),
+        firstDepositAt: value.firstDepositAt ? new Date(value.firstDepositAt) : undefined,
+        createdById: value.createdById || undefined,
+        createdByName: value.createdByName || undefined,
+    };
+};
+
+const readCachedActiveUser = (): User | null => {
+    try {
+        const raw = localStorage.getItem(ACTIVE_USER_CACHE_KEY);
+        if (!raw) return null;
+        return normalizeCachedUser(JSON.parse(raw));
+    } catch {
+        return null;
+    }
+};
+
+const writeCachedActiveUser = (user: User): void => {
+    try {
+        localStorage.setItem(ACTIVE_USER_CACHE_KEY, JSON.stringify({
+            ...user,
+            firstDepositAt: user.firstDepositAt ? user.firstDepositAt.toISOString() : undefined,
+        }));
+    } catch {}
+};
+
+const clearCachedActiveUser = (): void => {
+    try {
+        localStorage.removeItem(ACTIVE_USER_CACHE_KEY);
+    } catch {}
+};
 
 const lazyWithChunkRecovery = <T,>(importer: () => Promise<{ default: T }>) =>
     lazy(async () => {
@@ -173,12 +223,12 @@ const fileToDataUrl = (file: File): Promise<string> => {
 };
 
 const AppContent: React.FC = () => {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+    const [currentUser, setCurrentUser] = useState<User | null>(() => readCachedActiveUser());
     const [users, setUsers] = useState<User[]>([]);
     const [usersReady, setUsersReady] = useState(false);
     const [sessionRestorePending, setSessionRestorePending] = useState(() => {
         try {
-            return Boolean(localStorage.getItem(ACTIVE_USER_ID_KEY));
+            return !readCachedActiveUser() && Boolean(localStorage.getItem(ACTIVE_USER_ID_KEY));
         } catch {
             return false;
         }
@@ -328,8 +378,12 @@ const AppContent: React.FC = () => {
               setUsers(normalizedUsers);
               if (targetUser) {
                   const freshCurrentUser = normalizedUsers.find((item) => item.id === targetUser.id);
-                  if (freshCurrentUser) {
+                  if (freshCurrentUser && !freshCurrentUser.isLocked) {
                       setCurrentUser(freshCurrentUser);
+                      writeCachedActiveUser(freshCurrentUser);
+                  } else if (freshCurrentUser?.isLocked) {
+                      setCurrentUser(null);
+                      clearCachedActiveUser();
                   }
               }
           }
@@ -1504,6 +1558,7 @@ const AppContent: React.FC = () => {
       const normalizedUser = { ...user, role: normalizeRole(user.role) };
       setCurrentUser(normalizedUser);
       try { localStorage.setItem(ACTIVE_USER_ID_KEY, normalizedUser.id); } catch {}
+      writeCachedActiveUser(normalizedUser);
       if (supabase) {
           loadLiveSystemData(normalizedUser);
       }
@@ -1513,6 +1568,7 @@ const AppContent: React.FC = () => {
       setCurrentUser(null);
       setPlacedTickets([]);
       try { localStorage.removeItem(ACTIVE_USER_ID_KEY); } catch {}
+      clearCachedActiveUser();
   };
 
   const handleCancelWithdrawal = async (requestId: string) => {
