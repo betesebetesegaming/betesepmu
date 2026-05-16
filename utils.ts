@@ -292,24 +292,9 @@ export const triggerPrint = (elementId: string): void => {
                     <meta charset="utf-8" />
                     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
                     <meta name="thermal-paper-width" content="${paperWidthMm}mm" />
-                    <style>${printStyle.textContent || ''}
-                    /* Thermer guide overlay — visible on screen, hidden when printing */
-                    #betese-print-guide {
-                        position: fixed; top: 0; left: 0; right: 0;
-                        background: #1a1a1a; color: #fff;
-                        font-family: sans-serif; font-size: 14px;
-                        padding: 10px 14px; z-index: 9999;
-                        display: flex; align-items: center; gap: 10px;
-                    }
-                    #betese-print-guide b { color: #fbbf24; }
-                    @media print { #betese-print-guide { display: none !important; } }
-                    </style>
+                    <style>${printStyle.textContent || ''}</style>
                 </head>
                 <body>
-                    <div id="betese-print-guide">
-                        <span style="font-size:20px">🖨️</span>
-                        <span>Select <b>Thermal Printer</b>. Paper size: <b>ISO C8 / 57mm</b>. Length: <b>Auto</b>. Do not use A4.</span>
-                    </div>
                     ${stage.outerHTML}
                 </body>
             </html>
@@ -501,8 +486,10 @@ export const triggerPrint = (elementId: string): void => {
         }
 
         if (!isNativeAndroid) {
-            // On Android browser terminals, print from the current page.
-            // Popup mode often resets destination to Save as PDF (A4) and shrinks tickets.
+            // Use dedicated popup print page on Android browsers so we print ticket/report only.
+            // Current-page print can capture the whole dashboard/modal and produce tiny output.
+            const popupPrinted = tryAndroidBrowserPopupPrint();
+            if (popupPrinted) return;
             doPrint();
             return;
         }
