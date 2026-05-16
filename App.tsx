@@ -203,6 +203,20 @@ const AppContent: React.FC = () => {
   const [effectiveTime, setEffectiveTime] = useState(new Date());
   const [isOnline, setIsOnline] = useState(true);
 
+    const waitMs = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
+    const withRetry = async <T,>(op: () => Promise<T>, attempts = 3, pauseMs = 300): Promise<T> => {
+        let lastErr: unknown;
+        for (let i = 0; i < attempts; i++) {
+            try {
+                return await op();
+            } catch (e) {
+                lastErr = e;
+                if (i < attempts - 1) await waitMs(pauseMs * (i + 1));
+            }
+        }
+        throw lastErr;
+    };
+
     const isSunmiLite = useMemo(() => {
             if (typeof window === 'undefined') return false;
             const ua = String(window.navigator?.userAgent || '').toLowerCase();
@@ -227,27 +241,56 @@ const AppContent: React.FC = () => {
               }
           }
 
-          const [fetchedUsers, fetchedRaces, fetchedDeposits, fetchedWithdrawals, fetchedDepositLogs] = await Promise.all([
-              dbFetchUsers(), 
-              dbFetchRaces(),
-              dbFetchDepositRequests(),
-              dbFetchWithdrawalRequests(),
-              dbFetchDepositLogs()
-          ]);
+          const targetUser = user || currentUser;
 
-          const [fetchedPromotions, fetchedThreads, fetchedMessages, fetchedProgramImages, fetchedPaymentConfigs, fetchedManualBets] = await Promise.all([
-              dbFetchPromotions(),
-              dbFetchChatThreads(),
-              dbFetchChatMessages(),
-              dbFetchProgramImages(),
-              dbFetchPaymentConfigs(),
-              dbFetchManualBetOrders()
+          const [
+              usersResult,
+              racesResult,
+              depositsResult,
+              withdrawalsResult,
+              depositLogsResult,
+              promotionsResult,
+              threadsResult,
+              messagesResult,
+              programImagesResult,
+              paymentConfigsResult,
+              manualBetsResult,
+              liveTicketsResult,
+          ] = await Promise.allSettled([
+              withRetry(() => dbFetchUsers(), 3, 350),
+              withRetry(() => dbFetchRaces(), 2, 250),
+              withRetry(() => dbFetchDepositRequests(), 2, 250),
+              withRetry(() => dbFetchWithdrawalRequests(), 2, 250),
+              withRetry(() => dbFetchDepositLogs(), 2, 250),
+              withRetry(() => dbFetchPromotions(), 2, 250),
+              withRetry(() => dbFetchChatThreads(), 2, 250),
+              withRetry(() => dbFetchChatMessages(), 2, 250),
+              withRetry(() => dbFetchProgramImages(), 2, 250),
+              withRetry(() => dbFetchPaymentConfigs(), 2, 250),
+              withRetry(() => dbFetchManualBetOrders(), 2, 250),
+              targetUser ? withRetry(() => dbFetchLiveTickets(targetUser), 2, 250) : Promise.resolve([] as Ticket[])
           ]);
           
-          if (fetchedUsers && fetchedUsers.length > 0) {
-              const normalizedUsers = fetchedUsers.map(u => ({ ...u, role: normalizeRole(u.role) }));
+          const hadAtLeastOneSuccess = [
+              usersResult,
+              racesResult,
+              depositsResult,
+              withdrawalsResult,
+              depositLogsResult,
+              promotionsResult,
+              threadsResult,
+              messagesResult,
+              programImagesResult,
+              paymentConfigsResult,
+              manualBetsResult,
+              liveTicketsResult,
+          ].some(r => r.status === 'fulfilled');
+
+          setIsOnline(hadAtLeastOneSuccess);
+
+          if (usersResult.status === 'fulfilled' && usersResult.value && usersResult.value.length > 0) {
+              const normalizedUsers = usersResult.value.map(u => ({ ...u, role: normalizeRole(u.role) }));
               setUsers(normalizedUsers);
-              const targetUser = user || currentUser;
               if (targetUser) {
                   const freshCurrentUser = normalizedUsers.find((item) => item.id === targetUser.id);
                   if (freshCurrentUser) {
@@ -255,11 +298,12 @@ const AppContent: React.FC = () => {
                   }
               }
           }
-          if(fetchedRaces) setRaces(fetchedRaces);
+          if (racesResult.status === 'fulfilled') setRaces(racesResult.value || []);
           
           // Map snake_case to camelCase for requests with robust safety
           // and normalize status/method to prevent UI/report mismatches.
-          setDepositRequests((fetchedDeposits || []).map((r: any) => {
+          if (depositsResult.status === 'fulfilled') {
+              setDepositRequests((depositsResult.value || []).map((r: any) => {
               const rawMethod = String(r.method || '').trim().toLowerCase();
               const normalizedMethod: 'Wave' | 'AfriMoney' = rawMethod === 'afrimoney' ? 'AfriMoney' : 'Wave';
 
@@ -291,10 +335,12 @@ const AppContent: React.FC = () => {
                   verifiedAt: r.verified_at ? new Date(r.verified_at) : undefined,
               })
           }}));
+          }
 
-          setDepositLogs(fetchedDepositLogs || []);
+          if (depositLogsResult.status === 'fulfilled') setDepositLogs(depositLogsResult.value || []);
 
-          setWithdrawalRequests((fetchedWithdrawals || []).map((r: any) => ({
+          if (withdrawalsResult.status === 'fulfilled') {
+              setWithdrawalRequests((withdrawalsResult.value || []).map((r: any) => ({
               id: r.id, 
               customerId: r.user_id, // Corrected from userId to customerId to match type
               customerName: r.user_name || 'Client',
@@ -303,22 +349,18 @@ const AppContent: React.FC = () => {
               code: r.code, 
               requestedAt: r.requested_at ? new Date(r.requested_at) : new Date(),
               completedAt: r.completed_at ? new Date(r.completed_at) : undefined,
-              processedBy: r.processed_by, 
+              processedBy: r.processed_by,
               processedByName: r.processed_by_name
           })));
-
-          setPromotions(fetchedPromotions || []);
-          setThreads(fetchedThreads || []);
-          setMessages(fetchedMessages || []);
-          setProgramImages(fetchedProgramImages || []);
-          setPaymentConfigs(fetchedPaymentConfigs || []);
-          setManualBetOrders(fetchedManualBets || []);
-
-          const targetUser = user || currentUser;
-          if(targetUser) {
-              const liveTickets = await dbFetchLiveTickets(targetUser);
-              setPlacedTickets(liveTickets);
           }
+
+          if (promotionsResult.status === 'fulfilled') setPromotions(promotionsResult.value || []);
+          if (threadsResult.status === 'fulfilled') setThreads(threadsResult.value || []);
+          if (messagesResult.status === 'fulfilled') setMessages(messagesResult.value || []);
+          if (programImagesResult.status === 'fulfilled') setProgramImages(programImagesResult.value || []);
+          if (paymentConfigsResult.status === 'fulfilled') setPaymentConfigs(paymentConfigsResult.value || []);
+          if (manualBetsResult.status === 'fulfilled') setManualBetOrders(manualBetsResult.value || []);
+          if (liveTicketsResult.status === 'fulfilled') setPlacedTickets(liveTicketsResult.value || []);
       } catch (err) {
           console.error("Data Sync Error:", err);
           setIsOnline(false);
@@ -349,7 +391,7 @@ const AppContent: React.FC = () => {
           };
       }
 
-      dbFetchUsers()
+      withRetry(() => dbFetchUsers(), 3, 350)
           .then(fetched => {
               if (!isMounted) return;
               if (fetched && fetched.length > 0) {
