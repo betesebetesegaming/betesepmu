@@ -29,6 +29,7 @@ import {
 } from './supabaseClient';
 
 const LAZY_CHUNK_RETRY_KEY = 'betese_lazy_chunk_retry';
+const ACTIVE_USER_ID_KEY = 'betese_active_user_id';
 
 const lazyWithChunkRecovery = <T,>(importer: () => Promise<{ default: T }>) =>
     lazy(async () => {
@@ -395,7 +396,17 @@ const AppContent: React.FC = () => {
           .then(fetched => {
               if (!isMounted) return;
               if (fetched && fetched.length > 0) {
-                  setUsers(fetched.map(u => ({ ...u, role: normalizeRole(u.role) })));
+                  const normalizedUsers = fetched.map(u => ({ ...u, role: normalizeRole(u.role) }));
+                  setUsers(normalizedUsers);
+
+                  // Restore active session after refresh/recovery on terminals.
+                  const rememberedUserId = localStorage.getItem(ACTIVE_USER_ID_KEY);
+                  if (rememberedUserId && !currentUser) {
+                      const restored = normalizedUsers.find(u => u.id === rememberedUserId);
+                      if (restored && !restored.isLocked) {
+                          setCurrentUser(restored);
+                      }
+                  }
               }
           })
           .catch(() => {
@@ -1446,11 +1457,17 @@ const AppContent: React.FC = () => {
   const handleLogin = (user: User) => {
       const normalizedUser = { ...user, role: normalizeRole(user.role) };
       setCurrentUser(normalizedUser);
+      try { localStorage.setItem(ACTIVE_USER_ID_KEY, normalizedUser.id); } catch {}
       if (supabase) {
           loadLiveSystemData(normalizedUser);
       }
   };
-  const handleLogout = () => { setCurrentUser(null); setPlacedTickets([]); };
+
+  const handleLogout = () => {
+      setCurrentUser(null);
+      setPlacedTickets([]);
+      try { localStorage.removeItem(ACTIVE_USER_ID_KEY); } catch {}
+  };
 
   const handleCancelWithdrawal = async (requestId: string) => {
       try {
