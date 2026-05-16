@@ -310,11 +310,18 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                                     <span className="bg-green-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs">1</span>
                                     Select Race
                                 </h3>
-                                <div className="flex flex-wrap gap-2">
-                                    {availableRaces.map(r => (
-                                        <RaceTimerButton key={r.id} race={r} isSelected={selectedRace?.id === r.id} onClick={() => setSelectedRace(r)} initialEffectiveTime={effectiveTime} />
-                                    ))}
-                                </div>
+                                {availableRaces.length > 0 ? (
+                                    <div className="flex flex-wrap gap-2">
+                                        {availableRaces.map(r => (
+                                            <RaceTimerButton key={r.id} race={r} isSelected={selectedRace?.id === r.id} onClick={() => setSelectedRace(r)} initialEffectiveTime={effectiveTime} />
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-5 text-sm text-amber-900">
+                                        <p className="font-black uppercase">No active races available.</p>
+                                        <p className="mt-1 font-semibold">This usually means today&apos;s races have ended, no new races have been added yet, or the terminal clock is incorrect.</p>
+                                    </div>
+                                )}
                             </div>
                             {selectedRace && (
                                 <div className="bg-white p-4 rounded-xl shadow border-t-4 border-blue-600">

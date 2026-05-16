@@ -210,6 +210,7 @@ const AppContent: React.FC = () => {
   const [isProgramModalOpen, setIsProgramModalOpen] = useState(false);
   const [effectiveTime, setEffectiveTime] = useState(new Date());
   const [isOnline, setIsOnline] = useState(true);
+    const serverTimeOffsetMsRef = useRef(0);
 
     const waitMs = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
     const withRetry = async <T,>(op: () => Promise<T>, attempts = 3, pauseMs = 300): Promise<T> => {
@@ -231,6 +232,32 @@ const AppContent: React.FC = () => {
             const params = new URLSearchParams(window.location.search);
             return ua.includes('sunmi') || ua.includes('t2mini') || params.get('lite') === '1';
     }, []);
+
+  const syncEffectiveTimeWithServer = useCallback(async () => {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      if (!supabaseUrl || !supabaseAnonKey) return;
+
+      try {
+          const response = await fetch(`${supabaseUrl}/rest/v1/races?select=id&limit=1`, {
+              method: 'GET',
+              headers: {
+                  apikey: supabaseAnonKey,
+                  Authorization: `Bearer ${supabaseAnonKey}`,
+              },
+          });
+          const dateHeader = response.headers.get('date');
+          if (!dateHeader) return;
+
+          const serverNow = new Date(dateHeader);
+          if (Number.isNaN(serverNow.getTime())) return;
+
+          serverTimeOffsetMsRef.current = serverNow.getTime() - Date.now();
+          setEffectiveTime(new Date(Date.now() + serverTimeOffsetMsRef.current));
+      } catch {
+          // Fall back to device time when server time cannot be resolved.
+      }
+  }, []);
 
   const loadLiveSystemData = async (user?: User) => {
       if (!supabase) return;
@@ -504,9 +531,14 @@ const AppContent: React.FC = () => {
   }, [users]);
 
   useEffect(() => {
-      const interval = setInterval(() => setEffectiveTime(new Date()), isSunmiLite ? 5000 : 1000);
-      return () => clearInterval(interval);
-  }, [isSunmiLite]);
+      syncEffectiveTimeWithServer();
+      const interval = setInterval(() => setEffectiveTime(new Date(Date.now() + serverTimeOffsetMsRef.current)), isSunmiLite ? 5000 : 1000);
+      const resyncInterval = setInterval(() => { void syncEffectiveTimeWithServer(); }, 5 * 60 * 1000);
+      return () => {
+          clearInterval(interval);
+          clearInterval(resyncInterval);
+      };
+  }, [isSunmiLite, syncEffectiveTimeWithServer]);
 
   useEffect(() => {
       if (typeof document === 'undefined') return;
