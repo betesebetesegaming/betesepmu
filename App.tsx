@@ -252,6 +252,7 @@ const AppContent: React.FC = () => {
 
   const [betSlip, setBetSlip] = useState<BetSlip>({ selections: [], totalCost: 0 });
   const isBettingInFlightRef = useRef(false); // prevents double-click on Place Bet / Book Bet
+    const [isBettingInProgress, setIsBettingInProgress] = useState(false);
   const [lastTicket, setLastTicket] = useState<Ticket | null>(null);
   const [paidTicketModal, setPaidTicketModal] = useState<Ticket | null>(null);
   const [ticketToReprint, setTicketToReprint] = useState<Ticket | null>(null);
@@ -904,6 +905,7 @@ const AppContent: React.FC = () => {
     if (!currentUser || betSlip.selections.length === 0) return;
     if (isBettingInFlightRef.current) return;
     isBettingInFlightRef.current = true;
+        setIsBettingInProgress(true);
 
     try {
       // Recalculate totalCost fresh from selections to eliminate floating-point drift
@@ -1003,6 +1005,7 @@ const AppContent: React.FC = () => {
       } catch (e: any) { alert(`Transaction Failed: ${e.message}`); }
     } finally {
       isBettingInFlightRef.current = false;
+            setIsBettingInProgress(false);
     }
   };
 
@@ -1010,6 +1013,7 @@ const AppContent: React.FC = () => {
       if (!currentUser || betSlip.selections.length === 0) return;
       if (isBettingInFlightRef.current) return;
       isBettingInFlightRef.current = true;
+      setIsBettingInProgress(true);
 
       try {
           // Recalculate totalCost fresh to eliminate floating-point drift
@@ -1065,6 +1069,7 @@ const AppContent: React.FC = () => {
           alert(`Booking Failed: ${e.message}`);
       } finally {
           isBettingInFlightRef.current = false;
+          setIsBettingInProgress(false);
       }
   };
 
@@ -2090,6 +2095,7 @@ const AppContent: React.FC = () => {
             manualBetOrders={manualBetOrders}
             onProcessManualBet={processManualBet}
             onSaveRaceResult={handleSaveRaceResult}
+                        isBettingInProgress={isBettingInProgress}
           />
         )}
         {(currentUser.role === 'Admin' || currentUser.role === 'Supervisor') && (
@@ -2201,6 +2207,7 @@ const AppContent: React.FC = () => {
                 onDepositRequest={handleCreateDepositRequest}
                 depositRequests={depositRequests}
                 onCancelWithdrawal={handleCancelWithdrawal}
+                     isBettingInProgress={isBettingInProgress}
                 externalOpenProgram={isProgramModalOpen}
                 onExternalProgramClose={() => setIsProgramModalOpen(false)}
              />

@@ -494,10 +494,7 @@ export const triggerPrint = (elementId: string): void => {
         // This matches the original behavior users rely on.
 
         if (!isNativeAndroid) {
-            // Use dedicated popup print page on Android browsers so we print ticket/report only.
-            // Current-page print can capture the whole dashboard/modal and produce tiny output.
-            const popupPrinted = tryAndroidBrowserPopupPrint();
-            if (popupPrinted) return;
+            // Print directly from current page on Android browser to keep thermal width CSS intact.
             doPrint();
             return;
         }

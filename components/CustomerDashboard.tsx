@@ -78,6 +78,7 @@ interface CustomerDashboardProps {
   onDepositRequest: (amount: number, method: 'Wave' | 'AfriMoney', phone: string) => void;
   depositRequests: DepositRequest[];
   onCancelWithdrawal?: (requestId: string) => void;
+  isBettingInProgress?: boolean;
   externalOpenProgram?: boolean;
   onExternalProgramClose?: () => void;
 }
@@ -108,6 +109,7 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   onDepositRequest,
   depositRequests,
   onCancelWithdrawal,
+  isBettingInProgress = false,
   externalOpenProgram,
   onExternalProgramClose,}) => {
   const [activeTab, setActiveTab] = useState<'bet' | 'history' | 'wallet' | 'info'>('bet');
@@ -359,6 +361,7 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
               onInitiateBookBet={onInitiateBookBet} 
               onRemove={onRemoveSelection} 
               onUpdateSelectionMultiplier={onUpdateSelectionMultiplier} 
+              isPlacingBet={isBettingInProgress}
             />
             <RaceResultsPanel races={races} onSelectRace={setRapportModalRace} effectiveTime={effectiveTime} />
           </div>

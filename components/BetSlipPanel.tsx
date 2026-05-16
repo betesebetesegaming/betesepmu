@@ -10,9 +10,10 @@ interface BetSlipPanelProps {
   onRemove: (index: number) => void;
   onUpdateSelectionMultiplier: (index: number, multiplier: number) => void;
   onInitiateBookBet?: () => void;
+  isPlacingBet?: boolean;
 }
 
-export const BetSlipPanel: React.FC<BetSlipPanelProps> = ({ betSlip, onClear, onInitiatePlaceBet, onRemove, onUpdateSelectionMultiplier, onInitiateBookBet }) => {
+export const BetSlipPanel: React.FC<BetSlipPanelProps> = ({ betSlip, onClear, onInitiatePlaceBet, onRemove, onUpdateSelectionMultiplier, onInitiateBookBet, isPlacingBet = false }) => {
   const hasSelections = betSlip.selections.length === 0;
   const { t } = useLanguage();
   
@@ -106,10 +107,10 @@ export const BetSlipPanel: React.FC<BetSlipPanelProps> = ({ betSlip, onClear, on
       <div className="mt-6 space-y-3">
         <button
           onClick={onInitiatePlaceBet}
-          disabled={hasSelections}
+          disabled={hasSelections || isPlacingBet}
           className="w-full py-5 bg-betese-green text-white font-black rounded-2xl shadow-xl hover:brightness-110 disabled:bg-gray-300 disabled:opacity-50 transition-all active:scale-95 text-xl uppercase tracking-widest"
         >
-          {t('place_bet')}
+          {isPlacingBet ? 'PLACING...' : t('place_bet')}
         </button>
         {onInitiateBookBet && (
            <div className="pt-2">

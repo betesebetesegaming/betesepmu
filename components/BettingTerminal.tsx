@@ -47,7 +47,8 @@ interface BettingTerminalProps {
   onRejectDepositRequest: (requestId: string) => void;
   manualBetOrders: ManualBetOrder[];
   onProcessManualBet: (orderId: string) => void;
-  onSaveRaceResult: (result: RaceResult) => Promise<boolean>; 
+    onSaveRaceResult: (result: RaceResult) => Promise<boolean>;
+    isBettingInProgress?: boolean;
 }
 
 type View = 'DASHBOARD' | 'PLACE_BET' | 'SCAN_PAY' | 'FINANCE' | 'RAPPORTS' | 'UPDATE_RESULTS';
@@ -136,6 +137,7 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
         manualBetOrders = [], 
         onProcessManualBet,
         onSaveRaceResult,
+        isBettingInProgress = false,
         onOpenChat
     } = props;
     
@@ -343,7 +345,7 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                                 </div>
                             )}
                         </div>
-                        <BetSlipPanel betSlip={betSlip} onClear={onClearBetSlip} onInitiatePlaceBet={onInitiatePlaceBet} onRemove={onRemoveSelection} onUpdateSelectionMultiplier={onUpdateSelectionMultiplier} />
+                        <BetSlipPanel betSlip={betSlip} onClear={onClearBetSlip} onInitiatePlaceBet={onInitiatePlaceBet} onRemove={onRemoveSelection} onUpdateSelectionMultiplier={onUpdateSelectionMultiplier} isPlacingBet={isBettingInProgress} />
                     </div>
                 );
             case 'SCAN_PAY':
