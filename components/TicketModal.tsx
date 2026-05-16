@@ -46,7 +46,7 @@ export const TicketModal: React.FC<TicketModalProps> = ({ ticket, onClose, showP
             <div className="c b text-xs text-black uppercase">{sel.raceName} {sel.betType}</div>
             
             {/* Print-safe high-contrast number box for sharper thermal output */}
-            <div className="c b text-xl bg-white text-black border-2 border-black rounded-none px-1 py-1.5 my-1 text-center font-black tracking-tight leading-none">
+            <div className="c b huge text-xl bg-white text-black border-2 border-black rounded-none px-1 py-1.5 my-1 text-center font-black tracking-tight leading-none">
               {sel.pattern && sel.pattern.length > 0
                 ? sel.pattern.join('-')
                 : (sel.xCount > 0 ? 'X-'.repeat(sel.xCount) : '') + sel.numbers.join('-')}

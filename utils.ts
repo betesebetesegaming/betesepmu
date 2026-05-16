@@ -136,6 +136,7 @@ export const triggerPrint = (elementId: string): void => {
         console.error("PRINT ERROR: Element not found", elementId);
         return;
     }
+    const isTicketPrint = elementId.startsWith('ticket-receipt-');
 
     const isAndroidTerminal = /android|sunmi/i.test(navigator.userAgent || '');
     const isNativeAndroid = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
@@ -155,8 +156,11 @@ export const triggerPrint = (elementId: string): void => {
         : clamp(measuredContentWidthMm, minimumPaperWidthMm, 112);
     // Android terminal print services are most stable at ISO C8-equivalent 57mm width.
     const paperWidthMm = isAndroidTerminal ? 57 : requestedPaperWidthMm;
-    const qrWidthMm = clamp(Math.round(paperWidthMm * 0.68), 30, 72);
+    const qrWidthMm = clamp(Math.round(paperWidthMm * (isTicketPrint ? 0.56 : 0.68)), 26, 72);
     const textColumns = clamp(Math.round(paperWidthMm * (32 / 58)), 24, 64);
+    const baseFontPx = isTicketPrint ? 18 : 18;
+    const baseLineHeight = isTicketPrint ? 1.3 : 1.4;
+    const hugeFontPx = isTicketPrint ? 34 : 32;
 
     const oldStage = document.getElementById('betese-print-stage');
     if (oldStage) oldStage.remove();
@@ -185,17 +189,25 @@ export const triggerPrint = (elementId: string): void => {
             page-break-inside: avoid !important;
             break-inside: avoid-page !important;
             font-weight: 900 !important;
-            font-size: 18px !important;
         }
         #betese-print-stage .c { text-align: center !important; }
-        #betese-print-stage .b { font-weight: 900 !important; font-size: 18px !important; }
-        #betese-print-stage .huge { font-size: 32px !important; font-weight: 900 !important; letter-spacing: -1px; line-height: 1.1; margin: 6px 0; }
+        #betese-print-stage .b { font-weight: 900 !important; font-size: ${baseFontPx}px !important; }
+        #betese-print-stage .huge { font-size: ${hugeFontPx}px !important; font-weight: 900 !important; letter-spacing: -1px; line-height: 1.1; margin: 4px 0; }
         #betese-print-stage .solid { border-top: 2px solid black !important; margin: 5px 0 !important; }
         #betese-print-stage .dashed { border-top: 1px dashed black !important; margin: 5px 0 !important; }
         #betese-print-stage .flex { display: flex !important; justify-content: space-between !important; align-items: center !important; }
         #betese-print-stage img { display: block !important; margin: 5px auto !important; max-width: ${qrWidthMm}mm !important; }
         #betese-print-stage, #betese-print-stage * { visibility: visible !important; }
+        #betese-print-stage { page: receipt !important; }
         @media print {
+            html, body {
+                width: ${paperWidthMm}mm !important;
+                min-width: ${paperWidthMm}mm !important;
+                max-width: ${paperWidthMm}mm !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                background: #fff !important;
+            }
             body > *:not(#betese-print-stage):not(script):not(style) {
                 display: none !important;
             }
@@ -209,9 +221,9 @@ export const triggerPrint = (elementId: string): void => {
                 padding: 2mm !important;
                 overflow: visible !important;
                 font-family: 'Courier New', Courier, monospace !important;
-                font-size: 18px !important;
+                font-size: ${baseFontPx}px !important;
                 font-weight: 900 !important;
-                line-height: 1.4 !important;
+                line-height: ${baseLineHeight} !important;
                 color: #000 !important;
                 text-shadow: 0 0 0 #000 !important;
                 page-break-before: avoid !important;
@@ -219,6 +231,7 @@ export const triggerPrint = (elementId: string): void => {
                 page-break-inside: avoid !important;
                 break-inside: avoid-page !important;
             }
+            @page receipt { margin: 0; size: ${paperWidthMm}mm auto; }
             @page { margin: 0; size: ${paperWidthMm}mm auto; }
         }
     `;
