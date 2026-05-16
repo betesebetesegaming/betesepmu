@@ -26,44 +26,44 @@ export const TicketModal: React.FC<TicketModalProps> = ({ ticket, onClose, showP
   });
 
   const renderStandardTicket = () => (
-    <div className="text-gray-900 bg-white font-mono leading-tight overflow-hidden px-1 py-1">
+    <div className="text-black bg-white font-mono leading-tight overflow-hidden px-1 py-1">
       {/* Header */}
-      <div className="c b text-base border-b-2 border-gray-700 text-center pb-1 uppercase bg-gray-800 text-white py-0.5 drop-shadow-md">Betese PMU</div>
+      <div className="c b text-base border-b-2 border-black text-center pb-1 uppercase bg-black text-white py-0.5">Betese PMU</div>
 
       {/* Reference & Vendor Info */}
-      <div className="border-b border-gray-600 py-1 mb-1">
-        <div className="c b text-xs text-gray-800">REF: #{ticket.id}</div>
-        <div className="c b text-xs text-gray-800">
+      <div className="border-b border-black py-1 mb-1">
+        <div className="c b text-xs text-black">REF: #{ticket.id}</div>
+        <div className="c b text-xs text-black">
           {ticket.timestamp.toLocaleDateString([], { day: '2-digit', month: '2-digit', year: 'numeric' })} {ticket.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
         </div>
-        <div className="c b text-sm mt-0.5 text-gray-900 uppercase">VENDOR: {ticket.vendorName || ticket.vendorId || 'N/A'}</div>
+        <div className="c b text-sm mt-0.5 text-black uppercase">VENDOR: {ticket.vendorName || ticket.vendorId || 'N/A'}</div>
       </div>
 
       {/* Race Selections */}
       <div className="space-y-1.5">
         {ticket.selections.map((sel, i) => (
-          <div key={i} className="border-b border-gray-600 pb-1.5">
-            <div className="c b text-xs text-gray-800 uppercase">{sel.raceName} {sel.betType}</div>
+          <div key={i} className="border-b border-black pb-1.5">
+            <div className="c b text-xs text-black uppercase">{sel.raceName} {sel.betType}</div>
             
-            {/* Dark gray box for race numbers */}
-            <div className="c b text-lg bg-gray-800 text-white rounded px-1 py-1 my-1 text-center font-black tracking-wide drop-shadow-md">
+            {/* Print-safe high-contrast number box for sharper thermal output */}
+            <div className="c b text-xl bg-white text-black border-2 border-black rounded-none px-1 py-1.5 my-1 text-center font-black tracking-tight leading-none">
               {sel.pattern && sel.pattern.length > 0
                 ? sel.pattern.join('-')
                 : (sel.xCount > 0 ? 'X-'.repeat(sel.xCount) : '') + sel.numbers.join('-')}
             </div>
             
-            <div className="c b text-xs text-gray-800">STAKE X{sel.multiplier} GMD {(sel.cost * sel.multiplier).toFixed(0)}</div>
+            <div className="c b text-xs text-black">STAKE X{sel.multiplier} GMD {(sel.cost * sel.multiplier).toFixed(0)}</div>
           </div>
         ))}
       </div>
 
       {/* Total */}
-      <div className="border-t-2 border-gray-700 mt-1.5 pt-1 bg-gray-50">
-        <div className="c b text-base text-gray-900 font-black text-center drop-shadow-sm">Total {ticket.totalCost.toFixed(0)} GMD</div>
+      <div className="border-t-2 border-black mt-1.5 pt-1 bg-white">
+        <div className="c b text-base text-black font-black text-center">Total {ticket.totalCost.toFixed(0)} GMD</div>
       </div>
 
       {/* Footer */}
-      <div className="c b text-xs text-gray-700 mt-1 text-center">*** Valid for 7 days ***</div>
+      <div className="c b text-xs text-black mt-1 text-center">*** Valid for 7 days ***</div>
       <div className="text-center mt-1 pb-0.5">
         <img src={qrUrl} alt="QR" className="w-[50px] h-[50px] mx-auto block" />
       </div>
@@ -71,36 +71,36 @@ export const TicketModal: React.FC<TicketModalProps> = ({ ticket, onClose, showP
   );
 
   const renderPaidReceipt = () => (
-    <div className="text-gray-900 bg-white c font-mono leading-tight text-center">
-      <div className="text-sm b border-b-2 border-gray-700 py-1 uppercase bg-gray-800 text-white drop-shadow-md">Paid Receipt</div>
-      <p className="b text-xs text-gray-800 my-0.5">REF: #{ticket.id}</p>
+    <div className="text-black bg-white c font-mono leading-tight text-center">
+      <div className="text-sm b border-b-2 border-black py-1 uppercase bg-black text-white">Paid Receipt</div>
+      <p className="b text-xs text-black my-0.5">REF: #{ticket.id}</p>
       
-      <div className="my-1 border-2 border-gray-700 bg-gray-700 text-white py-1 rounded drop-shadow-md">
+      <div className="my-1 border-2 border-black bg-black text-white py-1 rounded-none">
         <p className="text-lg b tracking-widest leading-none">PAID</p>
         <p className="text-[7px] font-bold uppercase">Do Not Pay Again</p>
       </div>
       
-      <div className="my-1 border border-gray-600 p-1 bg-gray-100 rounded">
-        <p className="b text-[7px] text-gray-800 uppercase">Winning Amount Paid:</p>
-        <p className="text-base b text-gray-900">GMD {(ticket.winnings || 0).toFixed(0)}</p>
+      <div className="my-1 border border-black p-1 bg-white rounded-none">
+        <p className="b text-[7px] text-black uppercase">Winning Amount Paid:</p>
+        <p className="text-base b text-black">GMD {(ticket.winnings || 0).toFixed(0)}</p>
       </div>
 
-      <div className="text-left text-[7px] border border-gray-600 p-1 bg-white rounded">
-        <p className="b uppercase mb-0.5 text-center text-gray-900">Result Numbers</p>
+      <div className="text-left text-[7px] border border-black p-1 bg-white rounded-none">
+        <p className="b uppercase mb-0.5 text-center text-black">Result Numbers</p>
         {raceResultLines.map((line, idx) => (
-          <p key={idx} className="truncate text-gray-800">{line}</p>
+          <p key={idx} className="truncate text-black">{line}</p>
         ))}
       </div>
 
-      <div className="flex b text-[7px] mt-1 px-1 justify-between text-gray-800">
+      <div className="flex b text-[7px] mt-1 px-1 justify-between text-black">
         <span>PAID BY:{ticket.paidByName || ticket.paidById || 'SYSTEM'}</span>
         <span>{ticket.paidAt?.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
       </div>
-      <div className="b text-[7px] px-1 text-left uppercase text-gray-800">
+      <div className="b text-[7px] px-1 text-left uppercase text-black">
         Date: {ticket.paidAt?.toLocaleDateString([], { day: '2-digit', month: '2-digit', year: 'numeric' }) || 'N/A'}
       </div>
 
-      <div className="border-b border-gray-600 mt-1 mb-1"></div>
+      <div className="border-b border-black mt-1 mb-1"></div>
       <img src={qrUrl} alt="QR" className="w-[45px] h-[45px] mx-auto" />
     </div>
   );
