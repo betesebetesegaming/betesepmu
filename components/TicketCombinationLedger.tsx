@@ -355,7 +355,7 @@ export const TicketCombinationLedger: React.FC<TicketCombinationLedgerProps> = (
                       <div>
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-black text-base uppercase">{section.raceCode}</span>
-                          {section.scheduledTime && <span className="text-sm font-semibold opacity-90">{section.scheduledTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>}
+                          {section.scheduledTime && <span className="text-sm font-semibold opacity-90">{section.scheduledTime.toLocaleDateString([], { month: '2-digit', day: '2-digit', year: 'numeric' })} {section.scheduledTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>}
                           <span className="font-semibold text-sm opacity-90">- {section.raceName}</span>
                         </div>
                         <div className={`text-xs mt-0.5 ${isFirstFinished ? 'text-white/80' : section.isFinished ? 'text-amber-700' : 'text-white/80'}`}>
