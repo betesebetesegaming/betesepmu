@@ -152,8 +152,9 @@ export const triggerPrint = (elementId: string, options: TriggerPrintOptions = {
     const isSunmiTerminal = /sunmi/i.test(navigator.userAgent || '') ||
         /sunmi/i.test((window as any).SunmiModelName || '') ||
         typeof (window as any).SunmiInnerPrinter !== 'undefined';
+    const disableBrowserPreviewForTerminal = isAndroidTerminal && localStorage.getItem('betese_disable_browser_preview') !== '0';
 
-    console.log('📱 Device detection:', { isAndroidTerminal, isNativeAndroid, isSunmiTerminal });
+    console.log('📱 Device detection:', { isAndroidTerminal, isNativeAndroid, isSunmiTerminal, disableBrowserPreviewForTerminal });
 
     const pxPerMm = 96 / 25.4;
     const sourceRect = sourceElement.getBoundingClientRect();
@@ -584,6 +585,12 @@ export const triggerPrint = (elementId: string, options: TriggerPrintOptions = {
                         if (matePrinted) return;
                         void tryRawBtPrint().then((rawBtPrinted) => {
                             if (rawBtPrinted) return;
+
+                            if (disableBrowserPreviewForTerminal) {
+                                cleanup();
+                                alert('Direct printer bridge not available on this terminal. Printing was not sent.');
+                                return;
+                            }
 
                             // Final fallback: browser print preview path.
                             console.log('🖨️ STARTING ANDROID TERMINAL PRINT (direct window.print fallback)');

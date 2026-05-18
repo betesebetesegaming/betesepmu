@@ -11,18 +11,26 @@ interface TicketModalProps {
 }
 
 export const TicketModal: React.FC<TicketModalProps> = ({ ticket, onClose, showPrintButton, races }) => {
+  const [isPrinting, setIsPrinting] = React.useState(false);
+  const isAndroidTerminal = /android|sunmi/i.test(navigator.userAgent || '');
   
   const handlePrint = () => {
+    if (isPrinting) return;
+    setIsPrinting(true);
     console.log('📋 PRINT TICKET button clicked, ticket ID:', ticket.id);
     try {
       triggerPrint(`ticket-receipt-${ticket.id}`);
     } catch (e) {
       console.error('❌ Print failed:', e);
       alert('Print failed - see console for details');
+    } finally {
+      setTimeout(() => setIsPrinting(false), 3500);
     }
   };
 
   const handleDirect57x40Print = () => {
+    if (isPrinting) return;
+    setIsPrinting(true);
     console.log('📋 DIRECT 57x40 button clicked, ticket ID:', ticket.id);
     try {
       // Temporary reliability mode: use the stable print pipeline first.
@@ -31,6 +39,8 @@ export const TicketModal: React.FC<TicketModalProps> = ({ ticket, onClose, showP
     } catch (e) {
       console.error('❌ Direct print failed:', e);
       alert('Direct print failed - see console for details');
+    } finally {
+      setTimeout(() => setIsPrinting(false), 3500);
     }
   };
 
@@ -142,17 +152,22 @@ export const TicketModal: React.FC<TicketModalProps> = ({ ticket, onClose, showP
           <div className="p-4 bg-white border-t rounded-b-xl space-y-2">
             {showPrintButton && (
               <>
-                <button
-                  onClick={handleDirect57x40Print}
-                  className="w-full py-3 bg-black text-white font-black text-lg rounded-lg shadow-xl active:scale-95 transition-all flex justify-center items-center gap-2 border-b-4 border-black/40"
-                >
-                  <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5" stroke="currentColor" strokeWidth="1.8"><rect x="7" y="4" width="10" height="5"/><rect x="5" y="9" width="14" height="8" rx="2"/><rect x="8" y="14" width="8" height="6"/></svg> DIRECT 57x40MM
-                </button>
+                {!isAndroidTerminal && (
+                  <button
+                    onClick={handleDirect57x40Print}
+                    disabled={isPrinting}
+                    className="w-full py-3 bg-black text-white font-black text-lg rounded-lg shadow-xl active:scale-95 transition-all flex justify-center items-center gap-2 border-b-4 border-black/40 disabled:opacity-60"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5" stroke="currentColor" strokeWidth="1.8"><rect x="7" y="4" width="10" height="5"/><rect x="5" y="9" width="14" height="8" rx="2"/><rect x="8" y="14" width="8" height="6"/></svg> DIRECT 57x40MM
+                  </button>
+                )}
                 <button
                   onClick={handlePrint}
-                  className="w-full py-4 bg-betese-green text-white font-black text-2xl rounded-lg shadow-xl active:scale-95 transition-all flex justify-center items-center gap-2 border-b-4 border-black/20"
+                  disabled={isPrinting}
+                  className="w-full py-4 bg-betese-green text-white font-black text-2xl rounded-lg shadow-xl active:scale-95 transition-all flex justify-center items-center gap-2 border-b-4 border-black/20 disabled:opacity-60"
                 >
-                  <svg viewBox="0 0 24 24" fill="none" className="w-6 h-6" stroke="currentColor" strokeWidth="1.8"><rect x="7" y="4" width="10" height="5"/><rect x="5" y="9" width="14" height="8" rx="2"/><rect x="8" y="14" width="8" height="6"/></svg> PRINT TICKET
+                  <svg viewBox="0 0 24 24" fill="none" className="w-6 h-6" stroke="currentColor" strokeWidth="1.8"><rect x="7" y="4" width="10" height="5"/><rect x="5" y="9" width="14" height="8" rx="2"/><rect x="8" y="14" width="8" height="6"/></svg>
+                  {isPrinting ? 'PRINTING...' : (isAndroidTerminal ? 'PRINT NOW' : 'PRINT TICKET')}
                 </button>
               </>
             )}

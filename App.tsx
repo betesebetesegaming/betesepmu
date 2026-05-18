@@ -1006,7 +1006,6 @@ const AppContent: React.FC = () => {
           }
           setLastTicket(newTicket);
           setBetSlip({ selections: [], totalCost: 0 });
-          alert("BET PLACED SUCCESSFULLY: Ticket has been added to your history.");
       } catch (e: any) { alert(`Transaction Failed: ${e.message}`); }
     } finally {
       isBettingInFlightRef.current = false;
