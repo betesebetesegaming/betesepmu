@@ -578,25 +578,16 @@ export const triggerPrint = (elementId: string, options: TriggerPrintOptions = {
         // This matches the original behavior users rely on.
 
         if (!isNativeAndroid) {
-            // Browser/PWA mode: attempt direct thermal integrations first, then fallback to print preview.
-            void trySunmiBuiltinPrint().then((sunmiPrinted) => {
-                if (sunmiPrinted) return;
-                void tryNativeBluetoothThermalPrint().then((btPrinted) => {
-                    if (btPrinted) return;
-                    void tryMateBTPrint().then((matePrinted) => {
-                        if (matePrinted) return;
-                        void tryRawBtPrint().then((rawBtPrinted) => {
-                            if (rawBtPrinted) return;
+            if (disableBrowserPreviewForTerminal) {
+                cleanup();
+                console.warn('Direct printer bridge not available on browser mode terminal. Printing was not sent.');
+                return;
+            }
 
-                            if (disableBrowserPreviewForTerminal) {
-                                cleanup();
-                                console.warn('Direct printer bridge not available on this terminal. Printing was not sent.');
-                                return;
-                            }
-
-                            // Final fallback: browser print preview path.
-                            console.log('🖨️ STARTING ANDROID TERMINAL PRINT (direct window.print fallback)');
-                            const printAndRestore = () => {
+            // Browser/PWA mode: do immediate print preview.
+            // Native plugin bridges are unavailable here and only add delay.
+            console.log('🖨️ STARTING ANDROID TERMINAL BROWSER PREVIEW PRINT');
+            const printAndRestore = () => {
                 // Store original visibility state
                 const originalDisplays = new Map<HTMLElement, string>();
                 
@@ -660,13 +651,9 @@ export const triggerPrint = (elementId: string, options: TriggerPrintOptions = {
                 // Some Android print dialogs fire late; keep content stable while user confirms print.
                 // Restore only after a long timeout as a safety net if afterprint never fires.
                 setTimeout(restorePage, 90000);
-                            };
+            };
 
-                            printAndRestore();
-                        });
-                    });
-                });
-            });
+            printAndRestore();
             return;
         }
 
