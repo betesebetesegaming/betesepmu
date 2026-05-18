@@ -224,6 +224,10 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
         triggerPrint('printable-end-of-sale');
     };
 
+    const handlePrintTestTicket = () => {
+        triggerPrint('printable-test-ticket');
+    };
+
     const handleShareEndOfSaleWhatsApp = () => {
         const supportNumber = '2204176003';
         const text =
@@ -575,6 +579,18 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                                     Download APK
                                 </a>
                             </div>
+                            <div className="mt-3 flex flex-col sm:flex-row gap-3">
+                                <button
+                                    onClick={handlePrintTestTicket}
+                                    className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-amber-500 text-white font-black rounded-xl shadow hover:brightness-110 active:scale-95 transition-all border-b-4 border-black/20 text-sm uppercase"
+                                >
+                                    <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="7" y="4" width="10" height="5"/><rect x="5" y="9" width="14" height="8" rx="2"/><rect x="8" y="14" width="8" height="6"/></svg>
+                                    Print Test Ticket
+                                </button>
+                                <p className="text-[11px] text-gray-500 font-semibold self-center">
+                                    Temporary test only. Remove later after printer is confirmed.
+                                </p>
+                            </div>
                             <p className="text-[11px] text-gray-500 mt-3 font-semibold">
                                 {isAndroidTerminal
                                     ? 'Android: after download, open the APK file and tap Install.'
@@ -695,6 +711,31 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                 <div className="solid"></div>
                 <p className="c b text-[9px] mt-4 uppercase">Official End of Sale Report</p>
                 <p className="c text-[8px] opacity-70 italic">Time: {effectiveTime.toLocaleString()}</p>
+            </div>
+
+            <div
+                id="printable-test-ticket"
+                className="absolute top-0 left-[-5000px] pointer-events-none"
+                style={{ visibility: 'hidden' }}
+                aria-hidden="true"
+            >
+                <div className="text-black bg-white font-mono leading-tight overflow-hidden px-1 py-1">
+                    <div className="c b text-base border-b-2 border-black text-center pb-1 uppercase bg-black text-white py-0.5">Betese PMU Test Print</div>
+                    <div className="border-b border-black py-1 mb-1">
+                        <div className="c b text-xs text-black">TEST ONLY</div>
+                        <div className="c b text-xs text-black">
+                            {effectiveTime.toLocaleDateString([], { day: '2-digit', month: '2-digit', year: 'numeric' })} {effectiveTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
+                        </div>
+                        <div className="c b text-sm mt-0.5 text-black uppercase">VENDOR: {currentUser.name}</div>
+                    </div>
+                    <div className="c b huge text-xl bg-white text-black border-2 border-black rounded-none px-1 py-1.5 my-1 text-center font-black tracking-tight leading-none">
+                        PRINT TEST OK
+                    </div>
+                    <div className="border-t-2 border-black mt-1.5 pt-1 bg-white">
+                        <div className="c b text-base text-black font-black text-center">This is a test print</div>
+                    </div>
+                    <div className="c b text-xs text-black mt-1 text-center">*** Remove after testing ***</div>
+                </div>
             </div>
         </div>
     );
