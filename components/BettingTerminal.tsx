@@ -1,5 +1,6 @@
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { Race, Ticket, User, DepositLog, ChatMessage, ChatThread, BetSlip, BetTypeOption, BetSelection, WithdrawalRequest, DepositRequest, ManualBetOrder, RaceResult } from '../types';
 import { TicketModal } from './TicketModal';
 import { CustomerDepositPanel } from './CustomerDepositPanel';
@@ -143,6 +144,8 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
     
     const [view, setView] = useState<View>('DASHBOARD');
     const isAndroidTerminal = useMemo(() => /android|sunmi/i.test(navigator.userAgent || ''), []);
+    const isNativeAndroid = useMemo(() => Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android', []);
+    const [showInstallGuide, setShowInstallGuide] = useState(false);
     const [selectedRace, setSelectedRace] = useState<Race | null>(null);
     const [selectedBetType, setSelectedBetType] = useState<BetTypeOption | null>(null);
     const [selectedNumbers, setSelectedNumbers] = useState<number[]>([]);
@@ -173,6 +176,17 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
             setSelectedRace(availableRaces[0] || null);
         }
     }, [availableRaces, effectiveTime, selectedRace]);
+
+    useEffect(() => {
+        if (!isAndroidTerminal || isNativeAndroid) return;
+        if (localStorage.getItem('betese_apk_install_guide_seen') === '1') return;
+        setShowInstallGuide(true);
+    }, [isAndroidTerminal, isNativeAndroid]);
+
+    const closeInstallGuide = () => {
+        localStorage.setItem('betese_apk_install_guide_seen', '1');
+        setShowInstallGuide(false);
+    };
 
     const timeRemaining = selectedRace ? selectedRace.endDate.getTime() - effectiveTime.getTime() : 0;
     const isBettingClosed = timeRemaining <= BETTING_CUTOFF_MS;
@@ -583,6 +597,40 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
 
     return (
         <div className="max-w-7xl mx-auto px-2">
+            {showInstallGuide && (
+                <div className="fixed inset-0 z-[80] bg-black/70 flex items-center justify-center p-4">
+                    <div className="w-full max-w-md rounded-3xl bg-white shadow-2xl overflow-hidden border-4 border-betese-green">
+                        <div className="bg-betese-green px-5 py-4 text-white">
+                            <p className="text-[11px] font-black uppercase tracking-widest opacity-80">First time install</p>
+                            <h3 className="text-xl font-black uppercase">Install Betese PMU App</h3>
+                        </div>
+                        <div className="p-5 space-y-3 text-sm text-gray-700">
+                            <p className="font-semibold">1. Tap <span className="font-black text-betese-green">Download APK</span>.</p>
+                            <p className="font-semibold">2. Open the downloaded file from the notification or Downloads folder.</p>
+                            <p className="font-semibold">3. Tap <span className="font-black text-betese-green">Install</span>.</p>
+                            <p className="font-semibold">4. Open the installed app from the app icon, not the browser.</p>
+                            <div className="rounded-2xl bg-amber-50 border border-amber-200 px-4 py-3 text-xs font-semibold text-amber-900">
+                                If Android blocks installation, allow <span className="font-black">Install unknown apps</span> for the browser/file app first.
+                            </div>
+                        </div>
+                        <div className="p-5 pt-0 flex gap-3">
+                            <a
+                                href="/betesepmu.apk?v=20260518"
+                                download="betesepmu.apk"
+                                className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 bg-betese-green text-white font-black rounded-xl shadow hover:brightness-110 active:scale-95 transition-all text-sm uppercase"
+                            >
+                                Download APK
+                            </a>
+                            <button
+                                onClick={closeInstallGuide}
+                                className="px-4 py-3 bg-gray-100 text-gray-700 font-black rounded-xl shadow hover:bg-gray-200 active:scale-95 transition-all text-sm uppercase"
+                            >
+                                Later
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
             {rapportModalRace && <RapportModal race={rapportModalRace} onClose={() => setRapportModalRace(null)} showPrintButton={true} />}
             {view !== 'DASHBOARD' && <BackButton onClick={handleReturn} />}
             {renderView()}
