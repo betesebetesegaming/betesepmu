@@ -177,9 +177,9 @@ export const triggerPrint = (elementId: string, options: TriggerPrintOptions = {
     console.log('📏 Paper size:', { paperWidthMm, paperHeightMm, pageSize, direct57x40: options.direct57x40 });
     const qrWidthMm = clamp(Math.round(paperWidthMm * (isTicketPrint ? 0.56 : 0.68)), 26, 72);
     const textColumns = clamp(Math.round(paperWidthMm * (32 / 58)), 24, 64);
-    const baseFontPx = isTicketPrint ? 18 : 18;
-    const baseLineHeight = isTicketPrint ? 1.3 : 1.4;
-    const hugeFontPx = isTicketPrint ? 34 : 32;
+    const baseFontPx = isAndroidTerminal ? (isTicketPrint ? 22 : 20) : (isTicketPrint ? 18 : 18);
+    const baseLineHeight = isAndroidTerminal ? (isTicketPrint ? 1.22 : 1.32) : (isTicketPrint ? 1.3 : 1.4);
+    const hugeFontPx = isAndroidTerminal ? (isTicketPrint ? 40 : 36) : (isTicketPrint ? 34 : 32);
 
     const oldStage = document.getElementById('betese-print-stage');
     if (oldStage) oldStage.remove();
@@ -487,8 +487,6 @@ export const triggerPrint = (elementId: string, options: TriggerPrintOptions = {
 
     const tryNativeAndroidPrint = async (): Promise<boolean> => {
         if (!isAndroidTerminal) return false;
-        // On Sunmi, avoid Android print spooler UI; use Sunmi/BT paths instead.
-        if (isSunmiTerminal) return false;
         try {
             await NativePrint.printHtml({
                 html: buildPrintableHtml(),
@@ -660,12 +658,12 @@ export const triggerPrint = (elementId: string, options: TriggerPrintOptions = {
         // Native APK mode should stay on direct printer paths only.
         void trySunmiBuiltinPrint().then((sunmiPrinted) => {
             if (sunmiPrinted) return;
-            void tryNativeBluetoothThermalPrint().then((btPrinted) => {
-                if (btPrinted) return;
-                void tryMateBTPrint().then((matePrinted) => {
-                    if (matePrinted) return;
-                    void tryNativeAndroidPrint().then((printed) => {
-                        if (printed) return;
+            void tryNativeAndroidPrint().then((printed) => {
+                if (printed) return;
+                void tryNativeBluetoothThermalPrint().then((btPrinted) => {
+                    if (btPrinted) return;
+                    void tryMateBTPrint().then((matePrinted) => {
+                        if (matePrinted) return;
                         void tryRawBtPrint().then((rawBtPrinted) => {
                             if (!rawBtPrinted) {
                                 console.warn('Native print failed: no direct printer bridge available.');

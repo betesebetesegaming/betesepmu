@@ -225,7 +225,7 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
     };
 
     const handlePrintTestTicket = () => {
-        triggerPrint('printable-test-ticket');
+        triggerPrint('printable-test-ticket', { direct57x40: true });
     };
 
     const handleShareEndOfSaleWhatsApp = () => {
