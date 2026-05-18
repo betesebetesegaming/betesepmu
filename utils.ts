@@ -422,6 +422,57 @@ export const triggerPrint = (elementId: string, options: TriggerPrintOptions = {
         return true;
     };
 
+    const tryAndroidBrowserIframePrint = (): boolean => {
+        if (isNativeAndroid || !isAndroidTerminal) return false;
+
+        const iframe = document.createElement('iframe');
+        iframe.setAttribute('aria-hidden', 'true');
+        iframe.style.position = 'fixed';
+        iframe.style.right = '0';
+        iframe.style.bottom = '0';
+        iframe.style.width = '0';
+        iframe.style.height = '0';
+        iframe.style.border = '0';
+        iframe.style.opacity = '0';
+        document.body.appendChild(iframe);
+
+        const frameWindow = iframe.contentWindow;
+        const frameDoc = frameWindow?.document;
+        if (!frameWindow || !frameDoc) {
+            iframe.remove();
+            return false;
+        }
+
+        frameDoc.open();
+        frameDoc.write(buildPrintableHtml());
+        frameDoc.close();
+
+        const cleanupFrame = () => {
+            setTimeout(() => {
+                try { iframe.remove(); } catch {}
+            }, 1800);
+        };
+
+        const runPrint = () => {
+            try {
+                frameWindow.focus();
+                frameWindow.print();
+            } catch (e) {
+                console.error('IFRAME PRINT ERROR:', e);
+            }
+            cleanupFrame();
+            cleanup();
+        };
+
+        if (frameDoc.readyState === 'complete') {
+            setTimeout(runPrint, 260);
+        } else {
+            iframe.onload = () => setTimeout(runPrint, 260);
+        }
+
+        return true;
+    };
+
     const tryNativeAndroidPrint = async (): Promise<boolean> => {
         if (!isNativeAndroid) return false;
         // On Sunmi, avoid Android print spooler UI; use Sunmi/BT paths instead.
@@ -503,9 +554,13 @@ export const triggerPrint = (elementId: string, options: TriggerPrintOptions = {
         // This matches the original behavior users rely on.
 
         if (!isNativeAndroid) {
-            // Use dedicated popup print page so only ticket content is printed (not the full modal/screen).
+            // Use dedicated iframe print page so only ticket content is printed (not the full modal/screen).
+            const iframePrinted = tryAndroidBrowserIframePrint();
+            if (iframePrinted) return;
+            // Fallback to popup if iframe print is blocked by WebView policy.
             const popupPrinted = tryAndroidBrowserPopupPrint();
             if (popupPrinted) return;
+            // Last fallback: current-page print.
             doPrint();
             return;
         }
