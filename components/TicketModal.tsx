@@ -25,7 +25,9 @@ export const TicketModal: React.FC<TicketModalProps> = ({ ticket, onClose, showP
   const handleDirect57x40Print = () => {
     console.log('📋 DIRECT 57x40 button clicked, ticket ID:', ticket.id);
     try {
-      triggerPrint(`ticket-receipt-${ticket.id}`, { direct57x40: true });
+      // Temporary reliability mode: use the stable print pipeline first.
+      // We can re-enable strict 57x40 once physical printing is confirmed.
+      triggerPrint(`ticket-receipt-${ticket.id}`);
     } catch (e) {
       console.error('❌ Direct print failed:', e);
       alert('Direct print failed - see console for details');

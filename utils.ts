@@ -608,9 +608,14 @@ export const triggerPrint = (elementId: string, options: TriggerPrintOptions = {
                 }
                 
                 // Restore page after print dialog closes/cancels
+                let restored = false;
                 const restorePage = () => {
+                    if (restored) return;
+                    restored = true;
                     console.log('🖨️ Restoring page after print');
-                    document.head.removeChild(style);
+                    if (style.parentNode) {
+                        style.parentNode.removeChild(style);
+                    }
                     originalDisplays.forEach((display, el) => {
                         el.style.display = display;
                     });
@@ -621,8 +626,9 @@ export const triggerPrint = (elementId: string, options: TriggerPrintOptions = {
                 };
                 
                 window.addEventListener('afterprint', restorePage);
-                // Fallback restore in case afterprint doesn't fire
-                setTimeout(restorePage, 6000);
+                // Some Android print dialogs fire late; keep content stable while user confirms print.
+                // Restore only after a long timeout as a safety net if afterprint never fires.
+                setTimeout(restorePage, 90000);
             };
             
             printAndRestore();
