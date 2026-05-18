@@ -16,6 +16,10 @@ export const TicketModal: React.FC<TicketModalProps> = ({ ticket, onClose, showP
     triggerPrint(`ticket-receipt-${ticket.id}`);
   };
 
+  const handleDirect57x40Print = () => {
+    triggerPrint(`ticket-receipt-${ticket.id}`, { direct57x40: true });
+  };
+
   const isPaid = ticket.status === 'Paid';
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${ticket.id}`;
   const raceResultLines = Array.from(new Set(ticket.selections.map(sel => sel.raceId))).map((raceId) => {
@@ -123,12 +127,20 @@ export const TicketModal: React.FC<TicketModalProps> = ({ ticket, onClose, showP
           
           <div className="p-4 bg-white border-t rounded-b-xl space-y-2">
             {showPrintButton && (
+              <>
                 <button
-                    onClick={handlePrint}
-                    className="w-full py-4 bg-betese-green text-white font-black text-2xl rounded-lg shadow-xl active:scale-95 transition-all flex justify-center items-center gap-2 border-b-4 border-black/20"
+                  onClick={handleDirect57x40Print}
+                  className="w-full py-3 bg-black text-white font-black text-lg rounded-lg shadow-xl active:scale-95 transition-all flex justify-center items-center gap-2 border-b-4 border-black/40"
                 >
-                    <svg viewBox="0 0 24 24" fill="none" className="w-6 h-6" stroke="currentColor" strokeWidth="1.8"><rect x="7" y="4" width="10" height="5"/><rect x="5" y="9" width="14" height="8" rx="2"/><rect x="8" y="14" width="8" height="6"/></svg> PRINT TICKET
+                  <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5" stroke="currentColor" strokeWidth="1.8"><rect x="7" y="4" width="10" height="5"/><rect x="5" y="9" width="14" height="8" rx="2"/><rect x="8" y="14" width="8" height="6"/></svg> DIRECT 57x40MM
                 </button>
+                <button
+                  onClick={handlePrint}
+                  className="w-full py-4 bg-betese-green text-white font-black text-2xl rounded-lg shadow-xl active:scale-95 transition-all flex justify-center items-center gap-2 border-b-4 border-black/20"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" className="w-6 h-6" stroke="currentColor" strokeWidth="1.8"><rect x="7" y="4" width="10" height="5"/><rect x="5" y="9" width="14" height="8" rx="2"/><rect x="8" y="14" width="8" height="6"/></svg> PRINT TICKET
+                </button>
+              </>
             )}
             <button onClick={onClose} className="w-full py-2 text-gray-500 font-bold text-xs uppercase tracking-widest bg-gray-50 rounded-lg">Close</button>
           </div>

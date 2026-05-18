@@ -126,11 +126,15 @@ export const getEffectiveTicketStatus = (ticket: Ticket, now: Date): Ticket['sta
   return ticket.status;
 };
 
+interface TriggerPrintOptions {
+        direct57x40?: boolean;
+}
+
 /**
  * STABLE PMU PRINT ENGINE (V5 - FINAL PRODUCTION)
  * This is based on the 'Copy of Copy' version that works perfectly.
  */
-export const triggerPrint = (elementId: string): void => {
+export const triggerPrint = (elementId: string, options: TriggerPrintOptions = {}): void => {
     const sourceElement = document.getElementById(elementId);
     if (!sourceElement) {
         console.error("PRINT ERROR: Element not found", elementId);
@@ -156,6 +160,9 @@ export const triggerPrint = (elementId: string): void => {
         : clamp(measuredContentWidthMm, minimumPaperWidthMm, 112);
     // Android terminal print services are most stable at ISO C8-equivalent 57mm width.
     const paperWidthMm = isAndroidTerminal ? 57 : requestedPaperWidthMm;
+    const paperHeightMm = options.direct57x40 ? 40 : null;
+    const pageSize = paperHeightMm ? `${paperWidthMm}mm ${paperHeightMm}mm` : `${paperWidthMm}mm auto`;
+    const stagePaddingMm = paperHeightMm ? 1 : 2;
     const qrWidthMm = clamp(Math.round(paperWidthMm * (isTicketPrint ? 0.56 : 0.68)), 26, 72);
     const textColumns = clamp(Math.round(paperWidthMm * (32 / 58)), 24, 64);
     const baseFontPx = isTicketPrint ? 18 : 18;
@@ -175,6 +182,7 @@ export const triggerPrint = (elementId: string): void => {
             left: -10000px;
             top: 0;
             width: ${paperWidthMm}mm;
+            ${paperHeightMm ? `height: ${paperHeightMm}mm; max-height: ${paperHeightMm}mm; overflow: hidden;` : ''}
             padding: 0;
             margin: 0;
             background: #fff;
@@ -216,10 +224,10 @@ export const triggerPrint = (elementId: string): void => {
                 left: 0 !important;
                 width: ${paperWidthMm}mm !important;
                 min-height: 0 !important;
-                height: auto !important;
+                ${paperHeightMm ? `height: ${paperHeightMm}mm !important; max-height: ${paperHeightMm}mm !important;` : 'height: auto !important;'}
                 margin: 0 !important;
-                padding: 2mm !important;
-                overflow: visible !important;
+                padding: ${stagePaddingMm}mm !important;
+                overflow: ${paperHeightMm ? 'hidden' : 'visible'} !important;
                 font-family: 'Courier New', Courier, monospace !important;
                 font-size: ${baseFontPx}px !important;
                 font-weight: 900 !important;
@@ -231,8 +239,8 @@ export const triggerPrint = (elementId: string): void => {
                 page-break-inside: avoid !important;
                 break-inside: avoid-page !important;
             }
-            @page receipt { margin: 0; size: ${paperWidthMm}mm auto; }
-            @page { margin: 0; size: ${paperWidthMm}mm auto; }
+            @page receipt { margin: 0; size: ${pageSize}; }
+            @page { margin: 0; size: ${pageSize}; }
         }
     `;
     document.head.appendChild(printStyle);
@@ -305,6 +313,7 @@ export const triggerPrint = (elementId: string): void => {
                     <meta charset="utf-8" />
                     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
                     <meta name="thermal-paper-width" content="${paperWidthMm}mm" />
+                    ${paperHeightMm ? `<meta name="thermal-paper-height" content="${paperHeightMm}mm" />` : ''}
                     <style>${printStyle.textContent || ''}</style>
                 </head>
                 <body>
@@ -494,7 +503,9 @@ export const triggerPrint = (elementId: string): void => {
         // This matches the original behavior users rely on.
 
         if (!isNativeAndroid) {
-            // Print directly from current page on Android browser to keep thermal width CSS intact.
+            // Use dedicated popup print page so only ticket content is printed (not the full modal/screen).
+            const popupPrinted = tryAndroidBrowserPopupPrint();
+            if (popupPrinted) return;
             doPrint();
             return;
         }
