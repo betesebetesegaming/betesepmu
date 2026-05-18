@@ -48,16 +48,20 @@ public class SunmiPrintPlugin extends Plugin {
         }
     };
 
-    @Override
-    public void load() {
+    private boolean bindSunmiService() {
         try {
             Intent intent = new Intent();
-            intent.setPackage(SUNMI_SERVICE_PKG);
             intent.setAction(SUNMI_SERVICE_CLASS);
-            getContext().bindService(intent, connection, Context.BIND_AUTO_CREATE);
+            intent.setClassName(SUNMI_SERVICE_PKG, SUNMI_SERVICE_CLASS);
+            return getContext().bindService(intent, connection, Context.BIND_AUTO_CREATE);
         } catch (Exception e) {
-            // Not a Sunmi device — silently ignore
+            return false;
         }
+    }
+
+    @Override
+    public void load() {
+        bindSunmiService();
     }
 
     /**
@@ -110,6 +114,7 @@ public class SunmiPrintPlugin extends Plugin {
             return;
         }
 
+        bindSunmiService();
         handler.postDelayed(() -> retryPrintAfterBind(call, text, attempt + 1), BIND_RETRY_DELAY_MS);
     }
 

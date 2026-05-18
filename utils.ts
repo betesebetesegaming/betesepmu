@@ -667,7 +667,8 @@ export const triggerPrint = (elementId: string, options: TriggerPrintOptions = {
                         void tryRawBtPrint().then((rawBtPrinted) => {
                             if (!rawBtPrinted) {
                                 console.warn('Native print failed: no direct printer bridge available.');
-                                alert('Printer not ready. Check Sunmi printer, Bluetooth pairing, or app permissions.');
+                                // Last fallback in APK mode: open system print preview so printing can still continue.
+                                doPrint();
                             }
                         });
                     });
