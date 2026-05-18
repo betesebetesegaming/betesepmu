@@ -483,7 +483,7 @@ export const triggerPrint = (elementId: string, options: TriggerPrintOptions = {
     };
 
     const tryNativeAndroidPrint = async (): Promise<boolean> => {
-        if (!isNativeAndroid) return false;
+        if (!isAndroidTerminal) return false;
         // On Sunmi, avoid Android print spooler UI; use Sunmi/BT paths instead.
         if (isSunmiTerminal) return false;
         try {
@@ -500,7 +500,7 @@ export const triggerPrint = (elementId: string, options: TriggerPrintOptions = {
     };
 
     const tryNativeBluetoothThermalPrint = async (): Promise<boolean> => {
-        if (!isNativeAndroid) return false;
+        if (!isAndroidTerminal) return false;
         try {
             const preferredAddress = localStorage.getItem('betese_bt_printer_address') || undefined;
             await BluetoothThermalPrint.printText({
@@ -517,13 +517,25 @@ export const triggerPrint = (elementId: string, options: TriggerPrintOptions = {
     };
 
     const tryRawBtPrint = async (): Promise<boolean> => {
-        // Disabled by default to avoid Play Store/licensing popups on terminals.
-        return false;
+        if (!isAndroidTerminal) return false;
+        try {
+            const check = await RawBtPrint.isInstalled();
+            if (!check.installed) return false;
+            const result = await RawBtPrint.printText({ text: buildPrintableText() });
+            if (result.success) {
+                cleanup();
+                return true;
+            }
+            return false;
+        } catch (e) {
+            console.warn('Raw BT print unavailable, fallback to next print mode', e);
+            return false;
+        }
     };
 
     // Mate Technologies Bluetooth Printer (third-party APK support)
     const tryMateBTPrint = async (): Promise<boolean> => {
-        if (!isNativeAndroid) return false;
+        if (!isAndroidTerminal) return false;
         try {
             const preferredAddress = localStorage.getItem('betese_mate_bt_printer_address') || undefined;
             const result = await MateBTPrint.printText({
@@ -544,7 +556,7 @@ export const triggerPrint = (elementId: string, options: TriggerPrintOptions = {
 
     // Sunmi built-in printer via Sunmi Print AIDL service (direct, no Bluetooth needed)
     const trySunmiBuiltinPrint = async (): Promise<boolean> => {
-        if (!isNativeAndroid) return false;
+        if (!isAndroidTerminal) return false;
         if (!isSunmiTerminal) return false;
         try {
             const text = buildPrintableText();
@@ -563,9 +575,19 @@ export const triggerPrint = (elementId: string, options: TriggerPrintOptions = {
         // This matches the original behavior users rely on.
 
         if (!isNativeAndroid) {
-            // Most reliable Android print: hide page, print ticket element, restore page.
-            console.log('🖨️ STARTING ANDROID TERMINAL PRINT (direct window.print)');
-            const printAndRestore = () => {
+            // Browser/PWA mode: attempt direct thermal integrations first, then fallback to print preview.
+            void trySunmiBuiltinPrint().then((sunmiPrinted) => {
+                if (sunmiPrinted) return;
+                void tryNativeBluetoothThermalPrint().then((btPrinted) => {
+                    if (btPrinted) return;
+                    void tryMateBTPrint().then((matePrinted) => {
+                        if (matePrinted) return;
+                        void tryRawBtPrint().then((rawBtPrinted) => {
+                            if (rawBtPrinted) return;
+
+                            // Final fallback: browser print preview path.
+                            console.log('🖨️ STARTING ANDROID TERMINAL PRINT (direct window.print fallback)');
+                            const printAndRestore = () => {
                 // Store original visibility state
                 const originalDisplays = new Map<HTMLElement, string>();
                 
@@ -629,9 +651,13 @@ export const triggerPrint = (elementId: string, options: TriggerPrintOptions = {
                 // Some Android print dialogs fire late; keep content stable while user confirms print.
                 // Restore only after a long timeout as a safety net if afterprint never fires.
                 setTimeout(restorePage, 90000);
-            };
-            
-            printAndRestore();
+                            };
+
+                            printAndRestore();
+                        });
+                    });
+                });
+            });
             return;
         }
 
