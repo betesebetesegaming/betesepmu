@@ -152,7 +152,9 @@ export const triggerPrint = (elementId: string, options: TriggerPrintOptions = {
     const isSunmiTerminal = /sunmi/i.test(navigator.userAgent || '') ||
         /sunmi/i.test((window as any).SunmiModelName || '') ||
         typeof (window as any).SunmiInnerPrinter !== 'undefined';
-    const disableBrowserPreviewForTerminal = isAndroidTerminal && localStorage.getItem('betese_disable_browser_preview') !== '0';
+    // Preview fallback should be enabled by default in browser mode.
+    // Set localStorage.betese_disable_browser_preview = '1' only for strict direct-print kiosks.
+    const disableBrowserPreviewForTerminal = isAndroidTerminal && localStorage.getItem('betese_disable_browser_preview') === '1';
 
     console.log('📱 Device detection:', { isAndroidTerminal, isNativeAndroid, isSunmiTerminal, disableBrowserPreviewForTerminal });
 
