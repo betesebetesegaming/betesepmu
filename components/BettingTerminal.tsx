@@ -142,6 +142,7 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
     } = props;
     
     const [view, setView] = useState<View>('DASHBOARD');
+    const isAndroidTerminal = useMemo(() => /android|sunmi/i.test(navigator.userAgent || ''), []);
     const [selectedRace, setSelectedRace] = useState<Race | null>(null);
     const [selectedBetType, setSelectedBetType] = useState<BetTypeOption | null>(null);
     const [selectedNumbers, setSelectedNumbers] = useState<number[]>([]);
@@ -536,6 +537,31 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                                 </div>
                                 <button onClick={handlePrintDailyReport} className="px-6 py-4 bg-betese-green text-white font-black rounded-xl shadow hover:brightness-110 active:scale-95 text-sm uppercase flex items-center gap-2 border-b-4 border-black/20"><svg viewBox="0 0 24 24" fill="none" className="w-5 h-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M4 20V12M10 20V8M16 20V5M22 20V10"/></svg> PRINT SALES</button>
                             </div>
+                        </div>
+
+                        <div className="bg-white rounded-2xl shadow-xl border-l-8 border-betese-green p-4 sm:p-5">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                <div>
+                                    <p className="text-[11px] font-black text-betese-green uppercase">Vendor App Installer</p>
+                                    <h3 className="text-lg font-black text-gray-900 uppercase">Install Betese PMU Android App</h3>
+                                    <p className="text-xs text-gray-600 mt-1">
+                                        Use the app for faster terminal performance and direct printer integration.
+                                    </p>
+                                </div>
+                                <a
+                                    href="/betesepmu.apk"
+                                    download="betesepmu.apk"
+                                    className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-betese-green text-white font-black rounded-xl shadow hover:brightness-110 active:scale-95 transition-all border-b-4 border-black/20 text-sm uppercase"
+                                >
+                                    <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
+                                    Download APK
+                                </a>
+                            </div>
+                            <p className="text-[11px] text-gray-500 mt-3 font-semibold">
+                                {isAndroidTerminal
+                                    ? 'Android: after download, open the APK file and tap Install.'
+                                    : 'Open this dashboard on Android terminal to install directly.'}
+                            </p>
                         </div>
 
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 animate-fade-in">
