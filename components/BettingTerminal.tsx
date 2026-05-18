@@ -549,7 +549,7 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                                     </p>
                                 </div>
                                 <a
-                                    href="/betesepmu.apk"
+                                    href="/betesepmu.apk?v=20260518"
                                     download="betesepmu.apk"
                                     className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-betese-green text-white font-black rounded-xl shadow hover:brightness-110 active:scale-95 transition-all border-b-4 border-black/20 text-sm uppercase"
                                 >
