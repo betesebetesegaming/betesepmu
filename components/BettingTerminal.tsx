@@ -547,6 +547,10 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                                     <p className="text-xs text-gray-600 mt-1">
                                         Use the app for faster terminal performance and direct printer integration.
                                     </p>
+                                    <div className="mt-2 inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-gray-100 text-gray-700 border border-gray-200">
+                                        <span className={`w-2.5 h-2.5 rounded-full ${isAndroidTerminal ? 'bg-green-500' : 'bg-amber-500'}`}></span>
+                                        {isAndroidTerminal ? 'Native Android App / Terminal Mode' : 'Browser Mode / Install APK for Terminal'}
+                                    </div>
                                 </div>
                                 <a
                                     href="/betesepmu.apk?v=20260518"
