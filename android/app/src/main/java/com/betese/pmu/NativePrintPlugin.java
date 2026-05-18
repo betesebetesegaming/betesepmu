@@ -14,8 +14,41 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 @CapacitorPlugin(name = "NativePrint")
 public class NativePrintPlugin extends Plugin {
+
+    private static final Pattern PAPER_WIDTH_PATTERN = Pattern.compile("<meta[^>]*name=\"thermal-paper-width\"[^>]*content=\"([0-9.]+)mm\"", Pattern.CASE_INSENSITIVE);
+    private static final Pattern PAPER_HEIGHT_PATTERN = Pattern.compile("<meta[^>]*name=\"thermal-paper-height\"[^>]*content=\"([0-9.]+)mm\"", Pattern.CASE_INSENSITIVE);
+
+    private int mmToMils(double mm) {
+        return Math.max(1, (int) Math.round(mm * 39.3701));
+    }
+
+    private PrintAttributes.MediaSize resolveMediaSize(String html) {
+        double widthMm = 57.0;
+        double heightMm = 40.0;
+
+        try {
+            Matcher widthMatcher = PAPER_WIDTH_PATTERN.matcher(html);
+            if (widthMatcher.find()) {
+                widthMm = Double.parseDouble(widthMatcher.group(1));
+            }
+            Matcher heightMatcher = PAPER_HEIGHT_PATTERN.matcher(html);
+            if (heightMatcher.find()) {
+                heightMm = Double.parseDouble(heightMatcher.group(1));
+            }
+        } catch (Exception ignored) {}
+
+        return new PrintAttributes.MediaSize(
+            "betese_receipt_" + (int) widthMm + "x" + (int) heightMm,
+            "Betese Receipt " + (int) widthMm + "x" + (int) heightMm + "mm",
+            mmToMils(widthMm),
+            mmToMils(heightMm)
+        );
+    }
 
     @PluginMethod
     public void printHtml(PluginCall call) {
@@ -50,9 +83,11 @@ public class NativePrintPlugin extends Plugin {
                             printAdapter = view.createPrintDocumentAdapter();
                         }
 
+                        PrintAttributes.MediaSize mediaSize = resolveMediaSize(html);
                         PrintAttributes.Builder attrBuilder = new PrintAttributes.Builder()
                                 .setColorMode(PrintAttributes.COLOR_MODE_MONOCHROME)
-                                .setMediaSize(PrintAttributes.MediaSize.UNKNOWN_PORTRAIT)
+                                .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
+                                .setMediaSize(mediaSize)
                                 .setResolution(new PrintAttributes.Resolution("thermal", "thermal", 203, 203));
 
                         printManager.print(jobName, printAdapter, attrBuilder.build());
