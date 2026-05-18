@@ -657,7 +657,7 @@ export const triggerPrint = (elementId: string, options: TriggerPrintOptions = {
             return;
         }
 
-        // Print chain: Sunmi built-in → BT thermal → Mate BT → NativePrint (non-Sunmi) → RawBT (non-Sunmi) → web print
+        // Native APK mode should stay on direct printer paths only.
         void trySunmiBuiltinPrint().then((sunmiPrinted) => {
             if (sunmiPrinted) return;
             void tryNativeBluetoothThermalPrint().then((btPrinted) => {
@@ -667,7 +667,10 @@ export const triggerPrint = (elementId: string, options: TriggerPrintOptions = {
                     void tryNativeAndroidPrint().then((printed) => {
                         if (printed) return;
                         void tryRawBtPrint().then((rawBtPrinted) => {
-                            if (!rawBtPrinted) doPrint();
+                            if (!rawBtPrinted) {
+                                console.warn('Native print failed: no direct printer bridge available.');
+                                alert('Printer not ready. Check Sunmi printer, Bluetooth pairing, or app permissions.');
+                            }
                         });
                     });
                 });

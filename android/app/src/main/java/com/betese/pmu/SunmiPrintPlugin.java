@@ -14,6 +14,8 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
 import java.nio.charset.StandardCharsets;
+import android.os.Handler;
+import android.os.Looper;
 
 /**
  * SunmiPrintPlugin — connects to the Sunmi built-in printer via the Sunmi
@@ -26,9 +28,12 @@ public class SunmiPrintPlugin extends Plugin {
     // Sunmi internal print service component
     private static final String SUNMI_SERVICE_PKG  = "woyou.aidlservice.jiuiv5";
     private static final String SUNMI_SERVICE_CLASS = "woyou.aidlservice.jiuiv5.IWoyouService";
+    private static final long BIND_RETRY_DELAY_MS = 250;
+    private static final int MAX_BIND_RETRY_COUNT = 8;
 
     private IBinder sunmiBinder = null;
     private boolean serviceBound = false;
+    private final Handler handler = new Handler(Looper.getMainLooper());
 
     private final ServiceConnection connection = new ServiceConnection() {
         @Override
@@ -62,6 +67,16 @@ public class SunmiPrintPlugin extends Plugin {
     @PluginMethod
     public void printText(PluginCall call) {
         String text = call.getString("text", "");
+        if (text == null || text.isEmpty()) {
+            call.reject("Missing print text");
+            return;
+        }
+
+        if (!serviceBound || sunmiBinder == null) {
+            retryPrintAfterBind(call, text, 0);
+            return;
+        }
+
         if (!serviceBound || sunmiBinder == null || text == null || text.isEmpty()) {
             call.reject("Sunmi printer not available");
             return;
@@ -82,6 +97,20 @@ public class SunmiPrintPlugin extends Plugin {
         } catch (RemoteException e) {
             call.reject("Sunmi print failed: " + e.getMessage());
         }
+    }
+
+    private void retryPrintAfterBind(PluginCall call, String text, int attempt) {
+        if (attempt >= MAX_BIND_RETRY_COUNT) {
+            call.reject("Sunmi printer not available");
+            return;
+        }
+
+        if (serviceBound && sunmiBinder != null) {
+            printText(call);
+            return;
+        }
+
+        handler.postDelayed(() -> retryPrintAfterBind(call, text, attempt + 1), BIND_RETRY_DELAY_MS);
     }
 
     /** Feed and cut paper (transaction code 19 = autoOutPaper). */
