@@ -9,6 +9,7 @@ import { WithdrawalCodeModal } from './components/WithdrawalCodeModal';
 import { SEVEN_DAYS_IN_MS, BETTING_CUTOFF_MS, calculateTicketWinnings, validateTicketForPlacement, validateTicketAgainstRaceState, normalizeGambiaPhone } from './utils';
 import { LanguageProvider } from './LanguageContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { deferWork } from './perf';
 import { 
     supabase, dbPlaceBet, dbPayoutTicket, dbFetchUsers, dbFetchRaces, 
     dbFetchLiveTickets, checkBackendConnection, dbSaveRace, 
@@ -329,17 +330,13 @@ const AppContent: React.FC = () => {
 
           const targetUser = user || currentUser;
 
+          // CRITICAL DATA FIRST: Users, races, tickets, financial transactions
           const [
               usersResult,
               racesResult,
               depositsResult,
               withdrawalsResult,
               depositLogsResult,
-              promotionsResult,
-              threadsResult,
-              messagesResult,
-              programImagesResult,
-              paymentConfigsResult,
               manualBetsResult,
               liveTicketsResult,
           ] = await Promise.allSettled([
@@ -348,31 +345,21 @@ const AppContent: React.FC = () => {
               withRetry(() => dbFetchDepositRequests(), 2, 250),
               withRetry(() => dbFetchWithdrawalRequests(), 2, 250),
               withRetry(() => dbFetchDepositLogs(), 2, 250),
-              withRetry(() => dbFetchPromotions(), 2, 250),
-              withRetry(() => dbFetchChatThreads(), 2, 250),
-              withRetry(() => dbFetchChatMessages(), 2, 250),
-              withRetry(() => dbFetchProgramImages(), 2, 250),
-              withRetry(() => dbFetchPaymentConfigs(), 2, 250),
               withRetry(() => dbFetchManualBetOrders(), 2, 250),
               targetUser ? withRetry(() => dbFetchLiveTickets(targetUser), 2, 250) : Promise.resolve([] as Ticket[])
           ]);
           
-          const hadAtLeastOneSuccess = [
+          const criticalSuccess = [
               usersResult,
               racesResult,
               depositsResult,
               withdrawalsResult,
               depositLogsResult,
-              promotionsResult,
-              threadsResult,
-              messagesResult,
-              programImagesResult,
-              paymentConfigsResult,
               manualBetsResult,
               liveTicketsResult,
           ].some(r => r.status === 'fulfilled');
 
-          setIsOnline(hadAtLeastOneSuccess);
+          setIsOnline(criticalSuccess);
 
           if (usersResult.status === 'fulfilled' && usersResult.value && usersResult.value.length > 0) {
               const normalizedUsers = usersResult.value.map(u => ({ ...u, role: normalizeRole(u.role) }));
@@ -444,13 +431,31 @@ const AppContent: React.FC = () => {
           })));
           }
 
-          if (promotionsResult.status === 'fulfilled') setPromotions(promotionsResult.value || []);
-          if (threadsResult.status === 'fulfilled') setThreads(threadsResult.value || []);
-          if (messagesResult.status === 'fulfilled') setMessages(messagesResult.value || []);
-          if (programImagesResult.status === 'fulfilled') setProgramImages(programImagesResult.value || []);
-          if (paymentConfigsResult.status === 'fulfilled') setPaymentConfigs(paymentConfigsResult.value || []);
           if (manualBetsResult.status === 'fulfilled') setManualBetOrders(manualBetsResult.value || []);
           if (liveTicketsResult.status === 'fulfilled') setPlacedTickets(liveTicketsResult.value || []);
+          
+          // DEFERRED DATA: Load non-critical features after app is interactive
+          deferWork(() => {
+              Promise.allSettled([
+                  withRetry(() => dbFetchPromotions(), 2, 250),
+                  withRetry(() => dbFetchChatThreads(), 2, 250),
+                  withRetry(() => dbFetchChatMessages(), 2, 250),
+                  withRetry(() => dbFetchProgramImages(), 2, 250),
+                  withRetry(() => dbFetchPaymentConfigs(), 2, 250),
+              ]).then(([promotionsResult, threadsResult, messagesResult, programImagesResult, paymentConfigsResult]) => {
+                  try {
+                      if (promotionsResult.status === 'fulfilled') setPromotions(promotionsResult.value || []);
+                      if (threadsResult.status === 'fulfilled') setThreads(threadsResult.value || []);
+                      if (messagesResult.status === 'fulfilled') setMessages(messagesResult.value || []);
+                      if (programImagesResult.status === 'fulfilled') setProgramImages(programImagesResult.value || []);
+                      if (paymentConfigsResult.status === 'fulfilled') setPaymentConfigs(paymentConfigsResult.value || []);
+                  } catch (err) {
+                      console.error("Deferred data load error:", err);
+                  }
+              }).catch(err => {
+                  console.error("Deferred Promise.allSettled error:", err);
+              });
+          });
       } catch (err) {
           console.error("Data Sync Error:", err);
           setIsOnline(false);

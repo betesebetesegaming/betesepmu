@@ -30,13 +30,40 @@ export default defineConfig(({ mode }) => {
       sourcemap: false,
       minify: 'esbuild',
       chunkSizeWarningLimit: 900,
+      target: 'es2020',
+      assetsInlineLimit: 4096,
       rollupOptions: {
         output: {
-          manualChunks: {
-            react: ['react', 'react-dom'],
-            vendor: ['@supabase/supabase-js'],
+          manualChunks: (id) => {
+            // React vendor chunk
+            if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
+              return 'react';
+            }
+            // Supabase vendor chunk
+            if (id.includes('node_modules/@supabase')) {
+              return 'supabase';
+            }
+            // Dashboard components - load together as they're typically used together
+            if (id.includes('AdminDashboard') || id.includes('SupervisorDashboard') || id.includes('CustomerDashboard')) {
+              return 'dashboards';
+            }
+            // Modal/panel components
+            if (id.includes('TicketModal') || id.includes('ChatSystem')) {
+              return 'modals';
+            }
+            // Betting terminal - usually loaded separately
+            if (id.includes('BettingTerminal')) {
+              return 'betting';
+            }
           },
+          entryFileNames: 'assets/[name]-[hash].js',
+          chunkFileNames: 'assets/[name]-[hash].js',
+          assetFileNames: 'assets/[name]-[hash][extname]',
         },
+        external: [],
+      },
+      commonjsOptions: {
+        transformMixedEsModules: true,
       },
     },
   };
