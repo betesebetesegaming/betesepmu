@@ -13,11 +13,23 @@ interface TicketModalProps {
 export const TicketModal: React.FC<TicketModalProps> = ({ ticket, onClose, showPrintButton, races }) => {
   
   const handlePrint = () => {
-    triggerPrint(`ticket-receipt-${ticket.id}`);
+    console.log('📋 PRINT TICKET button clicked, ticket ID:', ticket.id);
+    try {
+      triggerPrint(`ticket-receipt-${ticket.id}`);
+    } catch (e) {
+      console.error('❌ Print failed:', e);
+      alert('Print failed - see console for details');
+    }
   };
 
   const handleDirect57x40Print = () => {
-    triggerPrint(`ticket-receipt-${ticket.id}`, { direct57x40: true });
+    console.log('📋 DIRECT 57x40 button clicked, ticket ID:', ticket.id);
+    try {
+      triggerPrint(`ticket-receipt-${ticket.id}`, { direct57x40: true });
+    } catch (e) {
+      console.error('❌ Direct print failed:', e);
+      alert('Direct print failed - see console for details');
+    }
   };
 
   const isPaid = ticket.status === 'Paid';

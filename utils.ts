@@ -135,11 +135,16 @@ interface TriggerPrintOptions {
  * This is based on the 'Copy of Copy' version that works perfectly.
  */
 export const triggerPrint = (elementId: string, options: TriggerPrintOptions = {}): void => {
+    console.log('🖨️ triggerPrint() called with:', { elementId, options, userAgent: navigator.userAgent });
+    
     const sourceElement = document.getElementById(elementId);
     if (!sourceElement) {
-        console.error("PRINT ERROR: Element not found", elementId);
+        console.error("❌ PRINT ERROR: Element not found", elementId);
+        alert('Ticket element not found - cannot print');
         return;
     }
+    console.log('✅ Ticket element found, size:', sourceElement.getBoundingClientRect());
+    
     const isTicketPrint = elementId.startsWith('ticket-receipt-');
 
     const isAndroidTerminal = /android|sunmi/i.test(navigator.userAgent || '');
@@ -147,6 +152,8 @@ export const triggerPrint = (elementId: string, options: TriggerPrintOptions = {
     const isSunmiTerminal = /sunmi/i.test(navigator.userAgent || '') ||
         /sunmi/i.test((window as any).SunmiModelName || '') ||
         typeof (window as any).SunmiInnerPrinter !== 'undefined';
+
+    console.log('📱 Device detection:', { isAndroidTerminal, isNativeAndroid, isSunmiTerminal });
 
     const pxPerMm = 96 / 25.4;
     const sourceRect = sourceElement.getBoundingClientRect();
@@ -163,6 +170,8 @@ export const triggerPrint = (elementId: string, options: TriggerPrintOptions = {
     const paperHeightMm = options.direct57x40 ? 40 : null;
     const pageSize = paperHeightMm ? `${paperWidthMm}mm ${paperHeightMm}mm` : `${paperWidthMm}mm auto`;
     const stagePaddingMm = paperHeightMm ? 1 : 2;
+    
+    console.log('📏 Paper size:', { paperWidthMm, paperHeightMm, pageSize, direct57x40: options.direct57x40 });
     const qrWidthMm = clamp(Math.round(paperWidthMm * (isTicketPrint ? 0.56 : 0.68)), 26, 72);
     const textColumns = clamp(Math.round(paperWidthMm * (32 / 58)), 24, 64);
     const baseFontPx = isTicketPrint ? 18 : 18;
@@ -554,14 +563,69 @@ export const triggerPrint = (elementId: string, options: TriggerPrintOptions = {
         // This matches the original behavior users rely on.
 
         if (!isNativeAndroid) {
-            // Use dedicated iframe print page so only ticket content is printed (not the full modal/screen).
-            const iframePrinted = tryAndroidBrowserIframePrint();
-            if (iframePrinted) return;
-            // Fallback to popup if iframe print is blocked by WebView policy.
-            const popupPrinted = tryAndroidBrowserPopupPrint();
-            if (popupPrinted) return;
-            // Last fallback: current-page print.
-            doPrint();
+            // Most reliable Android print: hide page, print ticket element, restore page.
+            console.log('🖨️ STARTING ANDROID TERMINAL PRINT (direct window.print)');
+            const printAndRestore = () => {
+                // Store original visibility state
+                const originalDisplays = new Map<HTMLElement, string>();
+                
+                // Hide all body children except the ticket element
+                Array.from(document.body.children).forEach((child) => {
+                    if (child !== sourceElement && !sourceElement.contains(child as Node)) {
+                        const el = child as HTMLElement;
+                        originalDisplays.set(el, el.style.display);
+                        el.style.display = 'none';
+                    }
+                });
+                
+                // Ensure ticket element is visible
+                const sourceParent = sourceElement.parentElement as HTMLElement | null;
+                const originalParentDisplay = sourceParent?.style.display;
+                if (sourceParent) sourceParent.style.display = 'block';
+                (sourceElement as HTMLElement).style.visibility = 'visible';
+                (sourceElement as HTMLElement).style.position = 'static';
+                (sourceElement as HTMLElement).style.display = 'block';
+                
+                // Set page size for printing
+                const style = document.createElement('style');
+                style.id = 'betese-print-only-style';
+                style.textContent = `
+                    @media print {
+                        * { margin: 0; padding: 0; }
+                        body { width: ${paperWidthMm}mm; margin: 0; padding: 0; }
+                        #${elementId} { visibility: visible; display: block; position: static; width: ${paperWidthMm}mm; margin: 0; padding: 2mm; }
+                    }
+                `;
+                document.head.appendChild(style);
+                
+                // Execute print
+                try {
+                    console.log('🖨️ Calling window.print() with page size:', paperWidthMm + 'mm');
+                    window.focus();
+                    window.print();
+                } catch (e) {
+                    console.error('🖨️ PRINT ERROR:', e);
+                }
+                
+                // Restore page after print dialog closes/cancels
+                const restorePage = () => {
+                    console.log('🖨️ Restoring page after print');
+                    document.head.removeChild(style);
+                    originalDisplays.forEach((display, el) => {
+                        el.style.display = display;
+                    });
+                    if (sourceParent && originalParentDisplay !== undefined) {
+                        sourceParent.style.display = originalParentDisplay;
+                    }
+                    window.removeEventListener('afterprint', restorePage);
+                };
+                
+                window.addEventListener('afterprint', restorePage);
+                // Fallback restore in case afterprint doesn't fire
+                setTimeout(restorePage, 6000);
+            };
+            
+            printAndRestore();
             return;
         }
 
