@@ -12,17 +12,22 @@ interface TicketModalProps {
 
 export const TicketModal: React.FC<TicketModalProps> = ({ ticket, onClose, showPrintButton, races }) => {
   const [isPrinting, setIsPrinting] = React.useState(false);
+  const [printStatus, setPrintStatus] = React.useState('');
+  const autoPrintStartedRef = React.useRef(false);
   const isAndroidTerminal = /android|sunmi/i.test(navigator.userAgent || '');
   
   const handlePrint = () => {
     if (isPrinting) return;
     setIsPrinting(true);
+    setPrintStatus('Starting print...');
     console.log('📋 PRINT TICKET button clicked, ticket ID:', ticket.id);
     try {
       triggerPrint(`ticket-receipt-${ticket.id}`);
+      setPrintStatus('Print command sent.');
     } catch (e) {
       console.error('❌ Print failed:', e);
       alert('Print failed - see console for details');
+      setPrintStatus('Print failed.');
     } finally {
       setTimeout(() => setIsPrinting(false), 3500);
     }
@@ -36,13 +41,26 @@ export const TicketModal: React.FC<TicketModalProps> = ({ ticket, onClose, showP
       // Temporary reliability mode: use the stable print pipeline first.
       // We can re-enable strict 57x40 once physical printing is confirmed.
       triggerPrint(`ticket-receipt-${ticket.id}`);
+      setPrintStatus('Print command sent.');
     } catch (e) {
       console.error('❌ Direct print failed:', e);
       alert('Direct print failed - see console for details');
+      setPrintStatus('Print failed.');
     } finally {
       setTimeout(() => setIsPrinting(false), 3500);
     }
   };
+
+  React.useEffect(() => {
+    if (!showPrintButton || !isAndroidTerminal) return;
+    if (autoPrintStartedRef.current) return;
+    autoPrintStartedRef.current = true;
+    setPrintStatus('Auto print starting...');
+    const timer = window.setTimeout(() => {
+      handlePrint();
+    }, 320);
+    return () => window.clearTimeout(timer);
+  }, [showPrintButton, isAndroidTerminal]);
 
   const isPaid = ticket.status === 'Paid';
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${ticket.id}`;
@@ -163,12 +181,18 @@ export const TicketModal: React.FC<TicketModalProps> = ({ ticket, onClose, showP
                 )}
                 <button
                   onClick={handlePrint}
+                  onTouchEnd={handlePrint}
                   disabled={isPrinting}
                   className="w-full py-4 bg-betese-green text-white font-black text-2xl rounded-lg shadow-xl active:scale-95 transition-all flex justify-center items-center gap-2 border-b-4 border-black/20 disabled:opacity-60"
                 >
                   <svg viewBox="0 0 24 24" fill="none" className="w-6 h-6" stroke="currentColor" strokeWidth="1.8"><rect x="7" y="4" width="10" height="5"/><rect x="5" y="9" width="14" height="8" rx="2"/><rect x="8" y="14" width="8" height="6"/></svg>
                   {isPrinting ? 'PRINTING...' : (isAndroidTerminal ? 'PRINT NOW' : 'PRINT TICKET')}
                 </button>
+                {isAndroidTerminal && (
+                  <div className="text-center text-xs font-semibold text-gray-600 py-1">
+                    {printStatus || 'Print starts automatically when this window opens.'}
+                  </div>
+                )}
               </>
             )}
             <button onClick={onClose} className="w-full py-2 text-gray-500 font-bold text-xs uppercase tracking-widest bg-gray-50 rounded-lg">Close</button>

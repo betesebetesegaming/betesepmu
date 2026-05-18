@@ -588,7 +588,7 @@ export const triggerPrint = (elementId: string, options: TriggerPrintOptions = {
 
                             if (disableBrowserPreviewForTerminal) {
                                 cleanup();
-                                alert('Direct printer bridge not available on this terminal. Printing was not sent.');
+                                console.warn('Direct printer bridge not available on this terminal. Printing was not sent.');
                                 return;
                             }
 
