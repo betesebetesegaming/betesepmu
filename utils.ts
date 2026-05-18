@@ -693,6 +693,47 @@ export const listPairedThermalPrinters = async (): Promise<Array<{ name: string;
     }
 };
 
+export const isRawBtInstalled = async (): Promise<boolean> => {
+    if (!(Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android')) return false;
+    try {
+        const result = await RawBtPrint.isInstalled();
+        return !!result?.installed;
+    } catch {
+        return false;
+    }
+};
+
+export const launchRawBtTest = async (): Promise<{ success: boolean; message: string }> => {
+    if (!(Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android')) {
+        return { success: false, message: 'RawBT test is only available on Android app.' };
+    }
+
+    const installed = await isRawBtInstalled();
+    if (!installed) {
+        return { success: false, message: 'RawBT not installed on this device.' };
+    }
+
+    const sample = [
+        'BETESE PMU RAWBT TEST',
+        new Date().toLocaleString(),
+        '------------------------',
+        'If this prints, RawBT bridge works.',
+        '',
+        '',
+        ''
+    ].join('\n');
+
+    try {
+        const result = await RawBtPrint.printText({ text: sample });
+        if (result?.success) {
+            return { success: true, message: 'RawBT launched. Confirm print in RawBT app.' };
+        }
+        return { success: false, message: 'RawBT launch failed.' };
+    } catch (e: any) {
+        return { success: false, message: `RawBT test failed: ${e?.message || 'unknown error'}` };
+    }
+};
+
 export const listMateBTPrinters = async (): Promise<Array<{ name: string; address: string }>> => {
     if (!(Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android')) return [];
     try {

@@ -15,7 +15,7 @@ import { TicketCheckPanel } from './TicketCheckPanel';
 import { RapportPrintPanel } from './RapportPrintPanel';
 import RaceTimerButton from './RaceTimerButton';
 import { BET_PRICING } from '../constants';
-import { BETTING_CUTOFF_MS, triggerPrint } from '../utils';
+import { BETTING_CUTOFF_MS, triggerPrint, isRawBtInstalled, launchRawBtTest } from '../utils';
 
 interface BettingTerminalProps {
   races: Race[];
@@ -146,6 +146,9 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
     const isAndroidTerminal = useMemo(() => /android|sunmi/i.test(navigator.userAgent || ''), []);
     const isNativeAndroid = useMemo(() => Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android', []);
     const [showInstallGuide, setShowInstallGuide] = useState(false);
+    const [rawBtStatus, setRawBtStatus] = useState<'checking' | 'installed' | 'not-installed' | 'error'>('checking');
+    const [rawBtMessage, setRawBtMessage] = useState('');
+    const [rawBtBusy, setRawBtBusy] = useState(false);
     const [selectedRace, setSelectedRace] = useState<Race | null>(null);
     const [selectedBetType, setSelectedBetType] = useState<BetTypeOption | null>(null);
     const [selectedNumbers, setSelectedNumbers] = useState<number[]>([]);
@@ -186,6 +189,41 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
     const closeInstallGuide = () => {
         localStorage.setItem('betese_apk_install_guide_seen', '1');
         setShowInstallGuide(false);
+    };
+
+    useEffect(() => {
+        let active = true;
+        if (!isNativeAndroid) {
+            setRawBtStatus('not-installed');
+            setRawBtMessage('RawBT status available in Android app only.');
+            return;
+        }
+
+        const check = async () => {
+            try {
+                const installed = await isRawBtInstalled();
+                if (!active) return;
+                setRawBtStatus(installed ? 'installed' : 'not-installed');
+                setRawBtMessage(installed ? 'RawBT installed.' : 'RawBT not installed.');
+            } catch {
+                if (!active) return;
+                setRawBtStatus('error');
+                setRawBtMessage('Could not read RawBT status.');
+            }
+        };
+
+        check();
+        return () => {
+            active = false;
+        };
+    }, [isNativeAndroid]);
+
+    const handleRawBtTest = async () => {
+        if (rawBtBusy) return;
+        setRawBtBusy(true);
+        const result = await launchRawBtTest();
+        setRawBtMessage(result.message);
+        setRawBtBusy(false);
     };
 
     const timeRemaining = selectedRace ? selectedRace.endDate.getTime() - effectiveTime.getTime() : 0;
@@ -590,6 +628,21 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                                 <p className="text-[11px] text-gray-500 font-semibold self-center">
                                     Temporary test only. Remove later after printer is confirmed.
                                 </p>
+                            </div>
+                            <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3">
+                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                    <div className="text-[11px] font-black uppercase tracking-widest text-gray-700">
+                                        RawBT Status: {rawBtStatus}
+                                    </div>
+                                    <button
+                                        onClick={handleRawBtTest}
+                                        disabled={rawBtBusy}
+                                        className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-gray-900 text-white font-black rounded-lg shadow hover:brightness-110 active:scale-95 transition-all text-xs uppercase disabled:opacity-60"
+                                    >
+                                        {rawBtBusy ? 'Checking...' : 'Run RawBT Test'}
+                                    </button>
+                                </div>
+                                <p className="text-[11px] text-gray-600 font-semibold mt-2">{rawBtMessage || 'Run test to check RawBT print bridge.'}</p>
                             </div>
                             <p className="text-[11px] text-gray-500 mt-3 font-semibold">
                                 {isAndroidTerminal
