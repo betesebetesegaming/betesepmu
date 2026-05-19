@@ -220,6 +220,10 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
 
     const handleRawBtTest = async () => {
         if (rawBtBusy) return;
+        if (rawBtStatus !== 'installed') {
+            setRawBtMessage('RawBT is not installed. Install RawBT app first, then run this test.');
+            return;
+        }
         setRawBtBusy(true);
         const result = await launchRawBtTest();
         setRawBtMessage(result.message);
@@ -636,12 +640,12 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                                     </div>
                                     <button
                                         onClick={handleRawBtTest}
-                                        disabled={rawBtBusy || !isNativeAndroid}
+                                        disabled={rawBtBusy || !isNativeAndroid || rawBtStatus !== 'installed'}
                                         className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 font-black rounded-lg shadow active:scale-95 transition-all text-xs uppercase disabled:opacity-60 disabled:cursor-not-allowed"
                                         style={{ backgroundColor: '#111827', color: '#ffffff', minHeight: '44px' }}
                                     >
                                         <svg viewBox="0 0 24 24" fill="none" className="w-4 h-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 12h8"/><path d="M12 8v8"/><rect x="3" y="4" width="18" height="16" rx="2"/></svg>
-                                        {rawBtBusy ? 'Checking RawBT...' : 'Run RawBT Test'}
+                                        {rawBtBusy ? 'Checking RawBT...' : (rawBtStatus === 'installed' ? 'Run RawBT Test' : 'Install RawBT First')}
                                     </button>
                                 </div>
                                 <p className="text-[11px] text-gray-700 font-semibold mt-2">{rawBtMessage || 'Run test to check RawBT print bridge.'}</p>
