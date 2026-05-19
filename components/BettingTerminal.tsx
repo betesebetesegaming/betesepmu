@@ -627,6 +627,29 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                 const lastSavedTicket = placedTickets.length > 0 ? placedTickets[placedTickets.length - 1] : null;
                 return (
                     <div className="space-y-6">
+                        {isBackofficeApprover && (
+                            <div className="rounded-2xl border-2 border-indigo-400 bg-indigo-50 p-4 sm:p-5 shadow-lg">
+                                <p className="text-[11px] font-black uppercase tracking-widest text-indigo-800">Test Ticket / Approve Online Payment</p>
+                                <h3 className="text-base sm:text-lg font-black text-indigo-900 mt-1 uppercase">Backoffice Quick Actions</h3>
+                                <div className="mt-3 flex flex-col sm:flex-row gap-2">
+                                    <button
+                                        onClick={handlePrintTestTicket}
+                                        disabled={printTestBusy}
+                                        className="inline-flex items-center justify-center gap-2 px-4 py-3 bg-amber-500 text-white font-black rounded-lg shadow hover:brightness-110 active:scale-95 transition-all text-xs uppercase disabled:opacity-80"
+                                    >
+                                        {printTestBusy ? 'Starting Print...' : 'Print Test Ticket'}
+                                    </button>
+                                    <button
+                                        onClick={() => setView('FINANCE')}
+                                        className="inline-flex items-center justify-center gap-2 px-4 py-3 bg-indigo-600 text-white font-black rounded-lg shadow hover:bg-indigo-700 active:scale-95 transition-all text-xs uppercase"
+                                    >
+                                        Approve Online Payment
+                                    </button>
+                                </div>
+                                <p className="mt-2 text-[11px] text-indigo-700 font-semibold">One touch opens Finance approval screen.</p>
+                            </div>
+                        )}
+
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             {lastSavedTicket && (
                                 <div className="bg-yellow-100 border-l-8 border-yellow-500 p-4 rounded-r-2xl flex items-center justify-between animate-fade-in shadow-lg">
@@ -679,27 +702,6 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                                     {printTestMessage || 'Temporary test only. Remove later after printer is confirmed.'}
                                 </p>
                             </div>
-                            {isBackofficeApprover && (
-                                <div className="mt-3 rounded-xl border-2 border-indigo-300 bg-indigo-50 p-3">
-                                    <p className="text-[11px] font-black uppercase tracking-widest text-indigo-800">Test Ticket / Approve Online Payment</p>
-                                    <div className="mt-2 flex flex-col sm:flex-row gap-2">
-                                        <button
-                                            onClick={handlePrintTestTicket}
-                                            disabled={printTestBusy}
-                                            className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-amber-500 text-white font-black rounded-lg shadow hover:brightness-110 active:scale-95 transition-all text-xs uppercase disabled:opacity-80"
-                                        >
-                                            {printTestBusy ? 'Starting Print...' : 'Print Test Ticket'}
-                                        </button>
-                                        <button
-                                            onClick={() => setView('FINANCE')}
-                                            className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white font-black rounded-lg shadow hover:bg-indigo-700 active:scale-95 transition-all text-xs uppercase"
-                                        >
-                                            Approve Online Payment
-                                        </button>
-                                    </div>
-                                    <p className="mt-2 text-[11px] text-indigo-700 font-semibold">One touch takes you to approval screen in Finance.</p>
-                                </div>
-                            )}
                             <div className="mt-3 rounded-xl border-2 border-gray-300 bg-white p-3">
                                 <div className="flex flex-col gap-2">
                                     <div className="text-[11px] font-black uppercase tracking-widest text-gray-800">
