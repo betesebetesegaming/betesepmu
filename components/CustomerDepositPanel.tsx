@@ -69,6 +69,11 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
 
     const nextPendingRequest = pendingRequests[0] || null;
 
+  const getCustomerWallet = (customerId: string): number => {
+      const customer = (customers || []).find(c => c.id === customerId);
+      return Number(customer?.walletBalance || 0);
+  };
+
   const fullHistory = useMemo(() => {
       let logs = [...depositLogs].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
       if (methodFilter !== 'All') {
@@ -234,6 +239,68 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-lg">
+      {isBackofficeApprover && pendingRequests.length > 0 && (
+          <div className="fixed inset-0 z-50 bg-black/50 p-4 flex items-center justify-center">
+              <div className="w-full max-w-3xl rounded-2xl bg-white border-2 border-red-500 shadow-2xl">
+                  <div className="flex items-center justify-between gap-3 border-b border-red-100 p-4">
+                      <div>
+                          <p className="text-xs font-black uppercase tracking-widest text-red-700">Backoffice Approval Required</p>
+                          <h4 className="text-xl font-black text-red-900">Approve Online Payment</h4>
+                      </div>
+                      <span className="px-3 py-1 rounded-full bg-red-100 text-red-800 text-xs font-black uppercase tracking-widest animate-pulse">
+                          {pendingRequests.length} pending
+                      </span>
+                  </div>
+
+                  <div className="p-4 space-y-3 max-h-[70vh] overflow-y-auto">
+                      {pendingRequests.slice(0, 5).map(req => (
+                          <div key={req.id} className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                              <div className="flex flex-wrap items-start justify-between gap-3">
+                                  <div>
+                                      <p className="text-lg font-black text-betese-dark">{req.customerName}</p>
+                                      <p className="text-sm text-gray-700">Customer ID: <span className="font-black">{req.customerId}</span></p>
+                                      <p className="text-sm text-gray-700">Payment Number: <span className="font-black">{req.transactionId}</span></p>
+                                      <p className="text-sm text-gray-700">Method: <span className="font-black">{req.method}</span></p>
+                                      <p className="text-sm text-gray-700">Amount: <span className="font-black">{Number(req.amount || 0).toFixed(2)} GMD</span></p>
+                                      <p className="text-sm text-blue-700">Current Wallet: <span className="font-black">{getCustomerWallet(req.customerId).toFixed(2)} GMD</span></p>
+                                      {req.method === 'Wave' && (
+                                          <p className="text-xs text-amber-700 font-semibold mt-1">
+                                              Verification: {req.verificationStatus || 'PendingProviderConfirmation'}
+                                          </p>
+                                      )}
+                                  </div>
+                                  <div className="flex flex-col gap-2 min-w-[190px]">
+                                      {onApproveDepositRequest && (
+                                          <button
+                                              type="button"
+                                              onClick={() => onApproveDepositRequest(req.id)}
+                                              className="px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-black hover:bg-green-700"
+                                          >
+                                              Approve + Credit Account
+                                          </button>
+                                      )}
+                                      {onRejectDepositRequest && (
+                                          <button
+                                              type="button"
+                                              onClick={() => onRejectDepositRequest(req.id)}
+                                              className="px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-black hover:bg-red-700"
+                                          >
+                                              Reject Payment
+                                          </button>
+                                      )}
+                                  </div>
+                              </div>
+                          </div>
+                      ))}
+                  </div>
+
+                  <div className="border-t border-red-100 p-4 bg-red-50">
+                      <p className="text-sm font-bold text-red-900">This popup stays visible until all pending online payments are approved or rejected.</p>
+                  </div>
+              </div>
+          </div>
+      )}
+
       <h3 className="text-xl font-bold text-betese-dark mb-4">Customer Deposits</h3>
 
     {isBackofficeApprover && pendingRequests.length > 0 && (
@@ -309,7 +376,7 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
                 onClick={() => setActiveTab('requests')}
                 className={`flex-1 py-2 text-center font-bold text-sm ${activeTab === 'requests' ? 'border-b-4 border-betese-green text-betese-green' : 'text-gray-500 hover:text-gray-700'}`}
             >
-                Online Requests {pendingRequests.length > 0 && <span className="ml-2 bg-red-500 text-white rounded-full px-2 py-0.5 text-xs animate-pulse">{pendingRequests.length}</span>}
+                                Approve Online Payment {pendingRequests.length > 0 && <span className="ml-2 bg-red-500 text-white rounded-full px-2 py-0.5 text-xs animate-pulse">{pendingRequests.length}</span>}
             </button>
           )}
           <button 
