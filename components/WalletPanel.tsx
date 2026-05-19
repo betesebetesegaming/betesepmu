@@ -8,6 +8,7 @@ import { AfriMoneyLogo } from './AfriMoneyLogo';
 import { WaveLogo } from './WaveLogo';
 
 const WAVE_MERCHANT_URL = 'https://pay.wave.com/m/M_gm_W5puv7Atyy-N/c/gm/';
+const AFRIMONEY_MERCHANT_URL = ''; // TODO: paste AfriMoney payment link here
 
 interface WalletPanelProps {
   user: User;
@@ -152,6 +153,14 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
 
   const openWaveCheckout = () => {
       window.open(WAVE_MERCHANT_URL, '_blank', 'noopener,noreferrer');
+  };
+
+  const openAfriMoneyCheckout = () => {
+      if (!AFRIMONEY_MERCHANT_URL) {
+          alert('AfriMoney payment link is not configured yet. Please pay manually using the AfriMoney number and then confirm below.');
+          return;
+      }
+      window.open(AFRIMONEY_MERCHANT_URL, '_blank', 'noopener,noreferrer');
   };
 
     const handleWithdrawalSubmit = async (e: React.FormEvent) => {
@@ -352,7 +361,7 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
                   </ol>
               </div>
 
-              {/* Wave pay button — opens Wave in a new tab so user stays in Betese */}
+              {/* Wave pay button */}
               {depositMethod === 'Wave' && (
                   <div className="rounded-2xl border-2 border-blue-400 bg-blue-50 p-4 flex flex-col items-center gap-3">
                       <p className="text-xs font-black uppercase tracking-widest text-blue-700">Step 1 — Pay with Wave first</p>
@@ -370,6 +379,27 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
                           Then come back here and fill in the form below.
                       </p>
                       <p className="text-xs font-black uppercase tracking-widest text-blue-500 mt-1">Step 2 — Confirm your payment below</p>
+                  </div>
+              )}
+
+              {/* AfriMoney pay button */}
+              {depositMethod === 'AfriMoney' && (
+                  <div className="rounded-2xl border-2 border-purple-400 bg-purple-50 p-4 flex flex-col items-center gap-3">
+                      <p className="text-xs font-black uppercase tracking-widest text-purple-700">Step 1 — Pay with AfriMoney first</p>
+                      <button
+                          type="button"
+                          onClick={openAfriMoneyCheckout}
+                          className="w-full flex items-center justify-center gap-3 rounded-xl bg-purple-700 px-5 py-4 font-black text-white text-base shadow-lg hover:bg-purple-800 active:scale-95 transition-all border-b-4 border-purple-900"
+                      >
+                          <AfriMoneyLogo height={26} />
+                          PAY WITH AFRIMONEY
+                      </button>
+                      <p className="text-[11px] text-purple-700 font-semibold text-center">
+                          Tap the button — AfriMoney opens in a new window.<br/>
+                          Log in with <strong>your own AfriMoney account</strong> and pay.<br/>
+                          Then come back here and fill in the form below.
+                      </p>
+                      <p className="text-xs font-black uppercase tracking-widest text-purple-500 mt-1">Step 2 — Confirm your payment below</p>
                   </div>
               )}
 
@@ -435,7 +465,7 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
                   )}
                   {!depositMessage && (
                     <button type="submit" className="w-full px-4 py-3 bg-betese-green text-white font-bold rounded-lg hover:brightness-110 active:scale-95 transition-all">
-                        {depositMethod === 'Wave' ? 'Confirm Wave Payment' : t('submit_deposit')}
+                        {depositMethod === 'Wave' ? 'Confirm Wave Payment' : depositMethod === 'AfriMoney' ? 'Confirm AfriMoney Payment' : t('submit_deposit')}
                     </button>
                   )}
               </form>
