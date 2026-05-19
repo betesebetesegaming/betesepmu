@@ -143,25 +143,14 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
       setLastDepositData({ amount: depositAmount, method: depositMethod, phone: normalizedSenderPhone });
       setDepositMessage(
           depositMethod === 'Wave'
-              ? 'Wave deposit credited to your wallet instantly.'
+              ? 'Wave deposit request submitted. Your account will be credited once verified.'
               : t('success_deposit')
       );
-      if (depositMethod === 'Wave') {
-          if (isMobileDevice) {
-              window.location.href = WAVE_MERCHANT_URL;
-          } else {
-              setWaveCheckoutOpen(true);
-          }
-      }
       setDepositAmount('');
       setDepositPhone('');
   }
 
   const openWaveCheckout = () => {
-      if (isMobileDevice) {
-          window.location.href = WAVE_MERCHANT_URL;
-          return;
-      }
       window.open(WAVE_MERCHANT_URL, '_blank', 'noopener,noreferrer');
   };
 
@@ -244,6 +233,16 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
           </div>
       )}
       <h3 className="text-xl font-bold text-betese-dark mb-4">{t('tab_wallet')}</h3>
+
+            <div className="mb-4 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <p className="text-gray-700"><span className="font-black uppercase text-[11px] tracking-widest text-gray-500">Account ID:</span> <span className="font-bold">{user.id}</span></p>
+                    <p className="text-gray-700"><span className="font-black uppercase text-[11px] tracking-widest text-gray-500">Owner ID:</span> <span className="font-bold">{user.createdById || 'Self-Registered'}</span></p>
+                </div>
+                {user.createdByName && (
+                    <p className="mt-1 text-gray-600"><span className="font-black uppercase text-[11px] tracking-widest text-gray-500">Owner Name:</span> <span className="font-bold">{user.createdByName}</span></p>
+                )}
+            </div>
       
             <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="p-4 bg-green-50 rounded-lg border border-green-200">
@@ -353,6 +352,27 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
                   </ol>
               </div>
 
+              {/* Wave pay button — opens Wave in a new tab so user stays in Betese */}
+              {depositMethod === 'Wave' && (
+                  <div className="rounded-2xl border-2 border-blue-400 bg-blue-50 p-4 flex flex-col items-center gap-3">
+                      <p className="text-xs font-black uppercase tracking-widest text-blue-700">Step 1 — Pay with Wave first</p>
+                      <button
+                          type="button"
+                          onClick={openWaveCheckout}
+                          className="w-full flex items-center justify-center gap-3 rounded-xl bg-blue-600 px-5 py-4 font-black text-white text-base shadow-lg hover:bg-blue-700 active:scale-95 transition-all border-b-4 border-blue-900"
+                      >
+                          <WaveLogo height={26} />
+                          PAY WITH WAVE
+                      </button>
+                      <p className="text-[11px] text-blue-700 font-semibold text-center">
+                          Tap the button — Wave opens in a new window.<br/>
+                          Log in with <strong>your own Wave account</strong> and pay.<br/>
+                          Then come back here and fill in the form below.
+                      </p>
+                      <p className="text-xs font-black uppercase tracking-widest text-blue-500 mt-1">Step 2 — Confirm your payment below</p>
+                  </div>
+              )}
+
               <form onSubmit={handleDepositSubmit} className="space-y-3">
                   <div>
                       <label className="block text-sm font-medium text-gray-700">{t('amount_sent')}</label>
@@ -414,8 +434,8 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
                       </div>
                   )}
                   {!depositMessage && (
-                    <button type="submit" className="w-full px-4 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700">
-                                                {depositMethod === 'Wave' ? 'Continue to Wave Checkout' : t('submit_deposit')}
+                    <button type="submit" className="w-full px-4 py-3 bg-betese-green text-white font-bold rounded-lg hover:brightness-110 active:scale-95 transition-all">
+                        {depositMethod === 'Wave' ? 'Confirm Wave Payment' : t('submit_deposit')}
                     </button>
                   )}
               </form>
