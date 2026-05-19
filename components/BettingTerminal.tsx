@@ -110,6 +110,7 @@ const BackButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
 );
 
 export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
+    const APK_BUILD_VERSION = '20260519-1';
     const { 
         races = [], 
         betSlip, 
@@ -613,7 +614,7 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                                     </div>
                                 </div>
                                 <a
-                                    href="/betesepmu.apk?v=20260518"
+                                    href={`/betesepmu.apk?v=${APK_BUILD_VERSION}`}
                                     download="betesepmu.apk"
                                     className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-betese-green text-white font-black rounded-xl shadow hover:brightness-110 active:scale-95 transition-all border-b-4 border-black/20 text-sm uppercase"
                                 >
@@ -638,18 +639,29 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                                     <div className="text-[11px] font-black uppercase tracking-widest text-gray-800">
                                         RawBT Status: {rawBtStatus}
                                     </div>
-                                    <button
-                                        onClick={handleRawBtTest}
-                                        disabled={rawBtBusy || !isNativeAndroid || rawBtStatus !== 'installed'}
-                                        className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 font-black rounded-lg shadow active:scale-95 transition-all text-xs uppercase disabled:opacity-60 disabled:cursor-not-allowed"
-                                        style={{ backgroundColor: '#111827', color: '#ffffff', minHeight: '44px' }}
-                                    >
-                                        <svg viewBox="0 0 24 24" fill="none" className="w-4 h-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 12h8"/><path d="M12 8v8"/><rect x="3" y="4" width="18" height="16" rx="2"/></svg>
-                                        {rawBtBusy ? 'Checking RawBT...' : (rawBtStatus === 'installed' ? 'Run RawBT Test' : 'Install RawBT First')}
-                                    </button>
+                                    {rawBtStatus === 'installed' ? (
+                                        <button
+                                            onClick={handleRawBtTest}
+                                            disabled={rawBtBusy || !isNativeAndroid}
+                                            className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 font-black rounded-lg shadow active:scale-95 transition-all text-xs uppercase disabled:opacity-60 disabled:cursor-not-allowed"
+                                            style={{ backgroundColor: '#111827', color: '#ffffff', minHeight: '44px' }}
+                                        >
+                                            <svg viewBox="0 0 24 24" fill="none" className="w-4 h-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 12h8"/><path d="M12 8v8"/><rect x="3" y="4" width="18" height="16" rx="2"/></svg>
+                                            {rawBtBusy ? 'Checking RawBT...' : 'Run RawBT Test'}
+                                        </button>
+                                    ) : (
+                                        <div
+                                            className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 font-black rounded-lg text-xs uppercase border border-gray-300 bg-gray-200 text-gray-600"
+                                            style={{ minHeight: '44px' }}
+                                        >
+                                            <svg viewBox="0 0 24 24" fill="none" className="w-4 h-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 12h8"/><rect x="3" y="4" width="18" height="16" rx="2"/></svg>
+                                            Install RawBT First
+                                        </div>
+                                    )}
                                 </div>
                                 <p className="text-[11px] text-gray-700 font-semibold mt-2">{rawBtMessage || 'Run test to check RawBT print bridge.'}</p>
                             </div>
+                            <p className="text-[11px] text-gray-400 mt-2 font-semibold">APK Build: {APK_BUILD_VERSION}</p>
                             <p className="text-[11px] text-gray-500 mt-3 font-semibold">
                                 {isAndroidTerminal
                                     ? 'Android: after download, open the APK file and tap Install.'
@@ -690,7 +702,7 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                         </div>
                         <div className="p-5 pt-0 flex gap-3">
                             <a
-                                href="/betesepmu.apk?v=20260518"
+                                href={`/betesepmu.apk?v=${APK_BUILD_VERSION}`}
                                 download="betesepmu.apk"
                                 className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 bg-betese-green text-white font-black rounded-xl shadow hover:brightness-110 active:scale-95 transition-all text-sm uppercase"
                             >
