@@ -1229,28 +1229,8 @@ const AppContent: React.FC = () => {
         if (supabase) {
             await dbDepositRequest(newRequest);
         }
+        // All payments (Wave and AfriMoney) stay Pending for backoffice manual approval
         setDepositRequests(prev => [newRequest, ...(prev || []).filter(req => req.id !== newRequest.id)]);
-
-        if (method === 'Wave') {
-            await handleDeposit(currentUser.id, normalizedAmount, 'Wave', normalizedPhone, { id: 'SYSTEM', name: 'Wave Direct Deposit' });
-            if (supabase) {
-                await dbMarkDepositRequestApproved(newRequest.id, 'SYSTEM', 'Wave Direct Deposit', effectiveTime);
-            }
-            setDepositRequests(prev => (prev || []).map(req => req.id === newRequest.id
-                ? {
-                    ...req,
-                    status: 'Approved',
-                    processedBy: 'SYSTEM',
-                    processedByName: 'Wave Direct Deposit',
-                    processedAt: effectiveTime,
-                    verificationStatus: 'Verified',
-                    verificationSource: 'client-fallback',
-                    verificationMessage: 'Credited through temporary client fallback. Replace with webhook confirmation for production.',
-                    verifiedAt: effectiveTime,
-                  }
-                : req
-            ));
-        }
     } catch (e: any) {
         alert(`Payment Error: ${e.message}`);
         console.error("Deposit Error:", e);
