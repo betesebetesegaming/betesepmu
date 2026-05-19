@@ -337,16 +337,23 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
 
       <h3 className="text-xl font-bold text-betese-dark mb-4">Customer Deposits</h3>
 
-    {isBackofficeApprover && pendingRequests.length > 0 && (
-          <div className="mb-4 rounded-xl border-2 border-red-400 bg-red-50 p-4 shadow-sm">
+      {isBackofficeApprover && (
+          <div className={`mb-4 rounded-xl border-2 p-4 shadow-sm ${pendingRequests.length > 0 ? 'border-red-400 bg-red-50' : 'border-green-300 bg-green-50'}`}>
               <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                      <p className="text-xs font-black uppercase tracking-widest text-red-700">Approval Box</p>
-                      <p className="text-lg font-black text-red-900">{pendingRequests.length} online payment{pendingRequests.length > 1 ? 's' : ''} waiting for approval</p>
+                      <p className={`text-xs font-black uppercase tracking-widest ${pendingRequests.length > 0 ? 'text-red-700' : 'text-green-700'}`}>Approval Box</p>
+                      <p className={`text-lg font-black ${pendingRequests.length > 0 ? 'text-red-900' : 'text-green-900'}`}>
+                          {pendingRequests.length > 0
+                              ? `${pendingRequests.length} online payment${pendingRequests.length > 1 ? 's' : ''} waiting for approval`
+                              : 'No pending online payments'}
+                      </p>
                       {nextPendingRequest && (
                           <p className="text-sm text-red-800 mt-1">
                               Next: <span className="font-black">{nextPendingRequest.customerName}</span> - <span className="font-black">{Number(nextPendingRequest.amount || 0).toFixed(2)} GMD</span>
                           </p>
+                      )}
+                      {!nextPendingRequest && (
+                          <p className="text-sm text-green-800 mt-1">All requests are currently approved/rejected.</p>
                       )}
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
