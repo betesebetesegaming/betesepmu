@@ -41,24 +41,54 @@ export const ProcessWithdrawalPanel: React.FC<ProcessWithdrawalPanelProps> = ({ 
 
   const handleFindRequest = () => {
     setMessage('');
-    if (!code) {
-        setMessage('Please enter a withdrawal code.');
+    const search = code.trim();
+    if (!search) {
+        setMessage('Please enter withdrawal code, customer ID, or customer phone number.');
         setIsSuccess(false);
         return;
     }
-    const request = withdrawalRequests.find(r => r.code.toUpperCase() === code.toUpperCase() && r.status === 'Pending');
+
+    const pendingRequests = (withdrawalRequests || []).filter(r => r.status === 'Pending');
+    const upperSearch = search.toUpperCase();
+
+    // First priority: exact withdrawal code (secure OTP flow)
+    let request = pendingRequests.find(r => r.code.toUpperCase() === upperSearch);
+
+    // Fallback: customer ID or phone number (for quick finding by staff)
+    if (!request) {
+      const normalizedSearchDigits = search.replace(/\D/g, '');
+      const matchedCustomers = customers.filter(c => {
+        const customerId = String(c.id || '').toUpperCase();
+        const customerPhoneDigits = String(c.phone || '').replace(/\D/g, '');
+        const idMatch = customerId === upperSearch;
+        const phoneMatch = normalizedSearchDigits.length >= 6 && customerPhoneDigits.endsWith(normalizedSearchDigits);
+        return idMatch || phoneMatch;
+      });
+
+      if (matchedCustomers.length > 0) {
+        const customerIds = new Set(matchedCustomers.map(c => c.id));
+        request = pendingRequests
+          .filter(r => customerIds.has(r.customerId))
+          .sort((a, b) => b.requestedAt.getTime() - a.requestedAt.getTime())[0];
+      }
+    }
+
     if (request) {
         const reqCustomer = customers.find(c => c.id === request.customerId);
         if (reqCustomer) {
             setFoundRequest(request);
             setCustomer(reqCustomer);
             setStep('confirm');
+            if (request.code.toUpperCase() !== upperSearch) {
+              setMessage(`Found pending request for ${reqCustomer.name}. Confirm OTP code from customer before payout.`);
+              setIsSuccess(true);
+            }
         } else {
             setMessage('Could not find customer associated with this request.');
             setIsSuccess(false);
         }
     } else {
-      setMessage('Withdrawal code not found, already processed, or expired.');
+      setMessage('No pending withdrawal found for that code, customer ID, or phone.');
       setIsSuccess(false);
     }
   };
@@ -187,13 +217,13 @@ export const ProcessWithdrawalPanel: React.FC<ProcessWithdrawalPanelProps> = ({ 
     <div className="bg-white p-6 rounded-lg shadow-lg">
       <h3 className="text-xl font-bold text-betese-dark mb-4">Process Withdrawal</h3>
       <div className="space-y-4">
-        <p className="text-sm text-gray-600">Enter the customer's withdrawal code. For secure Wave payouts, verify OTP and save the transfer reference.</p>
+        <p className="text-sm text-gray-600">Find by withdrawal code, customer ID, or phone. Before payout, confirm the OTP code shared by customer (vendor counter, chat, or WhatsApp).</p>
         <div className="flex gap-2">
             <input
                 type="text"
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
-                placeholder="Enter Withdrawal Code"
+                placeholder="Enter code, customer ID, or phone"
                 className="flex-grow p-2 border border-gray-300 rounded-md uppercase"
             />
             <button

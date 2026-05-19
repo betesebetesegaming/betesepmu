@@ -40,8 +40,10 @@ const NewMessageModal: React.FC<{
     isOpen: boolean;
     onClose: () => void;
     vendors: User[];
+    currentUserRole: User['role'];
     onSend: (recipients: string[], content: string) => void;
-}> = ({ isOpen, onClose, vendors, onSend }) => {
+}> = ({ isOpen, onClose, vendors, currentUserRole, onSend }) => {
+    const isCustomer = currentUserRole === 'Customer';
     const [recipient, setRecipient] = useState('ALL_VENDORS');
     const [content, setContent] = useState('');
 
@@ -50,7 +52,16 @@ const NewMessageModal: React.FC<{
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (!content.trim()) return;
-        onSend([recipient], content);
+
+        if (isCustomer) {
+            const mappedRecipients = recipient === 'CUSTOMER_SERVICE'
+                ? ['BACK_OFFICE', 'CUSTOMER_SERVICE']
+                : ['BACK_OFFICE', 'PAYMASTER'];
+            onSend(mappedRecipients, content);
+        } else {
+            onSend([recipient], content);
+        }
+
         setContent('');
         onClose();
     };
@@ -68,9 +79,18 @@ const NewMessageModal: React.FC<{
                             onChange={e => setRecipient(e.target.value)}
                             className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-betese-green focus:border-betese-green sm:text-sm rounded-md"
                         >
-                            <option value="ALL_VENDORS">All Vendors (Broadcast)</option>
-                            <option value="BACK_OFFICE">Back Office</option>
-                            {vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                            {isCustomer ? (
+                                <>
+                                    <option value="PAYMASTER">Paymaster (Cash/Payment Help)</option>
+                                    <option value="CUSTOMER_SERVICE">Customer Service Help</option>
+                                </>
+                            ) : (
+                                <>
+                                    <option value="ALL_VENDORS">All Vendors (Broadcast)</option>
+                                    <option value="BACK_OFFICE">Back Office</option>
+                                    {vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                                </>
+                            )}
                         </select>
                     </div>
                     <div>
@@ -404,7 +424,10 @@ const ThreadList: React.FC<{
         const otherParticipantIds = thread.participantIds.filter(id => id !== currentUser.id && id !== 'ALL_VENDORS');
         
         if (otherParticipantIds.includes('BACK_OFFICE')) {
-             return { name: "Back Office", participants: "Internal Support" };
+               const supportName = thread.name && ['Paymaster', 'Customer Service'].includes(thread.name)
+                 ? thread.name
+                 : 'Back Office';
+               return { name: supportName, participants: "Internal Support" };
         }
 
         const otherUser = messages.find(m => m.threadId === thread.id && m.senderId !== currentUser.id);
@@ -531,6 +554,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, currentUs
                     isOpen={isNewMessageModalOpen}
                     onClose={() => setIsNewMessageModalOpen(false)}
                     vendors={users.filter(u => u.role === 'Vendor')}
+                    currentUserRole={currentUser.role}
                     onSend={handleSendNewMessage}
                 />
                 {shouldShowThreads && (
