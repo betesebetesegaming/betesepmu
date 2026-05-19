@@ -152,7 +152,21 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
   }
 
   const openWaveCheckout = () => {
-      window.open(WAVE_MERCHANT_URL, '_blank', 'noopener,noreferrer');
+      const dismissKeyboard = () => {
+          const activeElement = document.activeElement as HTMLElement | null;
+          activeElement?.blur();
+          Array.from(document.querySelectorAll('input, textarea, [contenteditable="true"]')).forEach((element) => {
+              if (element instanceof HTMLElement) {
+                  element.blur();
+              }
+          });
+          document.body?.focus?.();
+      };
+
+      dismissKeyboard();
+      window.setTimeout(() => {
+          window.open(WAVE_MERCHANT_URL, '_blank', 'noopener,noreferrer');
+      }, 150);
   };
 
   const openAfriMoneyCheckout = () => {
@@ -160,7 +174,21 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
           alert('AfriMoney payment link is not configured yet. Please pay manually using the AfriMoney number and then confirm below.');
           return;
       }
-      window.open(AFRIMONEY_MERCHANT_URL, '_blank', 'noopener,noreferrer');
+      const dismissKeyboard = () => {
+          const activeElement = document.activeElement as HTMLElement | null;
+          activeElement?.blur();
+          Array.from(document.querySelectorAll('input, textarea, [contenteditable="true"]')).forEach((element) => {
+              if (element instanceof HTMLElement) {
+                  element.blur();
+              }
+          });
+          document.body?.focus?.();
+      };
+
+      dismissKeyboard();
+      window.setTimeout(() => {
+          window.open(AFRIMONEY_MERCHANT_URL, '_blank', 'noopener,noreferrer');
+      }, 150);
   };
 
     const handleWithdrawalSubmit = async (e: React.FormEvent) => {
