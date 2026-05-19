@@ -59,6 +59,20 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
       return depositRequests.filter(req => req.status === 'Pending').sort((a,b) => b.timestamp.getTime() - a.timestamp.getTime());
   }, [depositRequests]);
 
+  // Wave auto-credits in the last 60 minutes — backoffice must verify on Wave portal
+  const recentAutoCredits = useMemo(() => {
+      const cutoff = Date.now() - 60 * 60 * 1000;
+      return (depositRequests || [])
+          .filter(req =>
+              req.method === 'Wave' &&
+              req.status === 'Approved' &&
+              req.processedByName === 'Wave Auto-Credit' &&
+              req.processedAt &&
+              req.processedAt.getTime() >= cutoff
+          )
+          .sort((a, b) => (b.processedAt?.getTime() || 0) - (a.processedAt?.getTime() || 0));
+  }, [depositRequests]);
+
   useEffect(() => {
       if (!isBackofficeApprover || pendingRequests.length === 0) return;
 
@@ -88,6 +102,29 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
       const timer = window.setInterval(playAlertTone, 15000);
       return () => window.clearInterval(timer);
   }, [isBackofficeApprover, pendingRequests.length]);
+
+  // Soft notification tone when a new Wave auto-credit arrives
+  useEffect(() => {
+      if (!isBackofficeApprover || recentAutoCredits.length === 0) return;
+      try {
+          const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
+          if (!AudioCtx) return;
+          const ctx = new AudioCtx();
+          // Two-note chime (pleasant, distinct from the urgent pending tone)
+          [660, 880].forEach((freq, i) => {
+              const osc = ctx.createOscillator();
+              const gain = ctx.createGain();
+              osc.type = 'sine';
+              osc.frequency.value = freq;
+              gain.gain.value = 0.05;
+              osc.connect(gain);
+              gain.connect(ctx.destination);
+              osc.start(ctx.currentTime + i * 0.18);
+              osc.stop(ctx.currentTime + i * 0.18 + 0.18);
+          });
+          window.setTimeout(() => ctx.close(), 800);
+      } catch { /* ignore */ }
+  }, [recentAutoCredits.length, isBackofficeApprover]);
 
   const filteredCustomers = useMemo(() => {
     if (!searchTerm) return [];
@@ -271,6 +308,53 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-lg">
+      {isBackofficeApprover && recentAutoCredits.length > 0 && (
+          <div className="fixed inset-0 z-40 bg-black/30 p-4 flex items-start justify-center pt-20 pointer-events-none">
+              <div className="w-full max-w-2xl rounded-2xl bg-white border-2 border-blue-500 shadow-2xl pointer-events-auto">
+                  <div className="flex items-center justify-between gap-3 border-b border-blue-100 p-4 bg-blue-600 rounded-t-2xl">
+                      <div>
+                          <p className="text-xs font-black uppercase tracking-widest text-blue-100">Wave Auto-Credited (Last 60 min)</p>
+                          <h4 className="text-lg font-black text-white">Verify on Wave Portal</h4>
+                      </div>
+                      <span className="px-3 py-1 rounded-full bg-white text-blue-700 text-xs font-black uppercase tracking-widest">
+                          {recentAutoCredits.length} payment{recentAutoCredits.length > 1 ? 's' : ''}
+                      </span>
+                  </div>
+                  <div className="p-4 space-y-3 max-h-[50vh] overflow-y-auto">
+                      {recentAutoCredits.map(req => (
+                          <div key={req.id} className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+                              <div className="flex flex-wrap items-start justify-between gap-3">
+                                  <div>
+                                      <p className="text-base font-black text-betese-dark">{req.customerName}</p>
+                                      <p className="text-sm text-gray-700">Customer ID: <span className="font-black">{req.customerId}</span></p>
+                                      <p className="text-sm text-gray-700">Payment Phone: <span className="font-black">{req.transactionId}</span></p>
+                                      <p className="text-sm text-gray-700">Amount: <span className="font-black text-green-700">{Number(req.amount || 0).toFixed(2)} GMD</span></p>
+                                      <p className="text-sm text-gray-700">Wallet after credit: <span className="font-black">{getCustomerWallet(req.customerId).toFixed(2)} GMD</span></p>
+                                      <p className="text-xs text-blue-700 mt-1 font-semibold">
+                                          Auto-credited at {req.processedAt ? req.processedAt.toLocaleTimeString() : '—'}
+                                      </p>
+                                  </div>
+                                  <div className="flex flex-col gap-2 min-w-[160px]">
+                                      <a
+                                          href="https://pay.wave.com/m/M_gm_W5puv7Atyy-N/c/gm/"
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-black hover:bg-blue-700 text-center"
+                                      >
+                                          Check Wave Portal
+                                      </a>
+                                  </div>
+                              </div>
+                          </div>
+                      ))}
+                  </div>
+                  <div className="border-t border-blue-100 p-3 bg-blue-50 rounded-b-2xl">
+                      <p className="text-xs text-blue-800 font-bold">Wallet already credited automatically. Verify the payment on Wave merchant portal. If fraud detected, freeze the customer account from User Management.</p>
+                  </div>
+              </div>
+          </div>
+      )}
+
       {isBackofficeApprover && pendingRequests.length > 0 && (
           <div className="fixed inset-0 z-50 bg-black/50 p-4 flex items-center justify-center">
               <div className="w-full max-w-3xl rounded-2xl bg-white border-2 border-red-500 shadow-2xl">
@@ -408,6 +492,11 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
               <p className="text-lg font-black text-red-900">{pendingRequests.length}</p>
               <p className="text-xs text-red-700">needs approval/reject</p>
           </div>
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <p className="text-xs font-bold text-blue-700 uppercase">Wave Auto-Credits</p>
+              <p className="text-lg font-black text-blue-900">{recentAutoCredits.length}</p>
+              <p className="text-xs text-blue-700">last 60 min — verify on portal</p>
+          </div>
       </div>
       
       <div className="flex mb-4 border-b">
@@ -443,7 +532,7 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
                   </h4>
                   {pendingRequests.length === 0 ? (
                       <div className="text-center text-gray-500 py-6 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
-                          <p>✅ All caught up! No pending requests.</p>
+                          <p>✅ All caught up! No pending AfriMoney requests.</p>
                       </div>
                   ) : (
                       <div className="space-y-4">
@@ -463,6 +552,48 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
                                     </div>
                                 </div>
                           ))}
+                      </div>
+                  )}
+              </div>
+
+              {/* Wave Auto-Credits audit — backoffice verify section */}
+              <div>
+                  <h4 className="text-lg font-bold text-blue-700 mb-3 flex items-center gap-2">
+                      Wave Auto-Credits — Verify on Portal
+                      <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-normal">{recentAutoCredits.length} last 60 min</span>
+                  </h4>
+                  {recentAutoCredits.length === 0 ? (
+                      <div className="text-center text-gray-500 py-4 border-2 border-dashed border-blue-200 rounded-lg bg-blue-50">
+                          <p className="text-sm text-blue-600">No Wave auto-credits in the last 60 minutes.</p>
+                      </div>
+                  ) : (
+                      <div className="space-y-3">
+                          {recentAutoCredits.map(req => (
+                              <div key={req.id} className="p-4 border-l-8 border-blue-500 rounded-r-lg bg-blue-50 shadow-sm">
+                                  <div className="flex flex-wrap items-start justify-between gap-3">
+                                      <div>
+                                          <p className="font-black text-base text-betese-dark flex items-center gap-2">
+                                              {req.customerName}
+                                              <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full">Auto-Credited ✓</span>
+                                          </p>
+                                          <p className="text-sm text-gray-700">Customer ID: <span className="font-black">{req.customerId}</span></p>
+                                          <p className="text-sm text-gray-700">Payment Phone: <span className="font-black">{req.transactionId}</span></p>
+                                          <p className="text-sm text-green-700 font-black">{Number(req.amount || 0).toFixed(2)} GMD credited automatically</p>
+                                          <p className="text-sm text-gray-700">Wallet now: <span className="font-black">{getCustomerWallet(req.customerId).toFixed(2)} GMD</span></p>
+                                          <p className="text-xs text-blue-700 mt-1">Credited at {req.processedAt ? req.processedAt.toLocaleTimeString() : '—'}</p>
+                                      </div>
+                                      <a
+                                          href="https://pay.wave.com/m/M_gm_W5puv7Atyy-N/c/gm/"
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-black hover:bg-blue-700 text-center whitespace-nowrap"
+                                      >
+                                          Check Wave Portal
+                                      </a>
+                                  </div>
+                              </div>
+                          ))}
+                          <p className="text-xs text-blue-700 font-semibold">If you see a fraudulent payment, go to User Management → find the customer → Freeze Account.</p>
                       </div>
                   )}
               </div>

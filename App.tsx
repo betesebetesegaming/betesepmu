@@ -1229,8 +1229,30 @@ const AppContent: React.FC = () => {
         if (supabase) {
             await dbDepositRequest(newRequest);
         }
-        // All payments (Wave and AfriMoney) stay Pending for backoffice manual approval
         setDepositRequests(prev => [newRequest, ...(prev || []).filter(req => req.id !== newRequest.id)]);
+
+        if (method === 'Wave') {
+            // Wave payments are auto-credited immediately.
+            // Backoffice receives a notification to verify on the Wave merchant portal.
+            await handleDeposit(currentUser.id, normalizedAmount, 'Wave', normalizedPhone, { id: 'SYSTEM', name: 'Wave Auto-Credit' });
+            if (supabase) {
+                await dbMarkDepositRequestApproved(newRequest.id, 'SYSTEM', 'Wave Auto-Credit', effectiveTime);
+            }
+            setDepositRequests(prev => (prev || []).map(req => req.id === newRequest.id
+                ? {
+                    ...req,
+                    status: 'Approved',
+                    processedBy: 'SYSTEM',
+                    processedByName: 'Wave Auto-Credit',
+                    processedAt: effectiveTime,
+                    verificationStatus: 'PendingProviderConfirmation',
+                    verificationSource: 'client-fallback',
+                    verificationMessage: 'Auto-credited. Backoffice must verify on Wave merchant portal.',
+                  }
+                : req
+            ));
+        }
+        // AfriMoney stays Pending for manual backoffice approval.
     } catch (e: any) {
         alert(`Payment Error: ${e.message}`);
         console.error("Deposit Error:", e);
