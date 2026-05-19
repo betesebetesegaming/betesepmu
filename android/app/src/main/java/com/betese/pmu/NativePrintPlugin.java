@@ -5,6 +5,7 @@ import android.os.Build;
 import android.print.PrintAttributes;
 import android.print.PrintDocumentAdapter;
 import android.print.PrintManager;
+import android.view.ViewGroup;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
@@ -64,6 +65,10 @@ public class NativePrintPlugin extends Plugin {
             try {
                 WebView printWebView = new WebView(getContext());
                 printWebView.getSettings().setJavaScriptEnabled(false);
+                ViewGroup rootView = getActivity().findViewById(android.R.id.content);
+                if (rootView != null) {
+                    rootView.addView(printWebView, new ViewGroup.LayoutParams(1, 1));
+                }
 
                 printWebView.setWebViewClient(new WebViewClient() {
                     @Override
@@ -72,6 +77,9 @@ public class NativePrintPlugin extends Plugin {
                         PrintManager printManager = (PrintManager) context.getSystemService(Context.PRINT_SERVICE);
                         if (printManager == null) {
                             call.reject("Print service unavailable");
+                            if (rootView != null) {
+                                rootView.removeView(view);
+                            }
                             view.destroy();
                             return;
                         }
@@ -95,6 +103,13 @@ public class NativePrintPlugin extends Plugin {
                         JSObject result = new JSObject();
                         result.put("success", true);
                         call.resolve(result);
+
+                        view.postDelayed(() -> {
+                            if (rootView != null) {
+                                rootView.removeView(view);
+                            }
+                            view.destroy();
+                        }, 1500);
                     }
                 });
 

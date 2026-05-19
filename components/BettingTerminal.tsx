@@ -110,7 +110,7 @@ const BackButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
 );
 
 export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
-    const APK_BUILD_VERSION = '20260519-1';
+    const APK_BUILD_VERSION = '20260519-2';
     const { 
         races = [], 
         betSlip, 
@@ -150,6 +150,8 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
     const [rawBtStatus, setRawBtStatus] = useState<'checking' | 'installed' | 'not-installed' | 'error'>('checking');
     const [rawBtMessage, setRawBtMessage] = useState('');
     const [rawBtBusy, setRawBtBusy] = useState(false);
+    const [printTestBusy, setPrintTestBusy] = useState(false);
+    const [printTestMessage, setPrintTestMessage] = useState('');
     const [selectedRace, setSelectedRace] = useState<Race | null>(null);
     const [selectedBetType, setSelectedBetType] = useState<BetTypeOption | null>(null);
     const [selectedNumbers, setSelectedNumbers] = useState<number[]>([]);
@@ -268,7 +270,20 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
     };
 
     const handlePrintTestTicket = () => {
-        triggerPrint('printable-test-ticket', { direct57x40: true });
+        if (printTestBusy) return;
+
+        setPrintTestBusy(true);
+        setPrintTestMessage(isNativeAndroid ? 'Starting printer...' : 'Opening print dialog...');
+
+        try {
+            triggerPrint('printable-test-ticket', { direct57x40: true });
+        } catch {
+            setPrintTestMessage('Print test failed to start.');
+        }
+
+        window.setTimeout(() => {
+            setPrintTestBusy(false);
+        }, 5000);
     };
 
     const handleShareEndOfSaleWhatsApp = () => {
@@ -625,13 +640,14 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                             <div className="mt-3 flex flex-col sm:flex-row gap-3">
                                 <button
                                     onClick={handlePrintTestTicket}
-                                    className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-amber-500 text-white font-black rounded-xl shadow hover:brightness-110 active:scale-95 transition-all border-b-4 border-black/20 text-sm uppercase"
+                                    disabled={printTestBusy}
+                                    className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-amber-500 text-white font-black rounded-xl shadow hover:brightness-110 active:scale-95 transition-all border-b-4 border-black/20 text-sm uppercase disabled:cursor-not-allowed disabled:opacity-80"
                                 >
                                     <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="7" y="4" width="10" height="5"/><rect x="5" y="9" width="14" height="8" rx="2"/><rect x="8" y="14" width="8" height="6"/></svg>
-                                    Print Test Ticket
+                                    {printTestBusy ? 'Starting Print...' : 'Print Test Ticket'}
                                 </button>
                                 <p className="text-[11px] text-gray-500 font-semibold self-center">
-                                    Temporary test only. Remove later after printer is confirmed.
+                                    {printTestMessage || 'Temporary test only. Remove later after printer is confirmed.'}
                                 </p>
                             </div>
                             <div className="mt-3 rounded-xl border-2 border-gray-300 bg-white p-3">
