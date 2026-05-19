@@ -146,6 +146,7 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
     const [view, setView] = useState<View>('DASHBOARD');
     const isAndroidTerminal = useMemo(() => /android|sunmi/i.test(navigator.userAgent || ''), []);
     const isNativeAndroid = useMemo(() => Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android', []);
+    const isBackofficeApprover = useMemo(() => currentUser.role === 'Admin' || currentUser.role === 'Supervisor', [currentUser.role]);
     const [showInstallGuide, setShowInstallGuide] = useState(false);
     const [rawBtStatus, setRawBtStatus] = useState<'checking' | 'installed' | 'not-installed' | 'error'>('checking');
     const [rawBtMessage, setRawBtMessage] = useState('');
@@ -678,6 +679,27 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                                     {printTestMessage || 'Temporary test only. Remove later after printer is confirmed.'}
                                 </p>
                             </div>
+                            {isBackofficeApprover && (
+                                <div className="mt-3 rounded-xl border-2 border-indigo-300 bg-indigo-50 p-3">
+                                    <p className="text-[11px] font-black uppercase tracking-widest text-indigo-800">Test Ticket / Approve Online Payment</p>
+                                    <div className="mt-2 flex flex-col sm:flex-row gap-2">
+                                        <button
+                                            onClick={handlePrintTestTicket}
+                                            disabled={printTestBusy}
+                                            className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-amber-500 text-white font-black rounded-lg shadow hover:brightness-110 active:scale-95 transition-all text-xs uppercase disabled:opacity-80"
+                                        >
+                                            {printTestBusy ? 'Starting Print...' : 'Print Test Ticket'}
+                                        </button>
+                                        <button
+                                            onClick={() => setView('FINANCE')}
+                                            className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white font-black rounded-lg shadow hover:bg-indigo-700 active:scale-95 transition-all text-xs uppercase"
+                                        >
+                                            Approve Online Payment
+                                        </button>
+                                    </div>
+                                    <p className="mt-2 text-[11px] text-indigo-700 font-semibold">One touch takes you to approval screen in Finance.</p>
+                                </div>
+                            )}
                             <div className="mt-3 rounded-xl border-2 border-gray-300 bg-white p-3">
                                 <div className="flex flex-col gap-2">
                                     <div className="text-[11px] font-black uppercase tracking-widest text-gray-800">
