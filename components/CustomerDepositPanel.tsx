@@ -55,6 +55,10 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
       }
   }, [canUseCorrection, isCorrectionMode]);
 
+  const pendingRequests = useMemo(() => {
+      return depositRequests.filter(req => req.status === 'Pending').sort((a,b) => b.timestamp.getTime() - a.timestamp.getTime());
+  }, [depositRequests]);
+
   useEffect(() => {
       if (!isBackofficeApprover || pendingRequests.length === 0) return;
 
@@ -94,10 +98,6 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
     if (!selectedCustomer) return [];
     return depositLogs.filter(log => log.customerId === selectedCustomer.id).sort((a,b) => b.timestamp.getTime() - a.timestamp.getTime());
   }, [depositLogs, selectedCustomer]);
-
-  const pendingRequests = useMemo(() => {
-      return depositRequests.filter(req => req.status === 'Pending').sort((a,b) => b.timestamp.getTime() - a.timestamp.getTime());
-  }, [depositRequests]);
 
     const nextPendingRequest = pendingRequests[0] || null;
 
