@@ -137,6 +137,7 @@ export const SupervisorDashboard: React.FC<SupervisorDashboardProps> = (props) =
                             onApproveDepositRequest={props.onApproveDepositRequest}
                             onRejectDepositRequest={props.onRejectDepositRequest}
                             currentUserRole={currentUser.role}
+                            currentUserName={currentUser.name}
                         />
                     </div>
                 );

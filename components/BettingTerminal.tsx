@@ -152,6 +152,8 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
     const [rawBtBusy, setRawBtBusy] = useState(false);
     const [printTestBusy, setPrintTestBusy] = useState(false);
     const [printTestMessage, setPrintTestMessage] = useState('');
+    const [apkDownloadBusy, setApkDownloadBusy] = useState(false);
+    const [apkDownloadMessage, setApkDownloadMessage] = useState('');
     const [selectedRace, setSelectedRace] = useState<Race | null>(null);
     const [selectedBetType, setSelectedBetType] = useState<BetTypeOption | null>(null);
     const [selectedNumbers, setSelectedNumbers] = useState<number[]>([]);
@@ -193,6 +195,32 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
         localStorage.setItem('betese_apk_install_guide_seen', '1');
         setShowInstallGuide(false);
     };
+
+    const handleDownloadApk = useCallback(() => {
+        if (apkDownloadBusy) return;
+
+        const apkUrl = `/betesepmu.apk?v=${APK_BUILD_VERSION}`;
+        setApkDownloadBusy(true);
+        setApkDownloadMessage('Starting download...');
+
+        try {
+            const a = document.createElement('a');
+            a.href = apkUrl;
+            a.download = 'betesepmu.apk';
+            a.rel = 'noopener';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setApkDownloadMessage('Download started. Open the APK file and tap Install.');
+        } catch {
+            window.location.href = apkUrl;
+            setApkDownloadMessage('Opening APK download...');
+        }
+
+        window.setTimeout(() => {
+            setApkDownloadBusy(false);
+        }, 6000);
+    }, [apkDownloadBusy, APK_BUILD_VERSION]);
 
     useEffect(() => {
         let active = true;
@@ -568,7 +596,7 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
 
                         {/* ── CUSTOMER DEPOSITS & WITHDRAWALS ── */}
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            <CustomerDepositPanel customers={customers} onDeposit={onDeposit} depositLogs={depositLogs} currentUserRole={currentUser.role} depositRequests={depositRequests} onApproveDepositRequest={onApproveDepositRequest} onRejectDepositRequest={onRejectDepositRequest} />
+                            <CustomerDepositPanel customers={customers} onDeposit={onDeposit} depositLogs={depositLogs} currentUserRole={currentUser.role} currentUserName={currentUser.name} depositRequests={depositRequests} onApproveDepositRequest={onApproveDepositRequest} onRejectDepositRequest={onRejectDepositRequest} />
                             <ProcessWithdrawalPanel onProcessWithdrawal={onProcessWithdrawal} withdrawalRequests={withdrawalRequests} customers={customers} />
                         </div>
                     </div>
@@ -628,14 +656,14 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                                         {isNativeAndroid ? 'Native Android App / Terminal Mode' : 'Browser Mode / Install APK for Terminal'}
                                     </div>
                                 </div>
-                                <a
-                                    href={`/betesepmu.apk?v=${APK_BUILD_VERSION}`}
-                                    download="betesepmu.apk"
-                                    className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-betese-green text-white font-black rounded-xl shadow hover:brightness-110 active:scale-95 transition-all border-b-4 border-black/20 text-sm uppercase"
+                                <button
+                                    onClick={handleDownloadApk}
+                                    disabled={apkDownloadBusy}
+                                    className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-betese-green text-white font-black rounded-xl shadow hover:brightness-110 active:scale-95 transition-all border-b-4 border-black/20 text-sm uppercase disabled:opacity-80 disabled:cursor-not-allowed"
                                 >
                                     <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
-                                    Download APK
-                                </a>
+                                    {apkDownloadBusy ? 'Downloading...' : 'Download APK'}
+                                </button>
                             </div>
                             <div className="mt-3 flex flex-col sm:flex-row gap-3">
                                 <button
@@ -679,9 +707,9 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                             </div>
                             <p className="text-[11px] text-gray-400 mt-2 font-semibold">APK Build: {APK_BUILD_VERSION}</p>
                             <p className="text-[11px] text-gray-500 mt-3 font-semibold">
-                                {isAndroidTerminal
+                                {apkDownloadMessage || (isAndroidTerminal
                                     ? 'Android: after download, open the APK file and tap Install.'
-                                    : 'Open this dashboard on Android terminal to install directly.'}
+                                    : 'Open this dashboard on Android terminal to install directly.')}
                             </p>
                         </div>
 
@@ -717,13 +745,13 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                             </div>
                         </div>
                         <div className="p-5 pt-0 flex gap-3">
-                            <a
-                                href={`/betesepmu.apk?v=${APK_BUILD_VERSION}`}
-                                download="betesepmu.apk"
-                                className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 bg-betese-green text-white font-black rounded-xl shadow hover:brightness-110 active:scale-95 transition-all text-sm uppercase"
+                            <button
+                                onClick={handleDownloadApk}
+                                disabled={apkDownloadBusy}
+                                className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 bg-betese-green text-white font-black rounded-xl shadow hover:brightness-110 active:scale-95 transition-all text-sm uppercase disabled:opacity-80 disabled:cursor-not-allowed"
                             >
-                                Download APK
-                            </a>
+                                {apkDownloadBusy ? 'Downloading...' : 'Download APK'}
+                            </button>
                             <button
                                 onClick={closeInstallGuide}
                                 className="px-4 py-3 bg-gray-100 text-gray-700 font-black rounded-xl shadow hover:bg-gray-200 active:scale-95 transition-all text-sm uppercase"

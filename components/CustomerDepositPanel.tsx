@@ -14,10 +14,12 @@ interface CustomerDepositPanelProps {
   onApproveDepositRequest?: (requestId: string) => void;
   onRejectDepositRequest?: (requestId: string) => void;
   currentUserRole: Role; // Added to control visibility
+    currentUserName?: string;
 }
 
-export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ customers, onDeposit, onAdminAdjustBalance, depositLogs, depositRequests = [], onApproveDepositRequest, onRejectDepositRequest, currentUserRole }) => {
+export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ customers, onDeposit, onAdminAdjustBalance, depositLogs, depositRequests = [], onApproveDepositRequest, onRejectDepositRequest, currentUserRole, currentUserName }) => {
     const isBackofficeApprover = currentUserRole === 'Admin' || currentUserRole === 'Supervisor';
+    const approverDisplayName = currentUserName?.trim() || currentUserRole;
   // If Vendor, default to 'manual', otherwise 'requests'
   const [activeTab, setActiveTab] = useState<'requests' | 'manual' | 'history'>(
             isBackofficeApprover ? 'requests' : 'manual'
@@ -52,6 +54,36 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
           setIsCorrectionMode(false);
       }
   }, [canUseCorrection, isCorrectionMode]);
+
+  useEffect(() => {
+      if (!isBackofficeApprover || pendingRequests.length === 0) return;
+
+      const playAlertTone = () => {
+          try {
+              const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
+              if (!AudioCtx) return;
+              const ctx = new AudioCtx();
+              const osc = ctx.createOscillator();
+              const gain = ctx.createGain();
+              osc.type = 'sine';
+              osc.frequency.value = 880;
+              gain.gain.value = 0.07;
+              osc.connect(gain);
+              gain.connect(ctx.destination);
+              osc.start();
+              window.setTimeout(() => {
+                  osc.stop();
+                  ctx.close();
+              }, 240);
+          } catch {
+              // Ignore audio errors (e.g. browser autoplay policy)
+          }
+      };
+
+      playAlertTone();
+      const timer = window.setInterval(playAlertTone, 15000);
+      return () => window.clearInterval(timer);
+  }, [isBackofficeApprover, pendingRequests.length]);
 
   const filteredCustomers = useMemo(() => {
     if (!searchTerm) return [];
@@ -263,6 +295,7 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
                                       <p className="text-sm text-gray-700">Method: <span className="font-black">{req.method}</span></p>
                                       <p className="text-sm text-gray-700">Amount: <span className="font-black">{Number(req.amount || 0).toFixed(2)} GMD</span></p>
                                       <p className="text-sm text-blue-700">Current Wallet: <span className="font-black">{getCustomerWallet(req.customerId).toFixed(2)} GMD</span></p>
+                                      <p className="text-sm text-gray-700">Approver: <span className="font-black">{approverDisplayName}</span></p>
                                       {req.method === 'Wave' && (
                                           <p className="text-xs text-amber-700 font-semibold mt-1">
                                               Verification: {req.verificationStatus || 'PendingProviderConfirmation'}
@@ -296,6 +329,7 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
 
                   <div className="border-t border-red-100 p-4 bg-red-50">
                       <p className="text-sm font-bold text-red-900">This popup stays visible until all pending online payments are approved or rejected.</p>
+                      <p className="text-xs text-red-700 mt-1">Signed in approver: <span className="font-black">{approverDisplayName}</span></p>
                   </div>
               </div>
           </div>
