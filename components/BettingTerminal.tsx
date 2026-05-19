@@ -604,8 +604,8 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                                         Use the app for faster terminal performance and direct printer integration.
                                     </p>
                                     <div className="mt-2 inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-gray-100 text-gray-700 border border-gray-200">
-                                        <span className={`w-2.5 h-2.5 rounded-full ${isAndroidTerminal ? 'bg-green-500' : 'bg-amber-500'}`}></span>
-                                        {isAndroidTerminal ? 'Native Android App / Terminal Mode' : 'Browser Mode / Install APK for Terminal'}
+                                        <span className={`w-2.5 h-2.5 rounded-full ${isNativeAndroid ? 'bg-green-500' : 'bg-amber-500'}`}></span>
+                                        {isNativeAndroid ? 'Native Android App / Terminal Mode' : 'Browser Mode / Install APK for Terminal'}
                                     </div>
                                 </div>
                                 <a
@@ -629,20 +629,22 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                                     Temporary test only. Remove later after printer is confirmed.
                                 </p>
                             </div>
-                            <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3">
-                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                                    <div className="text-[11px] font-black uppercase tracking-widest text-gray-700">
+                            <div className="mt-3 rounded-xl border-2 border-gray-300 bg-white p-3">
+                                <div className="flex flex-col gap-2">
+                                    <div className="text-[11px] font-black uppercase tracking-widest text-gray-800">
                                         RawBT Status: {rawBtStatus}
                                     </div>
                                     <button
                                         onClick={handleRawBtTest}
-                                        disabled={rawBtBusy}
-                                        className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-gray-900 text-white font-black rounded-lg shadow hover:brightness-110 active:scale-95 transition-all text-xs uppercase disabled:opacity-60"
+                                        disabled={rawBtBusy || !isNativeAndroid}
+                                        className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 font-black rounded-lg shadow active:scale-95 transition-all text-xs uppercase disabled:opacity-60 disabled:cursor-not-allowed"
+                                        style={{ backgroundColor: '#111827', color: '#ffffff', minHeight: '44px' }}
                                     >
-                                        {rawBtBusy ? 'Checking...' : 'Run RawBT Test'}
+                                        <svg viewBox="0 0 24 24" fill="none" className="w-4 h-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 12h8"/><path d="M12 8v8"/><rect x="3" y="4" width="18" height="16" rx="2"/></svg>
+                                        {rawBtBusy ? 'Checking RawBT...' : 'Run RawBT Test'}
                                     </button>
                                 </div>
-                                <p className="text-[11px] text-gray-600 font-semibold mt-2">{rawBtMessage || 'Run test to check RawBT print bridge.'}</p>
+                                <p className="text-[11px] text-gray-700 font-semibold mt-2">{rawBtMessage || 'Run test to check RawBT print bridge.'}</p>
                             </div>
                             <p className="text-[11px] text-gray-500 mt-3 font-semibold">
                                 {isAndroidTerminal
