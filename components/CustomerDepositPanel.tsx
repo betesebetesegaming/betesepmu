@@ -17,9 +17,10 @@ interface CustomerDepositPanelProps {
 }
 
 export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ customers, onDeposit, onAdminAdjustBalance, depositLogs, depositRequests = [], onApproveDepositRequest, onRejectDepositRequest, currentUserRole }) => {
+    const isBackofficeApprover = currentUserRole === 'Admin' || currentUserRole === 'Supervisor';
   // If Vendor, default to 'manual', otherwise 'requests'
   const [activeTab, setActiveTab] = useState<'requests' | 'manual' | 'history'>(
-      currentUserRole === 'Vendor' ? 'manual' : 'requests'
+            isBackofficeApprover ? 'requests' : 'manual'
   );
   
   // Manual Deposit State
@@ -41,10 +42,10 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
 
   // Ensure Vendors never see the requests tab even if state drifts
   useEffect(() => {
-      if (currentUserRole === 'Vendor' && activeTab === 'requests') {
+      if (!isBackofficeApprover && activeTab === 'requests') {
           setActiveTab('manual');
       }
-  }, [currentUserRole, activeTab]);
+  }, [isBackofficeApprover, activeTab]);
 
   useEffect(() => {
       if (!canUseCorrection && isCorrectionMode) {
@@ -235,7 +236,7 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
     <div className="bg-white p-6 rounded-lg shadow-lg">
       <h3 className="text-xl font-bold text-betese-dark mb-4">Customer Deposits</h3>
 
-      {currentUserRole !== 'Vendor' && pendingRequests.length > 0 && (
+    {isBackofficeApprover && pendingRequests.length > 0 && (
           <div className="mb-4 rounded-xl border-2 border-red-400 bg-red-50 p-4 shadow-sm">
               <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
@@ -303,7 +304,7 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
       
       <div className="flex mb-4 border-b">
           {/* HIDE ONLINE REQUESTS FOR VENDORS */}
-          {currentUserRole !== 'Vendor' && (
+          {isBackofficeApprover && (
             <button 
                 onClick={() => setActiveTab('requests')}
                 className={`flex-1 py-2 text-center font-bold text-sm ${activeTab === 'requests' ? 'border-b-4 border-betese-green text-betese-green' : 'text-gray-500 hover:text-gray-700'}`}
@@ -325,7 +326,7 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
           </button>
       </div>
 
-      {activeTab === 'requests' && currentUserRole !== 'Vendor' && (
+    {activeTab === 'requests' && isBackofficeApprover && (
           <div className="space-y-6 animate-fade-in">
               <div>
                   <h4 className="text-lg font-bold text-red-600 mb-3 flex items-center gap-2">
