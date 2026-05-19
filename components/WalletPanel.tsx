@@ -59,7 +59,6 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
   const [depositPhone, setDepositPhone] = useState(''); // Renamed logic var, used to be txnId
   const [depositMessage, setDepositMessage] = useState('');
   const [lastDepositData, setLastDepositData] = useState<{amount: number, method: string, phone: string} | null>(null);
-    const [waveCheckoutOpen, setWaveCheckoutOpen] = useState(false);
     const [paymentHandoff, setPaymentHandoff] = useState<'Wave' | 'AfriMoney' | null>(null);
 
   // Withdrawal Form State
@@ -123,7 +122,6 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
       e.preventDefault();
       setDepositMessage('');
       setLastDepositData(null);
-      setWaveCheckoutOpen(false);
       setPaymentHandoff(null);
 
       if (typeof depositAmount !== 'number' || depositAmount <= 0) {
@@ -213,48 +211,6 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
                     onClose={() => setLatestWithdrawalRequest(null)}
                 />
             )}
-      {waveCheckoutOpen && lastDepositData && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-              <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
-                  <div className="flex items-center justify-between gap-3 border-b pb-4 mb-4">
-                      <div>
-                          <p className="text-xs font-black uppercase tracking-widest text-blue-600">Wave Checkout</p>
-                          <h4 className="text-2xl font-black text-betese-dark">Pay {lastDepositData.amount.toFixed(2)} GMD</h4>
-                      </div>
-                      <WaveLogo height={34} />
-                  </div>
-                  <p className="text-sm text-gray-600 mb-4">
-                      On desktop, scan the QR code below. On phone, use the button to open Wave directly if the app is installed.
-                  </p>
-                  <div className="flex justify-center mb-4">
-                      <img
-                          src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(WAVE_MERCHANT_URL)}`}
-                          alt="Wave payment QR"
-                          className="rounded-2xl border border-gray-200 shadow-lg bg-white p-2"
-                      />
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <button
-                          type="button"
-                          onClick={openWaveCheckout}
-                          className="w-full rounded-xl bg-blue-600 px-4 py-3 font-black text-white shadow-lg hover:bg-blue-700 active:scale-95 transition-all"
-                      >
-                          {isMobileDevice ? 'Open Wave App' : 'Open Wave Page'}
-                      </button>
-                      <button
-                          type="button"
-                          onClick={() => setWaveCheckoutOpen(false)}
-                          className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 font-black text-gray-700 hover:bg-gray-50 active:scale-95 transition-all"
-                      >
-                          Close
-                      </button>
-                  </div>
-                  <p className="mt-4 text-xs text-gray-500 break-all">
-                      Betese payment link: <a href={WAVE_MERCHANT_URL} target="_blank" rel="noreferrer" className="font-bold text-blue-600 underline">{WAVE_MERCHANT_URL}</a>
-                  </p>
-              </div>
-          </div>
-      )}
       <h3 className="text-xl font-bold text-betese-dark mb-4">{t('tab_wallet')}</h3>
 
             <div className="mb-4 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm">

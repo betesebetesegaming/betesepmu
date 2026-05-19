@@ -336,7 +336,7 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
             {activeTab === 'history' && <TicketHistoryPanel tickets={placedTickets} onCancelTicket={onCancelTicket} races={races} effectiveTime={effectiveTime} />}
             {activeTab === 'wallet' && (
                 <div className="space-y-6">
-                    <WalletPanel user={user} onWithdrawalRequest={onWithdrawalRequest} withdrawalRequests={withdrawalRequests} onWalletFlash={onWalletFlash} onDepositRequest={onDepositRequest} depositRequests={depositRequests} tickets={placedTickets} onCancelWithdrawal={onCancelWithdrawal} />
+                    <WalletPanel user={user} onWithdrawalRequest={onWithdrawalRequest} withdrawalRequests={withdrawalRequests} onWalletFlash={onWalletFlash} onDepositRequest={onDepositRequest} depositRequests={depositRequests.filter(r => r.customerId === user.id)} tickets={placedTickets} onCancelWithdrawal={onCancelWithdrawal} />
                     <PasswordChangePanel user={user} onChangePassword={onChangePassword} />
                 </div>
             )}
