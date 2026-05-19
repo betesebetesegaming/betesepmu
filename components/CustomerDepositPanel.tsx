@@ -66,6 +66,8 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
       return depositRequests.filter(req => req.status === 'Pending').sort((a,b) => b.timestamp.getTime() - a.timestamp.getTime());
   }, [depositRequests]);
 
+    const nextPendingRequest = pendingRequests[0] || null;
+
   const fullHistory = useMemo(() => {
       let logs = [...depositLogs].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
       if (methodFilter !== 'All') {
@@ -233,6 +235,49 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
     <div className="bg-white p-6 rounded-lg shadow-lg">
       <h3 className="text-xl font-bold text-betese-dark mb-4">Customer Deposits</h3>
 
+      {currentUserRole !== 'Vendor' && pendingRequests.length > 0 && (
+          <div className="mb-4 rounded-xl border-2 border-red-400 bg-red-50 p-4 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                      <p className="text-xs font-black uppercase tracking-widest text-red-700">Approval Box</p>
+                      <p className="text-lg font-black text-red-900">{pendingRequests.length} online payment{pendingRequests.length > 1 ? 's' : ''} waiting for approval</p>
+                      {nextPendingRequest && (
+                          <p className="text-sm text-red-800 mt-1">
+                              Next: <span className="font-black">{nextPendingRequest.customerName}</span> - <span className="font-black">{Number(nextPendingRequest.amount || 0).toFixed(2)} GMD</span>
+                          </p>
+                      )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                      <button
+                          type="button"
+                          onClick={() => setActiveTab('requests')}
+                          className="px-4 py-2 rounded-lg bg-betese-dark text-white text-sm font-black hover:brightness-110"
+                      >
+                          Open Approval Box
+                      </button>
+                      {onApproveDepositRequest && nextPendingRequest && (
+                          <button
+                              type="button"
+                              onClick={() => onApproveDepositRequest(nextPendingRequest.id)}
+                              className="px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-black hover:bg-green-700"
+                          >
+                              One-Touch Approve
+                          </button>
+                      )}
+                      {onRejectDepositRequest && nextPendingRequest && (
+                          <button
+                              type="button"
+                              onClick={() => onRejectDepositRequest(nextPendingRequest.id)}
+                              className="px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-black hover:bg-red-700"
+                          >
+                              Reject Next
+                          </button>
+                      )}
+                  </div>
+              </div>
+          </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
               <p className="text-xs font-bold text-blue-700 uppercase">Online Total</p>
@@ -284,7 +329,7 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
           <div className="space-y-6 animate-fade-in">
               <div>
                   <h4 className="text-lg font-bold text-red-600 mb-3 flex items-center gap-2">
-                      Action Required (Pending)
+                      Approval Box (Action Required)
                       <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded-full font-normal">{pendingRequests.length}</span>
                   </h4>
                   {pendingRequests.length === 0 ? (
@@ -555,12 +600,16 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
                                           {req.method === 'Wave' ? <WaveLogo height={14} /> : req.method === 'AfriMoney' ? <AfriMoneyLogo height={14} /> : getMethodLabel(req.method)}
                                       </td>
                                       <td className="px-2 py-1">
-                                          <span className={`px-2 py-0.5 rounded-full font-bold ${req.status === 'Approved' ? 'bg-green-100 text-green-700' : req.status === 'Rejected' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                                              {req.status}
-                                          </span>
-                                          {req.method === 'Wave' && req.verificationStatus && (
-                                              <span className="ml-2 text-[10px] font-black uppercase text-blue-700">{req.verificationStatus}</span>
-                                          )}
+                                          <div className="flex flex-wrap items-center gap-1">
+                                              <span className={`px-2 py-0.5 rounded-full font-bold ${req.status === 'Approved' ? 'bg-green-100 text-green-700' : req.status === 'Rejected' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                                                  {req.status}
+                                              </span>
+                                              {req.method === 'Wave' && req.verificationStatus && (
+                                                  <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-black uppercase">
+                                                      {req.verificationStatus}
+                                                  </span>
+                                              )}
+                                          </div>
                                       </td>
                                       <td className="px-2 py-1">{req.processedByName || '-'}</td>
                                   </tr>
