@@ -139,7 +139,7 @@ const AdminMenu: React.FC<{ setView: (view: AdminView) => void; onFreshStart: ()
         { view: 'ANALYTICS', label: 'Analytics Dashboard', iconKind: 'analytics' as AdminIconKind, color: 'from-green-500 to-green-700' },
         { view: 'RAFFLE_DRAW', label: 'Automatic Raffle Draw', iconKind: 'raffle' as AdminIconKind, color: 'from-amber-500 to-orange-700' },
         { view: 'PROGRAM', label: 'Program & Ads', iconKind: 'program' as AdminIconKind, color: 'from-blue-500 to-blue-700' },
-        { view: 'USERS', label: 'User Accounts', iconKind: 'users' as AdminIconKind, color: 'from-purple-500 to-purple-700' },
+        { view: 'USERS', label: 'Approve Online Payment', iconKind: 'users' as AdminIconKind, color: 'from-purple-500 to-purple-700' },
         { view: 'RACES', label: 'Race Management', iconKind: 'races' as AdminIconKind, color: 'from-orange-500 to-orange-700' },
         { view: 'TICKET_PAYOUT', label: 'Office Payouts', iconKind: 'tools' as AdminIconKind, color: 'from-cyan-500 to-blue-500' },
         { view: 'REPORTS', label: 'Payout Reports', iconKind: 'reports' as AdminIconKind, color: 'from-yellow-500 to-yellow-600' },
@@ -351,14 +351,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
                         <div className="bg-lime-50 border-l-8 border-lime-600 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow">
                             <div>
                                 <h3 className="text-lg font-black text-lime-800 uppercase">Quick Access</h3>
-                                <p className="text-sm text-lime-700">Open Terminal Log / Ticket Information from here.</p>
+                                <p className="text-sm text-lime-700">Open Test Ticket or Approve Online Payment from here.</p>
                             </div>
-                            <button
-                                onClick={() => setView('TICKET_INFORMATION')}
-                                className="px-5 py-3 bg-lime-700 text-white font-black rounded-lg hover:bg-lime-800 transition-all"
-                            >
-                                Open Ticket Information
-                            </button>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <button
+                                    onClick={() => setView('TICKET_INFORMATION')}
+                                    className="px-5 py-3 bg-lime-700 text-white font-black rounded-lg hover:bg-lime-800 transition-all"
+                                >
+                                    Test Ticket / Terminal Log
+                                </button>
+                                <button
+                                    onClick={() => setView('USERS')}
+                                    className="px-5 py-3 bg-indigo-700 text-white font-black rounded-lg hover:bg-indigo-800 transition-all"
+                                >
+                                    Approve Online Payment
+                                </button>
+                            </div>
                         </div>
                         <RecentResultsPanel races={races} effectiveTime={effectiveTime} />
                         <AdminMenu setView={setView} onFreshStart={props.onFreshStart} />
