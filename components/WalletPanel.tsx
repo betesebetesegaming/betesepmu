@@ -55,6 +55,7 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
   // Deposit Form State
   const [depositAmount, setDepositAmount] = useState<number | ''>('');
   const [depositMethod, setDepositMethod] = useState<'Wave' | 'AfriMoney'>('Wave');
+    const [depositStage, setDepositStage] = useState<'pay' | 'confirm'>('pay');
   const [depositPhone, setDepositPhone] = useState(''); // Renamed logic var, used to be txnId
   const [depositMessage, setDepositMessage] = useState('');
   const [lastDepositData, setLastDepositData] = useState<{amount: number, method: string, phone: string} | null>(null);
@@ -149,6 +150,7 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
               ? 'Wave deposit request submitted. Your account will be credited once verified.'
               : t('success_deposit')
       );
+      setDepositStage('pay');
       setDepositAmount('');
       setDepositPhone('');
   }
@@ -413,6 +415,13 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
                           Log in with <strong>your own Wave account</strong> and pay.<br/>
                           Then come back here and fill in the form below.
                       </p>
+                      <button
+                          type="button"
+                          onClick={() => setDepositStage('confirm')}
+                          className="w-full rounded-xl border-2 border-blue-500 bg-white px-4 py-3 font-black text-blue-700 hover:bg-blue-100 active:scale-95 transition-all"
+                      >
+                          I HAVE PAID - ENTER PHONE NUMBER
+                      </button>
                       <p className="text-xs font-black uppercase tracking-widest text-blue-500 mt-1">Step 2 — Confirm your payment below</p>
                   </div>
               )}
@@ -434,11 +443,18 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
                           Log in with <strong>your own AfriMoney account</strong> and pay.<br/>
                           Then come back here and fill in the form below.
                       </p>
+                      <button
+                          type="button"
+                          onClick={() => setDepositStage('confirm')}
+                          className="w-full rounded-xl border-2 border-purple-500 bg-white px-4 py-3 font-black text-purple-700 hover:bg-purple-100 active:scale-95 transition-all"
+                      >
+                          I HAVE PAID - ENTER PHONE NUMBER
+                      </button>
                       <p className="text-xs font-black uppercase tracking-widest text-purple-500 mt-1">Step 2 — Confirm your payment below</p>
                   </div>
               )}
 
-              {!paymentHandoff && (
+              {!paymentHandoff && depositStage === 'confirm' && (
               <form onSubmit={handleDepositSubmit} className="space-y-3">
                   <div>
                       <label className="block text-sm font-medium text-gray-700">{t('amount_sent')}</label>
@@ -505,6 +521,13 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
                     </button>
                   )}
               </form>
+              )}
+
+              {!paymentHandoff && depositStage === 'pay' && (
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                      <p className="text-xs font-bold uppercase tracking-widest text-gray-600">Confirm step locked</p>
+                      <p className="text-sm text-gray-700 mt-1">Complete payment first, then tap "I HAVE PAID - ENTER PHONE NUMBER" to unlock the form.</p>
+                  </div>
               )}
 
               <div>
