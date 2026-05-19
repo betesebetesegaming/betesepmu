@@ -59,6 +59,7 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
   const [depositMessage, setDepositMessage] = useState('');
   const [lastDepositData, setLastDepositData] = useState<{amount: number, method: string, phone: string} | null>(null);
     const [waveCheckoutOpen, setWaveCheckoutOpen] = useState(false);
+    const [paymentHandoff, setPaymentHandoff] = useState<'Wave' | 'AfriMoney' | null>(null);
 
   // Withdrawal Form State
   const [withdrawAmount, setWithdrawAmount] = useState<number | ''>('');
@@ -122,6 +123,7 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
       setDepositMessage('');
       setLastDepositData(null);
       setWaveCheckoutOpen(false);
+      setPaymentHandoff(null);
 
       if (typeof depositAmount !== 'number' || depositAmount <= 0) {
           setDepositMessage('Please enter a valid deposit amount.');
@@ -152,21 +154,12 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
   }
 
   const openWaveCheckout = () => {
-      const dismissKeyboard = () => {
-          const activeElement = document.activeElement as HTMLElement | null;
-          activeElement?.blur();
-          Array.from(document.querySelectorAll('input, textarea, [contenteditable="true"]')).forEach((element) => {
-              if (element instanceof HTMLElement) {
-                  element.blur();
-              }
-          });
-          document.body?.focus?.();
-      };
-
-      dismissKeyboard();
+      const activeElement = document.activeElement as HTMLElement | null;
+      activeElement?.blur();
+      setPaymentHandoff('Wave');
       window.setTimeout(() => {
           window.open(WAVE_MERCHANT_URL, '_blank', 'noopener,noreferrer');
-      }, 150);
+      }, 350);
   };
 
   const openAfriMoneyCheckout = () => {
@@ -174,21 +167,12 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
           alert('AfriMoney payment link is not configured yet. Please pay manually using the AfriMoney number and then confirm below.');
           return;
       }
-      const dismissKeyboard = () => {
-          const activeElement = document.activeElement as HTMLElement | null;
-          activeElement?.blur();
-          Array.from(document.querySelectorAll('input, textarea, [contenteditable="true"]')).forEach((element) => {
-              if (element instanceof HTMLElement) {
-                  element.blur();
-              }
-          });
-          document.body?.focus?.();
-      };
-
-      dismissKeyboard();
+      const activeElement = document.activeElement as HTMLElement | null;
+      activeElement?.blur();
+      setPaymentHandoff('AfriMoney');
       window.setTimeout(() => {
           window.open(AFRIMONEY_MERCHANT_URL, '_blank', 'noopener,noreferrer');
-      }, 150);
+      }, 350);
   };
 
     const handleWithdrawalSubmit = async (e: React.FormEvent) => {
@@ -370,6 +354,29 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
 
       {activeTab === 'deposit' && (
           <div className="space-y-6 animate-fade-in">
+              {paymentHandoff && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+                      <div className={`w-full max-w-md rounded-3xl p-6 shadow-2xl ${paymentHandoff === 'Wave' ? 'bg-blue-50' : 'bg-purple-50'}`}>
+                          <p className={`text-xs font-black uppercase tracking-widest ${paymentHandoff === 'Wave' ? 'text-blue-700' : 'text-purple-700'}`}>Payment handoff active</p>
+                          <h4 className="mt-2 text-2xl font-black text-betese-dark">{paymentHandoff === 'Wave' ? 'Opening Wave' : 'Opening AfriMoney'}</h4>
+                          <p className="mt-3 text-sm text-gray-700">
+                              The Betese keyboard is hidden now. Finish the payment in the app that opens, then come back to Betese.
+                          </p>
+                          <div className="mt-6 flex items-center justify-center gap-3">
+                              <div className="h-3 w-3 rounded-full bg-green-500 animate-pulse"></div>
+                              <p className="text-xs font-bold text-gray-600 uppercase tracking-widest">Waiting for payment app</p>
+                          </div>
+                          <button
+                              type="button"
+                              onClick={() => setPaymentHandoff(null)}
+                              className="mt-6 w-full rounded-xl bg-gray-900 px-4 py-3 font-black text-white hover:bg-gray-800 active:scale-95 transition-all"
+                          >
+                              Return to deposit form
+                          </button>
+                      </div>
+                  </div>
+              )}
+
               <div className="bg-blue-50 p-4 rounded border border-blue-200 text-sm text-blue-800">
                   <p className="font-bold mb-2">{t('how_to_deposit')}</p>
                   
@@ -390,7 +397,7 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
               </div>
 
               {/* Wave pay button */}
-              {depositMethod === 'Wave' && (
+              {depositMethod === 'Wave' && !paymentHandoff && (
                   <div className="rounded-2xl border-2 border-blue-400 bg-blue-50 p-4 flex flex-col items-center gap-3">
                       <p className="text-xs font-black uppercase tracking-widest text-blue-700">Step 1 — Pay with Wave first</p>
                       <button
@@ -411,7 +418,7 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
               )}
 
               {/* AfriMoney pay button */}
-              {depositMethod === 'AfriMoney' && (
+              {depositMethod === 'AfriMoney' && !paymentHandoff && (
                   <div className="rounded-2xl border-2 border-purple-400 bg-purple-50 p-4 flex flex-col items-center gap-3">
                       <p className="text-xs font-black uppercase tracking-widest text-purple-700">Step 1 — Pay with AfriMoney first</p>
                       <button
@@ -431,6 +438,7 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
                   </div>
               )}
 
+              {!paymentHandoff && (
               <form onSubmit={handleDepositSubmit} className="space-y-3">
                   <div>
                       <label className="block text-sm font-medium text-gray-700">{t('amount_sent')}</label>
@@ -497,6 +505,7 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
                     </button>
                   )}
               </form>
+              )}
 
               <div>
                   <h4 className="font-bold text-gray-700 mb-2">{t('deposit_history')}</h4>
