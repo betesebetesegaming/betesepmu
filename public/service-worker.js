@@ -1,5 +1,5 @@
 /* eslint-disable no-undef */
-const CACHE_NAME = 'betese-pmu-v3';
+const CACHE_NAME = 'betese-pmu-v4';
 const URLS_TO_CACHE = [
   '/',
   '/index.html',
