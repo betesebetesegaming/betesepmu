@@ -552,7 +552,12 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
                             </div>
                             <p className="text-xs text-gray-600 mt-1">Code: <span className="font-mono">{req.code}</span></p>
                             {req.status === 'Completed' && req.processedByName && (
-                            <p className="text-xs text-gray-500 mt-1">Processed by: <strong>{req.processedByName}</strong></p>
+                            <>
+                                <p className="text-xs text-gray-500 mt-1">Processed by: <strong>{req.processedByName}</strong></p>
+                                {String(req.processedByName).includes('[Wave') && (
+                                    <p className="text-xs text-blue-700 font-bold mt-1">Winning paid by Wave ✓</p>
+                                )}
+                            </>
                             )}
                         </div>
                     )) : <p className="text-gray-500 text-sm">No withdrawal requests yet.</p>}

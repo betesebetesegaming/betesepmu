@@ -1545,13 +1545,18 @@ const AppContent: React.FC = () => {
       }
   };
 
-  const processWithdrawal = async (code: string) => {
+  const processWithdrawal = async (code: string, payoutMethod: 'Cash' | 'Wave' = 'Cash', payoutReference?: string) => {
       const req = (withdrawalRequests || []).find(r => r.code === code && r.status === 'Pending');
       if (!req || !currentUser) return false;
 
+      const safeReference = String(payoutReference || '').replace(/[\[\]]/g, '').trim();
+      const processedByName = payoutMethod === 'Wave'
+          ? `${currentUser.name} [Wave${safeReference ? ` Ref:${safeReference}` : ''}]`
+          : currentUser.name;
+
       if (supabase) {
           try {
-              const success = await dbProcessWithdrawalRequest(code, currentUser.id, currentUser.name, effectiveTime);
+              const success = await dbProcessWithdrawalRequest(code, currentUser.id, processedByName, effectiveTime);
               if (success) loadLiveSystemData(currentUser);
               return success;
           } catch (e) {
@@ -1560,7 +1565,7 @@ const AppContent: React.FC = () => {
           }
       }
 
-      const updated = { ...req, status: 'Completed' as const, completedAt: effectiveTime, processedBy: currentUser.id, processedByName: currentUser.name };
+      const updated = { ...req, status: 'Completed' as const, completedAt: effectiveTime, processedBy: currentUser.id, processedByName };
       setWithdrawalRequests(prev => (prev || []).map(r => r.id === req.id ? updated : r));
       return true;
   };
