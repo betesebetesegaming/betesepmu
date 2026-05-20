@@ -26,7 +26,8 @@ import {
     dbSendChatMessage, dbMarkThreadAsRead, dbSettleRaceTickets, dbCancelTicket,
     dbToggleUserLock, dbAdminResetPassword, dbRecalculateAllTicketsSafely,
     dbApplyCustomerDeposit, dbApplyCustomerBalanceAdjustment, dbFreshStart, dbFetchUserBalance,
-    dbMigrateLegacyBookedTicketsToActive, dbFetchDepositLogs, dbInsertDepositLog
+    dbMigrateLegacyBookedTicketsToActive, dbFetchDepositLogs, dbInsertDepositLog,
+    dbGenerateAndSendOTP
 } from './supabaseClient';
 
 const LAZY_CHUNK_RETRY_KEY = 'betese_lazy_chunk_retry';
@@ -1635,6 +1636,16 @@ const AppContent: React.FC = () => {
                   throw new Error('Unable to generate a unique withdrawal code. Please try again.');
               }
 
+              const normalizedPhone = normalizeGambiaPhone(currentUser.phone || '');
+              if (normalizedPhone) {
+                  const otpResult = await dbGenerateAndSendOTP(normalizedPhone, savedRequest.code);
+                  if (!otpResult.success) {
+                      alert(`Withdrawal created, but OTP SMS could not be sent automatically. Share code manually via WhatsApp. Reason: ${otpResult.message}`);
+                  }
+              } else {
+                  alert('Withdrawal created. Add a valid phone number on your customer profile to receive OTP by SMS automatically.');
+              }
+
               // Update local state immediately so customer sees code without needing refresh.
               setWithdrawalRequests(prev => [savedRequest!, ...(prev || [])]);
               return savedRequest;
@@ -2049,7 +2060,7 @@ const AppContent: React.FC = () => {
       }
       return (
           <Suspense fallback={<LoadingPane />}>
-              <LoginScreen onLogin={handleLogin} users={users} onSignUp={addUser as any} />
+              <LoginScreen onLogin={handleLogin} users={users} onSignUp={addUser} />
           </Suspense>
       );
   }

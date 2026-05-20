@@ -254,7 +254,7 @@ export interface ManualBetOrder {
 export interface OTPConfig {
   id?: string;
   isEnabled: boolean;
-  provider: 'builtin' | 'twilio' | 'aws_sns' | 'custom'; // builtin = local testing
+  provider: 'builtin' | 'twilio' | 'aws_sns' | 'custom' | 'africell'; // builtin = local testing
   apiKey: string;
   apiSecret: string;
   phoneFromNumber?: string;

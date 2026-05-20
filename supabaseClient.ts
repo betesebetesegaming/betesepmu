@@ -1415,11 +1415,19 @@ export const dbSendChatMessage = async (
         const nowIso = new Date().toISOString();
         const normalizedRecipients = recipients.length > 0 ? recipients : ['BACK_OFFICE'];
         const isBroadcast = normalizedRecipients.includes('ALL_VENDORS');
+        const isPaymasterRoute = normalizedRecipients.includes('PAYMASTER');
+        const isCustomerServiceRoute = normalizedRecipients.includes('CUSTOMER_SERVICE');
         const participantSet = new Set<string>([sender.id, ...normalizedRecipients]);
         const threadPayload = {
             id: `th-${Date.now()}-${Math.floor(Math.random() * 9999)}`,
             participant_ids: Array.from(participantSet),
-            name: isBroadcast ? 'Broadcast to All Vendors' : null,
+            name: isBroadcast
+                ? 'Broadcast to All Vendors'
+                : isPaymasterRoute
+                    ? 'Paymaster'
+                    : isCustomerServiceRoute
+                        ? 'Customer Service'
+                        : null,
             is_broadcast: isBroadcast,
             last_message_timestamp: nowIso
         };
@@ -1883,11 +1891,70 @@ export const dbSaveOTPConfig = async (config: OTPConfig): Promise<void> => {
     if (error) throw error;
 };
 
+const normalizeMsisdnForAfricell = (phone: string): string => {
+    const digits = String(phone || '').replace(/\D/g, '');
+    if (!digits) return '';
+    if (digits.startsWith('220')) return digits;
+    if (digits.length === 7) return `220${digits}`;
+    if (digits.length > 7 && !digits.startsWith('220')) return `220${digits.slice(-7)}`;
+    return digits;
+};
+
+const parseAfricellXmlResponse = (xmlText: string): { statusCode: string; statusMessage: string } => {
+    try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(xmlText, 'application/xml');
+        const statusCode = String(doc.getElementsByTagName('Status')[0]?.textContent || '').trim();
+        const statusMessage = String(doc.getElementsByTagName('Message')[0]?.textContent || '').trim();
+        return { statusCode, statusMessage };
+    } catch {
+        return { statusCode: '', statusMessage: '' };
+    }
+};
+
+const sendAfricellSms = async (params: {
+    baseUrl: string;
+    username: string;
+    password: string;
+    sender: string;
+    msisdn: string;
+    message: string;
+}): Promise<{ ok: boolean; message: string }> => {
+    const { baseUrl, username, password, sender, msisdn, message } = params;
+
+    if (!baseUrl.trim()) {
+        return { ok: false, message: 'Missing SMS API base URL (set VITE_AFRICELL_SMS_BASE_URL).' };
+    }
+
+    const endpoint = `${baseUrl.replace(/\/+$/, '')}/api/sendsms?sender=${encodeURIComponent(sender)}&msisdn=${encodeURIComponent(msisdn)}`;
+    const auth = btoa(`${username}:${password}`);
+
+    const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Basic ${auth}`,
+            'Content-Type': 'text/plain; charset=utf-8'
+        },
+        body: message
+    });
+
+    const text = await response.text();
+    const parsed = parseAfricellXmlResponse(text);
+    const statusCode = parsed.statusCode || String(response.status || '');
+    const statusMessage = parsed.statusMessage || response.statusText || 'Unknown response';
+
+    if (statusCode === '200') {
+        return { ok: true, message: 'SMS sent successfully' };
+    }
+
+    return { ok: false, message: `Africell SMS failed (${statusCode}): ${statusMessage}` };
+};
+
 /**
  * Generate OTP and send to phone (placeholder for SMS provider)
  * For now, returns a mock OTP that can be used in development/testing
  */
-export const dbGenerateAndSendOTP = async (phone: string): Promise<{ success: boolean; message: string; expirySeconds?: number }> => {
+export const dbGenerateAndSendOTP = async (phone: string, forcedCode?: string): Promise<{ success: boolean; message: string; expirySeconds?: number }> => {
     if (!supabase) return { success: false, message: "Database not connected" };
 
     try {
@@ -1900,13 +1967,18 @@ export const dbGenerateAndSendOTP = async (phone: string): Promise<{ success: bo
 
         // Generate random OTP code
         const codeLength = config.codeLength || 4;
-        const code = String(Math.floor(Math.random() * Math.pow(10, codeLength))).padStart(codeLength, '0');
+        const code = String(forcedCode || String(Math.floor(Math.random() * Math.pow(10, codeLength))).padStart(codeLength, '0')).trim();
         const expirySeconds = (config.expiryMinutes || 5) * 60;
         const expiresAt = new Date(Date.now() + expirySeconds * 1000);
+        const normalizedPhone = normalizeMsisdnForAfricell(phone);
+
+        if (!normalizedPhone) {
+            return { success: false, message: 'Invalid phone number for OTP' };
+        }
 
         // Store OTP in otp_attempts table for verification later
         const { error: insertError } = await supabase.from('otp_attempts').insert({
-            phone: phone,
+            phone: normalizedPhone,
             code: code,
             expires_at: expiresAt.toISOString(),
             attempt_count: 0,
@@ -1915,13 +1987,38 @@ export const dbGenerateAndSendOTP = async (phone: string): Promise<{ success: bo
 
         if (insertError) throw insertError;
 
-        // TODO: Integrate actual SMS provider (Twilio, AWS SNS, etc.)
-        // For now, log to console (dev mode)
-        console.log(`[OTP] Phone: ${phone}, Code: ${code}, Expires: ${expiresAt.toISOString()}`);
+        const smsMessageTemplate = (config.message || 'Your BETESE verification code is: {{code}}');
+        const smsText = smsMessageTemplate.includes('{{code}}')
+            ? smsMessageTemplate.replace(/\{\{code\}\}/g, code)
+            : `${smsMessageTemplate} ${code}`;
+
+        if (config.provider === 'builtin') {
+            console.log(`[OTP] Phone: ${normalizedPhone}, Code: ${code}, Expires: ${expiresAt.toISOString()}`);
+            return {
+                success: true,
+                message: `OTP sent to ${normalizedPhone}`,
+                expirySeconds
+            };
+        }
+
+        const apiBaseUrl = getEnvVar('VITE_AFRICELL_SMS_BASE_URL') || getEnvVar('VITE_SMS_API_BASE_URL') || '';
+        const smsResult = await sendAfricellSms({
+            baseUrl: apiBaseUrl,
+            username: config.apiKey,
+            password: config.apiSecret,
+            sender: (config.phoneFromNumber || 'BETESE').trim(),
+            msisdn: normalizedPhone,
+            message: smsText
+        });
+
+        if (!smsResult.ok) {
+            await supabase.from('otp_attempts').delete().eq('phone', normalizedPhone).eq('code', code);
+            return { success: false, message: smsResult.message };
+        }
 
         return {
             success: true,
-            message: `OTP sent to ${phone}`,
+            message: `OTP sent to ${normalizedPhone}`,
             expirySeconds
         };
     } catch (err: any) {

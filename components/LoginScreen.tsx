@@ -4,11 +4,13 @@ import { User, Role } from '../types';
 import { Logo } from './Logo';
 import { RulesModal } from './RulesModal';
 import { useLanguage } from '../LanguageContext';
+import { normalizeGambiaPhone } from '../utils';
+import { dbFetchOTPConfig, dbGenerateAndSendOTP, dbVerifyOTP } from '../supabaseClient';
 
 interface LoginScreenProps {
   onLogin: (user: User) => void;
   users: User[];
-  onSignUp: (name: string, role: Role, phone?: string, password?: string) => User;
+    onSignUp: (name: string, role: Role, phone?: string, password?: string) => Promise<User | null>;
 }
 
 // Modern Input Field with Icon support
@@ -44,17 +46,23 @@ const ModernInput: React.FC<{
     </div>
 );
 
-const SignUpForm: React.FC<{ onSignUp: (name: string, phone: string, password: string) => void; onBack: () => void; users: User[]; onOpenRules: () => void; }> = ({ onSignUp, onBack, users, onOpenRules }) => {
+const SignUpForm: React.FC<{ onSignUp: (name: string, phone: string, password: string) => Promise<User | null>; onBack: () => void; users: User[]; onOpenRules: () => void; }> = ({ onSignUp, onBack, users, onOpenRules }) => {
     const [name, setName] = useState('');
     const [phone, setPhone] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
+    const [otpCode, setOtpCode] = useState('');
+    const [otpSent, setOtpSent] = useState(false);
+    const [otpRequired, setOtpRequired] = useState(false);
+    const [info, setInfo] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
     const { t } = useLanguage();
 
-    const handleSignUp = (e: React.FormEvent) => {
+    const handleSignUp = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
+        setInfo('');
         if (!name || !phone || !password || !confirmPassword) {
             setError(t('error_fill_fields'));
             return;
@@ -67,11 +75,56 @@ const SignUpForm: React.FC<{ onSignUp: (name: string, phone: string, password: s
             setError('Passwords do not match.');
             return;
         }
-        if (users.some(u => u.phone === phone)) {
+
+        const normalizedPhone = normalizeGambiaPhone(phone || '');
+        if (!normalizedPhone) {
+            setError('Use valid phone: Gambia local 7 digits or +220XXXXXXX; Senegal must be +221XXXXXXXXX only.');
+            return;
+        }
+
+        if (users.some(u => normalizeGambiaPhone(u.phone || '') === normalizedPhone)) {
             setError('This phone number is already registered.');
             return;
         }
-        onSignUp(name, phone, password);
+
+        setIsSubmitting(true);
+        try {
+            const otpConfig = await dbFetchOTPConfig();
+            const shouldUseOtp = !!otpConfig?.isEnabled;
+
+            if (shouldUseOtp && !otpSent) {
+                const sent = await dbGenerateAndSendOTP(normalizedPhone);
+                if (!sent.success) {
+                    setError(sent.message || 'Failed to send OTP code.');
+                    return;
+                }
+
+                setOtpRequired(true);
+                setOtpSent(true);
+                setInfo('Verification code sent by SMS. Enter the code below, then click Create Account again.');
+                return;
+            }
+
+            if (shouldUseOtp) {
+                if (!otpCode.trim()) {
+                    setError('Enter the SMS verification code to continue.');
+                    return;
+                }
+
+                const verify = await dbVerifyOTP(normalizedPhone, otpCode.trim());
+                if (!verify.success || !verify.isValid) {
+                    setError(verify.message || 'Invalid verification code.');
+                    return;
+                }
+            }
+
+            const createdUser = await onSignUp(name, normalizedPhone, password);
+            if (!createdUser) {
+                setError('Unable to create account. Please try again.');
+            }
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
@@ -85,6 +138,12 @@ const SignUpForm: React.FC<{ onSignUp: (name: string, phone: string, password: s
                 <div className="mb-4 p-3 bg-red-50 border-l-4 border-red-500 text-red-700 text-sm rounded">
                     <p className="font-bold">Error</p>
                     <p>{error}</p>
+                </div>
+            )}
+            {info && (
+                <div className="mb-4 p-3 bg-blue-50 border-l-4 border-blue-500 text-blue-700 text-sm rounded">
+                    <p className="font-bold">Verification</p>
+                    <p>{info}</p>
                 </div>
             )}
 
@@ -122,6 +181,20 @@ const SignUpForm: React.FC<{ onSignUp: (name: string, phone: string, password: s
                     type="password"
                     icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>}
                 />
+
+                {(otpRequired || otpSent) && (
+                    <>
+                        <ModernInput
+                            id="signup-otp"
+                            label="SMS Verification Code"
+                            value={otpCode}
+                            onChange={setOtpCode}
+                            type="text"
+                            icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11c0 .552-.448 1-1 1H9a1 1 0 100 2h1a3 3 0 100-6H9a1 1 0 010-2h2a1 1 0 011 1m-7 9h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>}
+                        />
+                        <p className="text-[11px] text-blue-700 -mt-3 ml-2 font-semibold">Customer should enter the code received by text message before account creation is completed.</p>
+                    </>
+                )}
                 
                 <div className="text-xs text-gray-500 text-center px-4">
                     {t('agree_terms')} <button type="button" onClick={onOpenRules} className="text-green-600 hover:text-green-800 font-semibold underline">{t('official_rules_link')}</button>.
@@ -130,9 +203,10 @@ const SignUpForm: React.FC<{ onSignUp: (name: string, phone: string, password: s
 
                 <button 
                     type="submit" 
+                    disabled={isSubmitting}
                     className="w-full flex justify-center py-3.5 px-4 border border-transparent rounded-xl shadow-lg text-sm font-bold text-white bg-gradient-to-r from-betese-green to-green-600 hover:from-green-700 hover:to-green-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transform transition hover:-translate-y-0.5"
                 >
-                    {t('open_account')}
+                    {isSubmitting ? 'Please wait...' : t('open_account')}
                 </button>
             </form>
             
@@ -161,17 +235,20 @@ const LoginForm: React.FC<{ onLogin: (user: User) => void; users: User[]; onSwit
             return;
         }
 
-        const lowerCaseUsername = username.toLowerCase();
-        // Allow login with name (for staff) or phone (for customers)
-        // Also check if ID matches username (since ID is now phone number for customers)
+        const rawUsername = username.trim();
+        const lowerCaseUsername = rawUsername.toLowerCase();
+        const normalizedInputPhone = normalizeGambiaPhone(rawUsername);
+
+        // Allow login with name (staff), raw/normalized phone, or account ID.
         const user = users.find(u => 
             u.name.toLowerCase() === lowerCaseUsername || 
-            u.phone === lowerCaseUsername || 
-            u.id === lowerCaseUsername
+            u.id.toLowerCase() === lowerCaseUsername ||
+            (u.phone && normalizeGambiaPhone(u.phone) === normalizedInputPhone) ||
+            normalizeGambiaPhone(u.id) === normalizedInputPhone
         );
 
         if (user) {
-            if (user.password !== password) {
+            if ((user.password || '').trim() !== password.trim()) {
                 setError('Invalid username or password.');
                 return;
             }
@@ -205,11 +282,12 @@ const LoginForm: React.FC<{ onLogin: (user: User) => void; users: User[]; onSwit
             <form className="space-y-6" onSubmit={handleLogin}>
                 <ModernInput 
                     id="username" 
-                    label="Mobile Number / Username" 
+                    label="Account ID / Mobile Number / Username" 
                     value={username} 
                     onChange={setUsername}
                     icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>}
                 />
+                <p className="-mt-4 text-[11px] text-gray-500 font-semibold">You can sign in with your account ID, mobile number, or username.</p>
                 <ModernInput 
                     id="password" 
                     label={t('password')} 
@@ -252,9 +330,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, users, onSign
   const [isRulesOpen, setIsRulesOpen] = useState(false);
   const { language, setLanguage } = useLanguage();
 
-  const handleSignUpAndLogin = (name: string, phone: string, password: string) => {
-    const newUser = onSignUp(name, 'Customer', phone, password);
+    const handleSignUpAndLogin = async (name: string, phone: string, password: string): Promise<User | null> => {
+        const newUser = await onSignUp(name, 'Customer', phone, password);
+        if (!newUser) return null;
     onLogin(newUser);
+        return newUser;
   };
 
   return (

@@ -428,9 +428,10 @@ export const IntegrationSettingsPanel: React.FC<IntegrationSettingsPanelProps> =
                         <select
                             className="w-full p-2 border border-gray-300 rounded text-sm"
                             value={otpConfig.provider}
-                            onChange={(e) => handleOTPChange('provider', e.target.value)}
+                            onChange={(e) => handleOTPChange('provider', e.target.value as OTPConfig['provider'])}
                         >
                             <option value="builtin">Mock / Development (No SMS Sent)</option>
+                            <option value="africell">Africell SMS Gateway (Basic Auth)</option>
                             <option value="twilio">Twilio</option>
                             <option value="aws_sns">AWS SNS</option>
                             <option value="custom">Custom Provider</option>
@@ -448,6 +449,38 @@ export const IntegrationSettingsPanel: React.FC<IntegrationSettingsPanelProps> =
                         />
                     </div>
                 </div>
+
+                {otpConfig.provider !== 'builtin' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">SMS API Username</label>
+                            <input
+                                type="text"
+                                className="w-full p-2 border border-gray-300 rounded font-mono text-sm"
+                                placeholder="Provider API username"
+                                value={otpConfig.apiKey}
+                                onChange={(e) => handleOTPChange('apiKey', e.target.value)}
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">SMS API Password</label>
+                            <input
+                                type="password"
+                                className="w-full p-2 border border-gray-300 rounded font-mono text-sm"
+                                placeholder="Provider API password"
+                                value={otpConfig.apiSecret}
+                                onChange={(e) => handleOTPChange('apiSecret', e.target.value)}
+                            />
+                        </div>
+                    </div>
+                )}
+
+                {otpConfig.provider === 'africell' && (
+                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <p className="text-xs text-blue-800 font-semibold">Africell API URL is loaded from environment variable: VITE_AFRICELL_SMS_BASE_URL</p>
+                        <p className="text-[11px] text-blue-700 mt-1">Example: http://IP:Port</p>
+                    </div>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div>
