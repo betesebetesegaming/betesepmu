@@ -90,7 +90,17 @@ const SignUpForm: React.FC<{ onSignUp: (name: string, phone: string, password: s
         setIsSubmitting(true);
         try {
             const otpConfig = await dbFetchOTPConfig();
-            const shouldUseOtp = !!otpConfig?.isEnabled;
+            if (!otpConfig) {
+                setError('OTP setup is missing on server. Please ask Admin to configure OTP before new customer registration.');
+                return;
+            }
+
+            if (!otpConfig.isEnabled) {
+                setError('OTP verification is currently disabled. Please contact support/admin.');
+                return;
+            }
+
+            const shouldUseOtp = true;
 
             if (shouldUseOtp && !otpSent) {
                 const sent = await dbGenerateAndSendOTP(normalizedPhone);

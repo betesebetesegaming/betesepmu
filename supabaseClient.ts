@@ -1849,7 +1849,13 @@ export const dbFreshStart = async () => {
 export const dbFetchOTPConfig = async (): Promise<OTPConfig | null> => {
     if (!supabase) return null;
     const { data, error } = await supabase.from('otp_config').select('*').single();
-    if (error) return null;
+    if (error) {
+        const msg = String(error.message || '').toLowerCase();
+        if (msg.includes("could not find the table") || msg.includes('otp_config')) {
+            console.warn('[OTP] otp_config table is missing in Supabase. OTP cannot be enforced until schema is created.');
+        }
+        return null;
+    }
     
     return {
         id: data.id,
@@ -2023,6 +2029,13 @@ export const dbGenerateAndSendOTP = async (phone: string, forcedCode?: string): 
         };
     } catch (err: any) {
         console.error("OTP generation error:", err);
+        const raw = String(err?.message || '').toLowerCase();
+        if (raw.includes("could not find the table") || raw.includes('otp_attempts')) {
+            return {
+                success: false,
+                message: 'OTP backend is not configured (missing otp_attempts table). Contact Admin.'
+            };
+        }
         return {
             success: false,
             message: err.message || "Failed to send OTP"
