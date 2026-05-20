@@ -758,7 +758,13 @@ export const dbAddUser = async (user: User) => {
     };
 
     const { error } = await supabase.from('users').insert(insertPayload);
-    if (!error) return;
+    if (!error) {
+        if (normalizedCustomerPhone) {
+            // Consume one-time verified phone marker after successful customer creation.
+            await supabase.from('otp_verified_phones').delete().eq('phone', normalizedCustomerPhone);
+        }
+        return;
+    }
 
     if (!isMissingCorrectionPinColumnError(error)) throw error;
     const fallbackPayload: any = { ...insertPayload };
@@ -2178,7 +2184,18 @@ export const dbVerifyOTP = async (phone: string, code: string): Promise<{ succes
             return { success: false, message: "Invalid OTP code", isValid: false };
         }
 
-        // Mark as verified and delete
+        // Mark phone as verified for a short window used by DB-level insert policy.
+        const verifiedExpiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+        const { error: verifiedError } = await supabase
+            .from('otp_verified_phones')
+            .upsert({
+                phone: normalizedPhone,
+                verified_at: new Date().toISOString(),
+                expires_at: verifiedExpiresAt
+            }, { onConflict: 'phone' });
+        if (verifiedError) throw verifiedError;
+
+        // Remove consumed OTP attempt after successful verification.
         await supabase.from('otp_attempts').delete().eq('id', data.id);
 
         return { success: true, message: "OTP verified successfully", isValid: true };
