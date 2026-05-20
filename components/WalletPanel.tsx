@@ -450,7 +450,7 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
                         value={depositPhone} 
                         onChange={e => setDepositPhone(e.target.value)} 
                         className="w-full p-2 border border-gray-300 rounded-md"
-                                                placeholder="e.g., 7793854 or +2207793854 or +221773607354"
+                                                placeholder="e.g., +2207XXXXXX or +2217XXXXXXX"
                         required
                       />
                   </div>

@@ -318,6 +318,12 @@ export const triggerPrint = (elementId: string, options: TriggerPrintOptions = {
     };
 
     const buildPrintableHtml = (): string => {
+        const printableMarkup = `
+            <div id="betese-native-print-root">
+                ${sourceElement.innerHTML}
+            </div>
+        `;
+
         return `
             <!doctype html>
             <html>
@@ -326,10 +332,54 @@ export const triggerPrint = (elementId: string, options: TriggerPrintOptions = {
                     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
                     <meta name="thermal-paper-width" content="${paperWidthMm}mm" />
                     ${paperHeightMm ? `<meta name="thermal-paper-height" content="${paperHeightMm}mm" />` : ''}
-                    <style>${printStyle.textContent || ''}</style>
+                    <style>
+                        ${printStyle.textContent || ''}
+
+                        html, body {
+                            width: ${paperWidthMm}mm !important;
+                            min-width: ${paperWidthMm}mm !important;
+                            max-width: ${paperWidthMm}mm !important;
+                            margin: 0 !important;
+                            padding: 0 !important;
+                            background: #fff !important;
+                        }
+
+                        #betese-native-print-root {
+                            width: ${paperWidthMm}mm !important;
+                            min-height: 0 !important;
+                            ${paperHeightMm ? `height: ${paperHeightMm}mm !important; max-height: ${paperHeightMm}mm !important; overflow: hidden !important;` : 'height: auto !important; overflow: visible !important;'}
+                            margin: 0 !important;
+                            padding: ${stagePaddingMm}mm !important;
+                            background: #fff !important;
+                            color: #000 !important;
+                            font-family: 'Courier New', Courier, monospace !important;
+                            font-size: ${baseFontPx}px !important;
+                            font-weight: 900 !important;
+                            line-height: ${baseLineHeight} !important;
+                            box-sizing: border-box !important;
+                        }
+
+                        #betese-native-print-root * {
+                            box-sizing: border-box;
+                            visibility: visible !important;
+                            -webkit-print-color-adjust: exact !important;
+                            print-color-adjust: exact !important;
+                            font-weight: 900 !important;
+                        }
+
+                        #betese-native-print-root .c { text-align: center !important; }
+                        #betese-native-print-root .b { font-weight: 900 !important; font-size: ${baseFontPx}px !important; }
+                        #betese-native-print-root .huge { font-size: ${hugeFontPx}px !important; font-weight: 900 !important; letter-spacing: -1px; line-height: 1.1; margin: 4px 0; }
+                        #betese-native-print-root .solid { border-top: 2px solid black !important; margin: 5px 0 !important; }
+                        #betese-native-print-root .dashed { border-top: 1px dashed black !important; margin: 5px 0 !important; }
+                        #betese-native-print-root .flex { display: flex !important; justify-content: space-between !important; align-items: center !important; }
+                        #betese-native-print-root img { display: block !important; margin: 5px auto !important; max-width: ${qrWidthMm}mm !important; }
+
+                        @page { margin: 0; size: ${pageSize}; }
+                    </style>
                 </head>
                 <body>
-                    ${stage.outerHTML}
+                    ${printableMarkup}
                 </body>
             </html>
         `;

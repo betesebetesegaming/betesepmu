@@ -115,7 +115,7 @@ export const ProcessWithdrawalPanel: React.FC<ProcessWithdrawalPanelProps> = ({ 
       return;
     }
 
-    const success = await onProcessWithdrawal(code, payoutMethod, payoutReference.trim());
+    const success = await onProcessWithdrawal(foundRequest.code, payoutMethod, payoutReference.trim());
     if (success) {
       const updatedBalance = (customer.walletBalance ?? 0) - foundRequest.amount;
       setNewBalance(updatedBalance);
@@ -140,7 +140,7 @@ export const ProcessWithdrawalPanel: React.FC<ProcessWithdrawalPanelProps> = ({ 
                 <p><strong>Customer:</strong> {customer.name}</p>
                 <p><strong>Amount to Withdraw:</strong> <span className="font-bold text-2xl text-red-600">{foundRequest.amount.toFixed(2)} GMD</span></p>
                 <p><strong>Current Balance:</strong> {(customer.walletBalance ?? 0).toFixed(2)} GMD</p>
-              <p><strong>Security OTP:</strong> <span className="font-bold">{foundRequest.code}</span></p>
+              <p className="text-sm text-yellow-900"><strong>Security OTP:</strong> Ask customer to read the code received by SMS/WhatsApp. Do not proceed without matching OTP.</p>
              </div>
              <div className="mt-4 p-4 rounded-lg border border-blue-200 bg-blue-50 space-y-3">
               <p className="text-sm font-bold text-blue-900">Payout Method</p>
