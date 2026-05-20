@@ -1665,7 +1665,8 @@ const AppContent: React.FC = () => {
   };
 
   const addUser = async (name: string, role: Role, phone?: string, password?: string, correctionPin?: string) => {
-    if (!currentUser) {
+    // Allow public self-signup for Customer accounts; privileged roles still require logged-in Admin.
+    if (!currentUser && role !== 'Customer') {
         alert('You must be logged in to create users.');
         return null;
     }
@@ -1677,7 +1678,7 @@ const AppContent: React.FC = () => {
     }
 
     if (role === 'Admin') {
-        if (currentUser.role !== 'Admin') {
+        if (!currentUser || currentUser.role !== 'Admin') {
             alert('Only Admin can create another Admin account.');
             return null;
         }
@@ -1735,8 +1736,8 @@ const AppContent: React.FC = () => {
     correctionPin: role === 'Admin' ? (correctionPin || password || 'password') : undefined,
       walletBalance: 0,
       bonusBalance: 0,
-      createdById: currentUser?.id,
-      createdByName: currentUser?.name
+            createdById: currentUser?.id,
+            createdByName: currentUser?.name
     };
     
     try {
