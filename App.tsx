@@ -27,7 +27,7 @@ import {
     dbToggleUserLock, dbAdminResetPassword, dbRecalculateAllTicketsSafely,
     dbApplyCustomerDeposit, dbApplyCustomerBalanceAdjustment, dbFreshStart, dbFetchUserBalance,
     dbMigrateLegacyBookedTicketsToActive, dbFetchDepositLogs, dbInsertDepositLog,
-    dbGenerateAndSendOTP
+    dbGenerateAndSendOTP, dbFetchOTPConfig, dbVerifyOTP
 } from './supabaseClient';
 
 const LAZY_CHUNK_RETRY_KEY = 'betese_lazy_chunk_retry';
@@ -1664,7 +1664,7 @@ const AppContent: React.FC = () => {
       }
   };
 
-  const addUser = async (name: string, role: Role, phone?: string, password?: string, correctionPin?: string) => {
+    const addUser = async (name: string, role: Role, phone?: string, password?: string, correctionPin?: string, otpCode?: string) => {
     // Backward compatibility: some stale mobile bundles may call onSignUp(name, phone, password)
     // instead of onSignUp(name, 'Customer', phone, password).
     let resolvedRole: Role = role;
@@ -1720,6 +1720,26 @@ const AppContent: React.FC = () => {
     if (resolvedRole === 'Customer' && !normalizedPhone) {
         alert('Customer phone must be valid: Gambia local 7 digits or +220XXXXXXX; Senegal must be +221XXXXXXXXX only.');
         return null;
+    }
+
+    // Enforce OTP verification on public customer self-signup.
+    if (!currentUser && resolvedRole === 'Customer' && normalizedPhone) {
+        const otpConfig = await dbFetchOTPConfig();
+        if (!otpConfig?.isEnabled) {
+            alert('OTP verification is not configured or disabled. Contact Admin.');
+            return null;
+        }
+
+        if (!String(otpCode || '').trim()) {
+            alert('Enter SMS verification code to complete registration.');
+            return null;
+        }
+
+        const verify = await dbVerifyOTP(normalizedPhone, String(otpCode).trim());
+        if (!verify.success || !verify.isValid) {
+            alert(verify.message || 'Invalid OTP code.');
+            return null;
+        }
     }
 
     if (resolvedRole === 'Customer' && normalizedPhone) {

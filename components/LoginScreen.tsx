@@ -5,12 +5,12 @@ import { Logo } from './Logo';
 import { RulesModal } from './RulesModal';
 import { useLanguage } from '../LanguageContext';
 import { normalizeGambiaPhone } from '../utils';
-import { dbFetchOTPConfig, dbGenerateAndSendOTP, dbVerifyOTP } from '../supabaseClient';
+import { dbFetchOTPConfig, dbGenerateAndSendOTP } from '../supabaseClient';
 
 interface LoginScreenProps {
   onLogin: (user: User) => void;
   users: User[];
-    onSignUp: (name: string, role: Role, phone?: string, password?: string) => Promise<User | null>;
+        onSignUp: (name: string, role: Role, phone?: string, password?: string, correctionPin?: string, otpCode?: string) => Promise<User | null>;
 }
 
 // Modern Input Field with Icon support
@@ -46,7 +46,7 @@ const ModernInput: React.FC<{
     </div>
 );
 
-const SignUpForm: React.FC<{ onSignUp: (name: string, phone: string, password: string) => Promise<User | null>; onBack: () => void; users: User[]; onOpenRules: () => void; }> = ({ onSignUp, onBack, users, onOpenRules }) => {
+const SignUpForm: React.FC<{ onSignUp: (name: string, phone: string, password: string, otpCode?: string) => Promise<User | null>; onBack: () => void; users: User[]; onOpenRules: () => void; }> = ({ onSignUp, onBack, users, onOpenRules }) => {
     const [name, setName] = useState('');
     const [phone, setPhone] = useState('');
     const [password, setPassword] = useState('');
@@ -115,20 +115,12 @@ const SignUpForm: React.FC<{ onSignUp: (name: string, phone: string, password: s
                 return;
             }
 
-            if (shouldUseOtp) {
-                if (!otpCode.trim()) {
-                    setError('Enter the SMS verification code to continue.');
-                    return;
-                }
-
-                const verify = await dbVerifyOTP(normalizedPhone, otpCode.trim());
-                if (!verify.success || !verify.isValid) {
-                    setError(verify.message || 'Invalid verification code.');
-                    return;
-                }
+            if (shouldUseOtp && !otpCode.trim()) {
+                setError('Enter the SMS verification code to continue.');
+                return;
             }
 
-            const createdUser = await onSignUp(name, normalizedPhone, password);
+            const createdUser = await onSignUp(name, normalizedPhone, password, otpCode.trim());
             if (!createdUser) {
                 setError('Unable to create account. Please try again.');
             }
@@ -340,8 +332,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, users, onSign
   const [isRulesOpen, setIsRulesOpen] = useState(false);
   const { language, setLanguage } = useLanguage();
 
-    const handleSignUpAndLogin = async (name: string, phone: string, password: string): Promise<User | null> => {
-        const newUser = await onSignUp(name, 'Customer', phone, password);
+    const handleSignUpAndLogin = async (name: string, phone: string, password: string, otpCode?: string): Promise<User | null> => {
+        const newUser = await onSignUp(name, 'Customer', phone, password, undefined, otpCode);
         if (!newUser) return null;
     onLogin(newUser);
         return newUser;
