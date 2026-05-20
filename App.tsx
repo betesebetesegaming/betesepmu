@@ -1665,8 +1665,23 @@ const AppContent: React.FC = () => {
   };
 
   const addUser = async (name: string, role: Role, phone?: string, password?: string, correctionPin?: string) => {
+    // Backward compatibility: some stale mobile bundles may call onSignUp(name, phone, password)
+    // instead of onSignUp(name, 'Customer', phone, password).
+    let resolvedRole: Role = role;
+    let resolvedPhone = phone;
+    let resolvedPassword = password;
+    const validRoles: Role[] = ['Admin', 'Supervisor', 'Vendor', 'Customer'];
+    if (!validRoles.includes(role) && !currentUser) {
+        const inferredPhone = normalizeGambiaPhone(String(role || ''));
+        if (inferredPhone) {
+            resolvedRole = 'Customer';
+            resolvedPhone = inferredPhone;
+            resolvedPassword = String(phone || '');
+        }
+    }
+
     // Allow public self-signup for Customer accounts; privileged roles still require logged-in Admin.
-    if (!currentUser && role !== 'Customer') {
+    if (!currentUser && resolvedRole !== 'Customer') {
         alert('You must be logged in to create users.');
         return null;
     }
@@ -1677,7 +1692,7 @@ const AppContent: React.FC = () => {
         return null;
     }
 
-    if (role === 'Admin') {
+    if (resolvedRole === 'Admin') {
         if (!currentUser || currentUser.role !== 'Admin') {
             alert('Only Admin can create another Admin account.');
             return null;
@@ -1701,13 +1716,13 @@ const AppContent: React.FC = () => {
         }
     }
 
-    const normalizedPhone = role === 'Customer' ? normalizeGambiaPhone(phone || '') : undefined;
-    if (role === 'Customer' && !normalizedPhone) {
+    const normalizedPhone = resolvedRole === 'Customer' ? normalizeGambiaPhone(resolvedPhone || '') : undefined;
+    if (resolvedRole === 'Customer' && !normalizedPhone) {
         alert('Customer phone must be valid: Gambia local 7 digits or +220XXXXXXX; Senegal must be +221XXXXXXXXX only.');
         return null;
     }
 
-    if (role === 'Customer' && normalizedPhone) {
+    if (resolvedRole === 'Customer' && normalizedPhone) {
         const duplicate = (users || []).find(u =>
             u.role === 'Customer' && normalizeGambiaPhone(u.phone || '') === normalizedPhone
         );
@@ -1727,13 +1742,13 @@ const AppContent: React.FC = () => {
     }
 
     const newUser: User = {
-            id: role === 'Customer' ? (normalizedPhone || Math.floor(10000000 + Math.random() * 90000000).toString()) : (role.toUpperCase().slice(0, 3) + '-' + trimmedName.toUpperCase()),
+                        id: resolvedRole === 'Customer' ? (normalizedPhone || Math.floor(10000000 + Math.random() * 90000000).toString()) : (resolvedRole.toUpperCase().slice(0, 3) + '-' + trimmedName.toUpperCase()),
             name: trimmedName,
-      role,
+            role: resolvedRole,
       isLocked: false,
       phone: normalizedPhone,
-      password: password || 'password',
-    correctionPin: role === 'Admin' ? (correctionPin || password || 'password') : undefined,
+            password: resolvedPassword || 'password',
+        correctionPin: resolvedRole === 'Admin' ? (correctionPin || resolvedPassword || 'password') : undefined,
       walletBalance: 0,
       bonusBalance: 0,
             createdById: currentUser?.id,
