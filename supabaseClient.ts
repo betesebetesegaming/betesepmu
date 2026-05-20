@@ -1918,6 +1918,34 @@ const parseAfricellXmlResponse = (xmlText: string): { statusCode: string; status
     }
 };
 
+const sendOtpViaNetlifyFunction = async (params: {
+    provider: OTPConfig['provider'];
+    sender: string;
+    msisdn: string;
+    message: string;
+}): Promise<{ ok: boolean; message: string }> => {
+    const response = await fetch('/.netlify/functions/send-otp-sms', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(params)
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        return {
+            ok: false,
+            message: String(payload?.error || payload?.message || `OTP SMS request failed (${response.status})`)
+        };
+    }
+
+    return {
+        ok: Boolean(payload?.ok),
+        message: String(payload?.message || 'OTP SMS sent')
+    };
+};
+
 const sendAfricellSms = async (params: {
     baseUrl: string;
     username: string;
@@ -2057,9 +2085,15 @@ export const dbGenerateAndSendOTP = async (phone: string, forcedCode?: string): 
             };
         }
 
-        const apiBaseUrl = getEnvVar('VITE_AFRICELL_SMS_BASE_URL') || getEnvVar('VITE_SMS_API_BASE_URL') || '';
-        const smsResult = await sendAfricellSms({
-            baseUrl: apiBaseUrl,
+        const smsResult = config.provider === 'africell'
+            ? await sendOtpViaNetlifyFunction({
+                provider: config.provider,
+                sender: (config.phoneFromNumber || 'BETESE').trim(),
+                msisdn: normalizedPhone,
+                message: smsText
+            })
+            : await sendAfricellSms({
+            baseUrl: getEnvVar('VITE_AFRICELL_SMS_BASE_URL') || getEnvVar('VITE_SMS_API_BASE_URL') || '',
             username: config.apiKey,
             password: config.apiSecret,
             sender: (config.phoneFromNumber || 'BETESE').trim(),
