@@ -1956,6 +1956,51 @@ const sendAfricellSms = async (params: {
     return { ok: false, message: `Africell SMS failed (${statusCode}): ${statusMessage}` };
 };
 
+const canSendOtpNow = async (phone: string): Promise<{ allowed: boolean; message?: string }> => {
+    if (!supabase) return { allowed: false, message: 'Database not connected' };
+
+    const maxSends = 3;
+    const windowMinutes = 10;
+
+    // Preferred path: use SQL function if available.
+    const { data: rpcData, error: rpcError } = await supabase.rpc('can_send_otp', {
+        p_phone: phone,
+        p_max_sends: maxSends,
+        p_window_minutes: windowMinutes
+    });
+
+    if (!rpcError) {
+        const allowed = Boolean(rpcData);
+        return allowed
+            ? { allowed: true }
+            : { allowed: false, message: `Too many OTP requests. Please wait ${windowMinutes} minutes and try again.` };
+    }
+
+    // Fallback path when RPC is not yet created in database.
+    const rpcMsg = String(rpcError?.message || '').toLowerCase();
+    const isMissingFunction = rpcMsg.includes('function') && rpcMsg.includes('can_send_otp');
+    if (!isMissingFunction) {
+        return { allowed: false, message: rpcError.message || 'Unable to validate OTP request limit.' };
+    }
+
+    const windowStartIso = new Date(Date.now() - windowMinutes * 60 * 1000).toISOString();
+    const { count, error: countError } = await supabase
+        .from('otp_attempts')
+        .select('id', { count: 'exact', head: true })
+        .eq('phone', phone)
+        .gte('created_at', windowStartIso);
+
+    if (countError) {
+        return { allowed: false, message: countError.message || 'Unable to validate OTP request limit.' };
+    }
+
+    if ((count || 0) >= maxSends) {
+        return { allowed: false, message: `Too many OTP requests. Please wait ${windowMinutes} minutes and try again.` };
+    }
+
+    return { allowed: true };
+};
+
 /**
  * Generate OTP and send to phone (placeholder for SMS provider)
  * For now, returns a mock OTP that can be used in development/testing
@@ -1980,6 +2025,11 @@ export const dbGenerateAndSendOTP = async (phone: string, forcedCode?: string): 
 
         if (!normalizedPhone) {
             return { success: false, message: 'Invalid phone number for OTP' };
+        }
+
+        const rateLimit = await canSendOtpNow(normalizedPhone);
+        if (!rateLimit.allowed) {
+            return { success: false, message: rateLimit.message || 'Too many OTP requests. Please try again later.' };
         }
 
         // Store OTP in otp_attempts table for verification later
@@ -2055,10 +2105,15 @@ export const dbVerifyOTP = async (phone: string, code: string): Promise<{ succes
             return { success: false, message: "OTP verification is not enabled" };
         }
 
+        const normalizedPhone = normalizeMsisdnForAfricell(phone);
+        if (!normalizedPhone) {
+            return { success: false, message: 'Invalid phone number for OTP verification', isValid: false };
+        }
+
         const { data, error } = await supabase
             .from('otp_attempts')
             .select('*')
-            .eq('phone', phone)
+            .eq('phone', normalizedPhone)
             .order('created_at', { ascending: false })
             .limit(1)
             .maybeSingle();
