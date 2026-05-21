@@ -39,7 +39,7 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
     const [adjustmentMessage, setAdjustmentMessage] = useState<{ ok: boolean; text: string } | null>(null);
   
   // Correction Mode Toggle
-  const [isCorrectionMode, setIsCorrectionMode] = useState(false);
+  const [isCorrectionMode, setIsCorrectionMode] = useState(false);   const [afriPhone, setAfriPhone] = useState('');   const [afriAmount, setAfriAmount] = useState<number | ''>('');   const [afriSearchTerm, setAfriSearchTerm] = useState('');   const [afriSelectedCustomer, setAfriSelectedCustomer] = useState<User | null>(null);   const [afriLoading, setAfriLoading] = useState(false);   const [afriMessage, setAfriMessage] = useState<{ ok: boolean; text: string } | null>(null);
     const canUseCorrection = currentUserRole === 'Admin';
 
   // Ensure Vendors never see the requests tab even if state drifts
