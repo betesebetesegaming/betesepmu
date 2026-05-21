@@ -96,6 +96,8 @@ const SignUpForm: React.FC<{ onSignUp: (name: string, phone: string, password: s
                 const createdUser = await onSignUp(name, normalizedPhone, password, undefined);
                 if (!createdUser) {
                     setError('Unable to create account. Please try again or contact support.');
+                } else {
+                    onLogin(createdUser);
                 }
                 return;
             }
@@ -103,11 +105,12 @@ const SignUpForm: React.FC<{ onSignUp: (name: string, phone: string, password: s
             if (!otpSent) {
                 const sent = await dbGenerateAndSendOTP(normalizedPhone);
                 if (!sent.success) {
-                    // SMS service unavailable (credentials not configured or API error).
-                    // Proceed with registration without OTP so customers are not locked out.
+                    // SMS service unavailable. Proceed without OTP.
                     const createdUser = await onSignUp(name, normalizedPhone, password, undefined);
                     if (!createdUser) {
                         setError('Unable to create account. Please try again or contact support.');
+                    } else {
+                        onLogin(createdUser);
                     }
                     return;
                 }
@@ -126,6 +129,8 @@ const SignUpForm: React.FC<{ onSignUp: (name: string, phone: string, password: s
             const createdUser = await onSignUp(name, normalizedPhone, password, otpCode.trim());
             if (!createdUser) {
                 setError('Unable to create account. Please try again.');
+            } else {
+                onLogin(createdUser);
             }
         } finally {
             setIsSubmitting(false);
