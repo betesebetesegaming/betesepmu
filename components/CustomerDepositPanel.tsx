@@ -1,5 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
+
 import { User, DepositLog, DepositRequest, Role } from '../types';
 import { TableScrollNavigator } from './TableScrollNavigator';
 import { AfriMoneyLogo } from './AfriMoneyLogo';
@@ -520,7 +521,7 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
             onClick={() => setActiveTab('history')}
             className={`flex-1 py-2 text-center font-bold text-sm ${activeTab === 'history' ? 'border-b-4 border-betese-green text-betese-green' : 'text-gray-500 hover:text-gray-700'}`}
           >
-              Transaction History
+              Transaction History           </button>           <button              onClick={() => setActiveTab('afrimoney')}             className={`flex-1 py-2 text-center font-bold text-sm ${activeTab === 'afrimoney' ? 'border-b-4 border-betese-green text-betese-green' : 'text-gray-500 hover:text-gray-700'}`}           >               AfriMoney Pay           </button>       </div>        {activeTab === 'afrimoney' && (         <AfriMoneyPaymentTab customers={customers} onDeposit={onDeposit} />       )}
           </button>
       </div>
 
@@ -818,7 +819,7 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
 
               <div className="bg-white border rounded-lg p-3">
                   <h5 className="text-sm font-black text-gray-800 uppercase mb-1">Online Request Audit (Latest 20)</h5>
-                  <p className="text-[11px] text-gray-500 mb-2">This table is online customer requests only (Wave/AfriMoney). Manual vendor deposits are tracked in Transaction History as Manual Cash.</p>
+                  <p className="text-[11px] text-gray-500 mb-2">This table is online customer requests only (Wave/AfriMoney). Manual vendor deposits are tracked in Transaction History           </button>           <button              onClick={() => setActiveTab('afrimoney')}             className={`flex-1 py-2 text-center font-bold text-sm ${activeTab === 'afrimoney' ? 'border-b-4 border-betese-green text-betese-green' : 'text-gray-500 hover:text-gray-700'}`}           >               AfriMoney Pay           </button>       </div>        {activeTab === 'afrimoney' && (         <AfriMoneyPaymentTab customers={customers} onDeposit={onDeposit} />       )} as Manual Cash.</p>
                   <TableScrollNavigator className="overflow-x-auto">
                       <table className="min-w-full text-xs">
                           <thead className="bg-gray-100">
