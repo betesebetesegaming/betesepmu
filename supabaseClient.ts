@@ -685,6 +685,29 @@ export const dbFindUser = async (usernameOrPhone: string): Promise<User | null> 
     } catch { return null; }
 };
 
+// Server-side login via Netlify function — bypasses client-side RLS/grant issues.
+export const dbAuthenticateViaFunction = async (username: string, password: string): Promise<User | null> => {
+    try {
+        const res = await fetch('/.netlify/functions/authenticate-user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+        if (!res.ok) return null;
+        const json = await res.json();
+        if (!json.user) return null;
+        const u = json.user;
+        return {
+            id: u.id, name: u.name, role: u.role, isLocked: u.is_locked, phone: u.phone,
+            password: u.password, correctionPin: u.correction_pin || undefined,
+            walletBalance: u.wallet_balance, bonusBalance: u.bonus_balance,
+            totalDepositedAmount: Number(u.total_deposited_amount || 0),
+            firstDepositAt: u.first_deposit_at ? new Date(u.first_deposit_at) : undefined,
+            createdById: u.created_by_id, createdByName: u.created_by_name
+        };
+    } catch { return null; }
+};
+
 export const dbFetchRaces = async (): Promise<Race[]> => {
     if(!supabase) return [];
     const oneWeekAgo = new Date();

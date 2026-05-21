@@ -5,7 +5,7 @@ import { Logo } from './Logo';
 import { RulesModal } from './RulesModal';
 import { useLanguage } from '../LanguageContext';
 import { normalizeGambiaPhone } from '../utils';
-import { dbFetchOTPConfig, dbGenerateAndSendOTP, dbFindUser } from '../supabaseClient';
+import { dbFetchOTPConfig, dbGenerateAndSendOTP, dbFindUser, dbAuthenticateViaFunction } from '../supabaseClient';
 
 interface LoginScreenProps {
   onLogin: (user: User) => void;
@@ -253,8 +253,7 @@ const LoginForm: React.FC<{ onLogin: (user: User) => void; users: User[]; onSwit
             normalizeGambiaPhone(u.id) === normalizedInputPhone
         ) ?? null;
 
-        // Fallback: query Supabase directly if not found in pre-loaded array
-        // (handles timing race conditions and RLS/permission edge cases)
+        // Fallback 1: direct Supabase query (handles timing race conditions)
         if (!user) {
             user = await dbFindUser(rawUsername);
         }
@@ -266,12 +265,24 @@ const LoginForm: React.FC<{ onLogin: (user: User) => void; users: User[]; onSwit
             }
             if (user.isLocked) {
                 setError('Your account is locked. Please contact a supervisor.');
-            } else {
-                onLogin(user);
+                return;
             }
-        } else {
-            setError('Invalid username or password.');
+            onLogin(user);
+            return;
         }
+
+        // Fallback 2: server-side Netlify function (bypasses DB permission issues entirely)
+        const serverUser = await dbAuthenticateViaFunction(rawUsername, password.trim());
+        if (serverUser) {
+            if (serverUser.isLocked) {
+                setError('Your account is locked. Please contact a supervisor.');
+                return;
+            }
+            onLogin(serverUser);
+            return;
+        }
+
+        setError('Invalid username or password.');
     };
 
     return (
