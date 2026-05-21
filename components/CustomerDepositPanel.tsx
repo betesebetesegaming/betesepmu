@@ -3,7 +3,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { User, DepositLog, DepositRequest, Role } from '../types';
 import { TableScrollNavigator } from './TableScrollNavigator';
 import { AfriMoneyLogo } from './AfriMoneyLogo';
-import { WaveLogo } from './WaveLogo';
+import { WaveLogo } from './WaveLogo'
+ import { AfriMoneyPaymentTab } from './AfriMoneyPaymentTab'; 
 
 interface CustomerDepositPanelProps {
   customers: User[];
