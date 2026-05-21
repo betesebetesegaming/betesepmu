@@ -662,6 +662,29 @@ export const dbFetchUsers = async (): Promise<User[]> => {
     }));
 };
 
+// Direct single-user lookup — used as login fallback when the pre-loaded users array is empty.
+export const dbFindUser = async (usernameOrPhone: string): Promise<User | null> => {
+    if (!supabase) return null;
+    try {
+        const raw = String(usernameOrPhone || '').trim();
+        if (!raw) return null;
+        const normalizedPhone = normalizeGambiaPhone(raw);
+        let orFilter = `name.ilike.${raw},id.ilike.${raw}`;
+        if (normalizedPhone) orFilter += `,phone.eq.${normalizedPhone},id.eq.${normalizedPhone}`;
+        const { data, error } = await supabase.from('users').select('*').or(orFilter).limit(5);
+        if (error || !data || data.length === 0) return null;
+        const u = data[0];
+        return {
+            id: u.id, name: u.name, role: u.role, isLocked: u.is_locked, phone: u.phone,
+            password: u.password, correctionPin: u.correction_pin || undefined,
+            walletBalance: u.wallet_balance, bonusBalance: u.bonus_balance,
+            totalDepositedAmount: Number(u.total_deposited_amount || 0),
+            firstDepositAt: u.first_deposit_at ? new Date(u.first_deposit_at) : undefined,
+            createdById: u.created_by_id, createdByName: u.created_by_name
+        };
+    } catch { return null; }
+};
+
 export const dbFetchRaces = async (): Promise<Race[]> => {
     if(!supabase) return [];
     const oneWeekAgo = new Date();

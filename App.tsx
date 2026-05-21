@@ -1725,21 +1725,19 @@ const AppContent: React.FC = () => {
     // Enforce OTP verification on public customer self-signup.
     if (!currentUser && resolvedRole === 'Customer' && normalizedPhone) {
         const otpConfig = await dbFetchOTPConfig();
-        if (!otpConfig?.isEnabled) {
-            alert('OTP verification is not configured or disabled. Contact Admin.');
-            return null;
+        if (otpConfig?.isEnabled) {
+            // OTP enabled — require verification code
+            if (!String(otpCode || '').trim()) {
+                alert('Enter SMS verification code to complete registration.');
+                return null;
+            }
+            const verify = await dbVerifyOTP(normalizedPhone, String(otpCode).trim());
+            if (!verify.success || !verify.isValid) {
+                alert(verify.message || 'Invalid OTP code.');
+                return null;
+            }
         }
-
-        if (!String(otpCode || '').trim()) {
-            alert('Enter SMS verification code to complete registration.');
-            return null;
-        }
-
-        const verify = await dbVerifyOTP(normalizedPhone, String(otpCode).trim());
-        if (!verify.success || !verify.isValid) {
-            alert(verify.message || 'Invalid OTP code.');
-            return null;
-        }
+        // OTP disabled — allow registration without verification
     }
 
     if (resolvedRole === 'Customer' && normalizedPhone) {

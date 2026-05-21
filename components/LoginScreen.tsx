@@ -5,7 +5,7 @@ import { Logo } from './Logo';
 import { RulesModal } from './RulesModal';
 import { useLanguage } from '../LanguageContext';
 import { normalizeGambiaPhone } from '../utils';
-import { dbFetchOTPConfig, dbGenerateAndSendOTP } from '../supabaseClient';
+import { dbFetchOTPConfig, dbGenerateAndSendOTP, dbFindUser } from '../supabaseClient';
 
 interface LoginScreenProps {
   onLogin: (user: User) => void;
@@ -96,7 +96,11 @@ const SignUpForm: React.FC<{ onSignUp: (name: string, phone: string, password: s
             }
 
             if (!otpConfig.isEnabled) {
-                setError('OTP verification is currently disabled. Please contact support/admin.');
+                // OTP disabled — allow registration without SMS verification
+                const createdUser = await onSignUp(name, normalizedPhone, password, undefined);
+                if (!createdUser) {
+                    setError('Unable to create account. Please try again or contact support.');
+                }
                 return;
             }
 
@@ -228,7 +232,7 @@ const LoginForm: React.FC<{ onLogin: (user: User) => void; users: User[]; onSwit
     const [error, setError] = useState('');
     const { t } = useLanguage();
 
-    const handleLogin = (e: React.FormEvent) => {
+    const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
 
@@ -241,13 +245,19 @@ const LoginForm: React.FC<{ onLogin: (user: User) => void; users: User[]; onSwit
         const lowerCaseUsername = rawUsername.toLowerCase();
         const normalizedInputPhone = normalizeGambiaPhone(rawUsername);
 
-        // Allow login with name (staff), raw/normalized phone, or account ID.
-        const user = users.find(u => 
-            u.name.toLowerCase() === lowerCaseUsername || 
+        // Try pre-loaded users array first (fast path)
+        let user: User | null = users.find(u =>
+            u.name.toLowerCase() === lowerCaseUsername ||
             u.id.toLowerCase() === lowerCaseUsername ||
             (u.phone && normalizeGambiaPhone(u.phone) === normalizedInputPhone) ||
             normalizeGambiaPhone(u.id) === normalizedInputPhone
-        );
+        ) ?? null;
+
+        // Fallback: query Supabase directly if not found in pre-loaded array
+        // (handles timing race conditions and RLS/permission edge cases)
+        if (!user) {
+            user = await dbFindUser(rawUsername);
+        }
 
         if (user) {
             if ((user.password || '').trim() !== password.trim()) {
