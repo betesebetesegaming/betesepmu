@@ -164,7 +164,7 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
 
   const openAfriMoneyCheckout = () => {
       if (!AFRIMONEY_MERCHANT_URL) {
-          alert('AfriMoney payment link is not configured yet. Please pay manually using the AfriMoney number and then confirm below.');
+          setDepositStage('confirm');
           return;
       }
       const activeElement = document.activeElement as HTMLElement | null;
