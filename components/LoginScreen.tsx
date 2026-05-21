@@ -90,13 +90,9 @@ const SignUpForm: React.FC<{ onSignUp: (name: string, phone: string, password: s
         setIsSubmitting(true);
         try {
             const otpConfig = await dbFetchOTPConfig();
-            if (!otpConfig) {
-                setError('OTP setup is missing on server. Please ask Admin to configure OTP before new customer registration.');
-                return;
-            }
-
-            if (!otpConfig.isEnabled) {
-                // OTP disabled — allow registration without SMS verification
+            // If otp_config table is missing entirely, proceed without OTP
+            if (!otpConfig || !otpConfig.isEnabled) {
+                // OTP disabled or not configured — allow registration without SMS verification
                 const createdUser = await onSignUp(name, normalizedPhone, password, undefined);
                 if (!createdUser) {
                     setError('Unable to create account. Please try again or contact support.');
@@ -104,12 +100,15 @@ const SignUpForm: React.FC<{ onSignUp: (name: string, phone: string, password: s
                 return;
             }
 
-            const shouldUseOtp = true;
-
-            if (shouldUseOtp && !otpSent) {
+            if (!otpSent) {
                 const sent = await dbGenerateAndSendOTP(normalizedPhone);
                 if (!sent.success) {
-                    setError(sent.message || 'Failed to send OTP code.');
+                    // SMS service unavailable (credentials not configured or API error).
+                    // Proceed with registration without OTP so customers are not locked out.
+                    const createdUser = await onSignUp(name, normalizedPhone, password, undefined);
+                    if (!createdUser) {
+                        setError('Unable to create account. Please try again or contact support.');
+                    }
                     return;
                 }
 
@@ -119,7 +118,7 @@ const SignUpForm: React.FC<{ onSignUp: (name: string, phone: string, password: s
                 return;
             }
 
-            if (shouldUseOtp && !otpCode.trim()) {
+            if (!otpCode.trim()) {
                 setError('Enter the SMS verification code to continue.');
                 return;
             }
@@ -272,13 +271,22 @@ const LoginForm: React.FC<{ onLogin: (user: User) => void; users: User[]; onSwit
         }
 
         // Fallback 2: server-side Netlify function (bypasses DB permission issues entirely)
-        const serverUser = await dbAuthenticateViaFunction(rawUsername, password.trim());
-        if (serverUser) {
-            if (serverUser.isLocked) {
-                setError('Your account is locked. Please contact a supervisor.');
+        try {
+            const serverUser = await dbAuthenticateViaFunction(rawUsername, password.trim());
+            if (serverUser) {
+                if (serverUser.isLocked) {
+                    setError('Your account is locked. Please contact a supervisor.');
+                    return;
+                }
+                onLogin(serverUser);
                 return;
             }
-            onLogin(serverUser);
+        } catch (serviceErr: any) {
+            // Server or DB error — not a wrong-password situation
+            setError(
+                'Login service is temporarily unavailable. ' +
+                'Please ask the administrator to check server configuration.'
+            );
             return;
         }
 

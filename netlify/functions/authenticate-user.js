@@ -23,12 +23,17 @@ export const handler = async (event) => {
   if (event.httpMethod !== 'POST') return resp(405, { error: 'Method not allowed' });
 
   const supabaseUrl = process.env.VITE_SUPABASE_URL;
-  // Prefer service role key (bypasses RLS + grant issues); fall back to anon key
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const anonKey = process.env.VITE_SUPABASE_ANON_KEY;
+  const supabaseKey = serviceKey || anonKey;
 
   if (!supabaseUrl || !supabaseKey) {
-    return resp(503, { error: 'Database not configured' });
+    return resp(503, { error: 'Database not configured — missing VITE_SUPABASE_URL or keys' });
   }
+
+  // When only anon key is available, DB queries on the users table may fail due to missing GRANT.
+  // Return 503 (not 403) so the client can show a meaningful "service unavailable" message.
+  const usingAnonFallback = !serviceKey;
 
   let body;
   try { body = JSON.parse(event.body || '{}'); } catch { return resp(400, { error: 'Invalid JSON' }); }
@@ -45,7 +50,14 @@ export const handler = async (event) => {
 
   const { data, error } = await supabase.from('users').select('*').or(orFilter).limit(5);
 
-  if (error) return resp(403, { error: error.message });
+  if (error) {
+    // If we're using anon key fallback, a permission error means SUPABASE_SERVICE_ROLE_KEY is needed
+    const status = usingAnonFallback ? 503 : 403;
+    return resp(status, { error: usingAnonFallback
+      ? 'SUPABASE_SERVICE_ROLE_KEY not configured in Netlify — add it in Site settings → Environment variables'
+      : error.message
+    });
+  }
   if (!data || data.length === 0) return resp(200, { user: null });
 
   const match = data.find(u => (u.password || '').trim() === password);
