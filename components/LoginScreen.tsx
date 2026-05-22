@@ -5,7 +5,7 @@ import { Logo } from './Logo';
 import { RulesModal } from './RulesModal';
 import { useLanguage } from '../LanguageContext';
 import { normalizeGambiaPhone } from '../utils';
-import { dbFetchOTPConfig, dbGenerateAndSendOTP, dbFindUser, dbAuthenticateViaFunction } from '../supabaseClient';
+import { dbFindUser, dbAuthenticateViaFunction } from '../supabaseClient';
 
 interface LoginScreenProps {
   onLogin: (user: User) => void;
@@ -51,10 +51,6 @@ const SignUpForm: React.FC<{ onSignUp: (name: string, phone: string, password: s
     const [phone, setPhone] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
-    const [otpCode, setOtpCode] = useState('');
-    const [otpSent, setOtpSent] = useState(false);
-    const [otpRequired, setOtpRequired] = useState(false);
-    const [info, setInfo] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
     const { t } = useLanguage();
@@ -62,7 +58,6 @@ const SignUpForm: React.FC<{ onSignUp: (name: string, phone: string, password: s
     const handleSignUp = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
-        setInfo('');
         if (!name || !phone || !password || !confirmPassword) {
             setError(t('error_fill_fields'));
             return;
@@ -89,49 +84,14 @@ const SignUpForm: React.FC<{ onSignUp: (name: string, phone: string, password: s
 
         setIsSubmitting(true);
         try {
-            const otpConfig = await dbFetchOTPConfig();
-            // If otp_config table is missing entirely, proceed without OTP
-            if (!otpConfig || !otpConfig.isEnabled) {
-                // OTP disabled or not configured — allow registration without SMS verification
-                const createdUser = await onSignUp(name, normalizedPhone, password, undefined);
-                if (!createdUser) {
-                    setError('Unable to create account. Please try again or contact support.');
-                } else {
-                    onLogin(createdUser);
-                }
-                return;
-            }
-
-            if (!otpSent) {
-                const sent = await dbGenerateAndSendOTP(normalizedPhone);
-                if (!sent.success) {
-                    // SMS service unavailable. Proceed without OTP.
-                    const createdUser = await onSignUp(name, normalizedPhone, password, undefined);
-                    if (!createdUser) {
-                        setError('Unable to create account. Please try again or contact support.');
-                    } else {
-                        onLogin(createdUser);
-                    }
-                    return;
-                }
-
-                setOtpRequired(true);
-                setOtpSent(true);
-                setInfo('Verification code sent by SMS. Enter the code below, then click Create Account again.');
-                return;
-            }
-
-            if (!otpCode.trim()) {
-                setError('Enter the SMS verification code to continue.');
-                return;
-            }
-
-            const createdUser = await onSignUp(name, normalizedPhone, password, otpCode.trim());
+            // OTP/SMS provider is not ready (Africell credentials still placeholders),
+            // so registration bypasses OTP. The parent wrapper handles auto-login.
+            const createdUser = await onSignUp(name, normalizedPhone, password, undefined);
             if (!createdUser) {
-                setError('Unable to create account. Please try again.');
-            } else {
-                onLogin(createdUser);
+                setError('Unable to create account. Please check your details and try again, or contact support.');
             }
+        } catch (err: any) {
+            setError(err?.message || 'Account creation failed. Please try again or contact support.');
         } finally {
             setIsSubmitting(false);
         }
@@ -148,12 +108,6 @@ const SignUpForm: React.FC<{ onSignUp: (name: string, phone: string, password: s
                 <div className="mb-4 p-3 bg-red-50 border-l-4 border-red-500 text-red-700 text-sm rounded">
                     <p className="font-bold">Error</p>
                     <p>{error}</p>
-                </div>
-            )}
-            {info && (
-                <div className="mb-4 p-3 bg-blue-50 border-l-4 border-blue-500 text-blue-700 text-sm rounded">
-                    <p className="font-bold">Verification</p>
-                    <p>{info}</p>
                 </div>
             )}
 
@@ -192,20 +146,6 @@ const SignUpForm: React.FC<{ onSignUp: (name: string, phone: string, password: s
                     icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>}
                 />
 
-                {(otpRequired || otpSent) && (
-                    <>
-                        <ModernInput
-                            id="signup-otp"
-                            label="SMS Verification Code"
-                            value={otpCode}
-                            onChange={setOtpCode}
-                            type="text"
-                            icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11c0 .552-.448 1-1 1H9a1 1 0 100 2h1a3 3 0 100-6H9a1 1 0 010-2h2a1 1 0 011 1m-7 9h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>}
-                        />
-                        <p className="text-[11px] text-blue-700 -mt-3 ml-2 font-semibold">Customer should enter the code received by text message before account creation is completed.</p>
-                    </>
-                )}
-                
                 <div className="text-xs text-gray-500 text-center px-4">
                     {t('agree_terms')} <button type="button" onClick={onOpenRules} className="text-green-600 hover:text-green-800 font-semibold underline">{t('official_rules_link')}</button>.
                     <br/><span className="text-red-500 font-bold">{t('must_be_18')}</span>
@@ -248,25 +188,36 @@ const LoginForm: React.FC<{ onLogin: (user: User) => void; users: User[]; onSwit
         const rawUsername = username.trim();
         const lowerCaseUsername = rawUsername.toLowerCase();
         const normalizedInputPhone = normalizeGambiaPhone(rawUsername);
+        const trimmedPassword = password.trim();
 
-        // Try pre-loaded users array first (fast path)
-        let user: User | null = users.find(u =>
+        // Fast path: preloaded users array. Only used when password matches —
+        // if mismatched we still fall through to the server check below, since
+        // the local cache may be stale (admin password reset, etc.).
+        const localMatch = users.find(u =>
             u.name.toLowerCase() === lowerCaseUsername ||
             u.id.toLowerCase() === lowerCaseUsername ||
             (u.phone && normalizeGambiaPhone(u.phone) === normalizedInputPhone) ||
             normalizeGambiaPhone(u.id) === normalizedInputPhone
-        ) ?? null;
+        );
 
-        // Fallback 1: direct Supabase query (handles timing race conditions)
-        if (!user) {
-            user = await dbFindUser(rawUsername);
-        }
-
-        if (user) {
-            if ((user.password || '').trim() !== password.trim()) {
-                setError('Invalid username or password.');
+        if (localMatch && (localMatch.password || '').trim() === trimmedPassword) {
+            if (localMatch.isLocked) {
+                setError('Your account is locked. Please contact a supervisor.');
                 return;
             }
+            onLogin(localMatch);
+            return;
+        }
+
+        // Fallback 1: direct Supabase query (catches users not yet in preloaded array)
+        let user: User | null = null;
+        try {
+            user = await dbFindUser(rawUsername);
+        } catch {
+            user = null;
+        }
+
+        if (user && (user.password || '').trim() === trimmedPassword) {
             if (user.isLocked) {
                 setError('Your account is locked. Please contact a supervisor.');
                 return;
@@ -275,9 +226,9 @@ const LoginForm: React.FC<{ onLogin: (user: User) => void; users: User[]; onSwit
             return;
         }
 
-        // Fallback 2: server-side Netlify function (bypasses DB permission issues entirely)
+        // Fallback 2: server-side Netlify function (bypasses client-side RLS/grant issues)
         try {
-            const serverUser = await dbAuthenticateViaFunction(rawUsername, password.trim());
+            const serverUser = await dbAuthenticateViaFunction(rawUsername, trimmedPassword);
             if (serverUser) {
                 if (serverUser.isLocked) {
                     setError('Your account is locked. Please contact a supervisor.');
@@ -287,10 +238,18 @@ const LoginForm: React.FC<{ onLogin: (user: User) => void; users: User[]; onSwit
                 return;
             }
         } catch (serviceErr: any) {
-            // Server or DB error — not a wrong-password situation
+            // Server or DB error — not a wrong-password situation.
+            // If we already had a local match with wrong password, prefer the
+            // simple credentials message so the customer can retry.
+            if (localMatch || user) {
+                setError('Invalid username or password.');
+                return;
+            }
+            const msg = String(serviceErr?.message || '').trim();
             setError(
-                'Login service is temporarily unavailable. ' +
-                'Please ask the administrator to check server configuration.'
+                msg
+                    ? `Login service error: ${msg}`
+                    : 'Login service is temporarily unavailable. Please ask the administrator to check server configuration.'
             );
             return;
         }

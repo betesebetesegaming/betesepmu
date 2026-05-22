@@ -672,7 +672,12 @@ export const dbFindUser = async (usernameOrPhone: string): Promise<User | null> 
         let orFilter = `name.ilike.${raw},id.ilike.${raw}`;
         if (normalizedPhone) orFilter += `,phone.eq.${normalizedPhone},id.eq.${normalizedPhone}`;
         const { data, error } = await supabase.from('users').select('*').or(orFilter).limit(5);
-        if (error || !data || data.length === 0) return null;
+        if (error) {
+            // Log so RLS/permission failures are visible during diagnosis.
+            console.warn('[dbFindUser] users query failed — likely RLS/permission. The server-side login fallback should still succeed if SUPABASE_SERVICE_ROLE_KEY is set in Netlify.', error);
+            return null;
+        }
+        if (!data || data.length === 0) return null;
         const u = data[0];
         return {
             id: u.id, name: u.name, role: u.role, isLocked: u.is_locked, phone: u.phone,
@@ -682,30 +687,35 @@ export const dbFindUser = async (usernameOrPhone: string): Promise<User | null> 
             firstDepositAt: u.first_deposit_at ? new Date(u.first_deposit_at) : undefined,
             createdById: u.created_by_id, createdByName: u.created_by_name
         };
-    } catch { return null; }
+    } catch (err) {
+        console.warn('[dbFindUser] unexpected error:', err);
+        return null;
+    }
 };
 
 // Server-side login via Netlify function — bypasses client-side RLS/grant issues.
+// Returns the matched User, null for wrong credentials, or throws for server/DB errors.
 export const dbAuthenticateViaFunction = async (username: string, password: string): Promise<User | null> => {
-    try {
-        const res = await fetch('/.netlify/functions/authenticate-user', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
-        });
-        if (!res.ok) return null;
-        const json = await res.json();
-        if (!json.user) return null;
-        const u = json.user;
-        return {
-            id: u.id, name: u.name, role: u.role, isLocked: u.is_locked, phone: u.phone,
-            password: u.password, correctionPin: u.correction_pin || undefined,
-            walletBalance: u.wallet_balance, bonusBalance: u.bonus_balance,
-            totalDepositedAmount: Number(u.total_deposited_amount || 0),
-            firstDepositAt: u.first_deposit_at ? new Date(u.first_deposit_at) : undefined,
-            createdById: u.created_by_id, createdByName: u.created_by_name
-        };
-    } catch { return null; }
+    const res = await fetch('/.netlify/functions/authenticate-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        // 403 = DB permission denied; 503 = not configured. Throw so caller can show specific error.
+        throw new Error(json.error || `Auth service error (${res.status})`);
+    }
+    if (!json.user) return null;
+    const u = json.user;
+    return {
+        id: u.id, name: u.name, role: u.role, isLocked: u.is_locked, phone: u.phone,
+        password: u.password, correctionPin: u.correction_pin || undefined,
+        walletBalance: u.wallet_balance, bonusBalance: u.bonus_balance,
+        totalDepositedAmount: Number(u.total_deposited_amount || 0),
+        firstDepositAt: u.first_deposit_at ? new Date(u.first_deposit_at) : undefined,
+        createdById: u.created_by_id, createdByName: u.created_by_name
+    };
 };
 
 export const dbFetchRaces = async (): Promise<Race[]> => {

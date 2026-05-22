@@ -1722,18 +1722,24 @@ const AppContent: React.FC = () => {
         return null;
     }
 
-    // Enforce OTP verification on public customer self-signup.
-    if (!currentUser && resolvedRole === 'Customer' && normalizedPhone) {
-        const otpConfig = await dbFetchOTPConfig();
-        if (otpConfig?.isEnabled && String(otpCode || '').trim()) {
-            // OTP code was provided — verify it
-            const verify = await dbVerifyOTP(normalizedPhone, String(otpCode).trim());
-            if (!verify.success || !verify.isValid) {
-                alert(verify.message || 'Invalid OTP code.');
-                return null;
+    // OTP verification on public customer self-signup.
+    // Africell SMS credentials are placeholders right now, so registration
+    // proceeds without OTP when no code is supplied. When a code IS supplied
+    // (legacy mobile bundles), we still verify it so good clients aren't broken.
+    if (!currentUser && resolvedRole === 'Customer' && normalizedPhone && String(otpCode || '').trim()) {
+        try {
+            const otpConfig = await dbFetchOTPConfig();
+            if (otpConfig?.isEnabled) {
+                const verify = await dbVerifyOTP(normalizedPhone, String(otpCode).trim());
+                if (!verify.success || !verify.isValid) {
+                    alert(verify.message || 'Invalid OTP code.');
+                    return null;
+                }
             }
+        } catch (otpErr) {
+            console.warn('OTP verification skipped due to error:', otpErr);
+            // OTP service unavailable — fall through and continue registration.
         }
-        // If OTP is enabled but no code was provided (SMS unavailable), allow registration
     }
 
     if (resolvedRole === 'Customer' && normalizedPhone) {
@@ -1772,13 +1778,34 @@ const AppContent: React.FC = () => {
     try {
         if (supabase) {
             await dbAddUser(newUser);
+            // Refresh local users list so the new account is immediately searchable
+            // by subsequent login attempts and duplicate-checks in this session.
+            try {
+                const refreshed = await dbFetchUsers();
+                if (refreshed && refreshed.length > 0) {
+                    setUsers(refreshed.map(u => ({ ...u, role: normalizeRole(u.role) })));
+                } else {
+                    setUsers(prev => [...(prev || []), newUser]);
+                }
+            } catch {
+                setUsers(prev => [...(prev || []), newUser]);
+            }
         } else {
             setUsers(prev => [...prev, newUser]);
         }
+        return newUser;
     } catch (e: any) {
-        alert("Failed to add user: " + e.message);
+        const rawMessage = String(e?.message || e || '').trim();
+        const lowered = rawMessage.toLowerCase();
+        let friendly = rawMessage || 'Unknown error.';
+        if (lowered.includes('row-level security') || lowered.includes('permission denied') || lowered.includes('rls')) {
+            friendly = 'Database is not accepting new sign-ups right now. Please contact the administrator (RLS/permission policy on users table needs to allow inserts).';
+        } else if (lowered.includes('duplicate key') || lowered.includes('already exists') || lowered.includes('unique')) {
+            friendly = 'This phone number is already registered. Try logging in instead.';
+        }
+        alert('Failed to create account: ' + friendly);
+        return null;
     }
-    return newUser;
   };
 
   const handleToggleLock = async (userId: string) => {
