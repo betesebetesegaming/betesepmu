@@ -178,7 +178,7 @@ export const reportWebVitals = (onMetric: (metric: any) => void): void => {
         const lastEntry = entries[entries.length - 1];
         onMetric({
           name: 'LCP',
-          value: lastEntry.renderTime || lastEntry.loadTime,
+          value: (lastEntry as any).renderTime || (lastEntry as any).loadTime,
           id: 'lcp',
         });
       });

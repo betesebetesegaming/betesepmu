@@ -1,3 +1,4 @@
+'use client';
 
 import React, { Suspense, lazy, useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { BetSlip, BetTypeOption, Ticket, BetSelection, User, Role, WithdrawalRequest, Race, RaceResult, DepositLog, ChatMessage, ChatThread, Promotion, PromotionRule, DepositRequest, PaymentIntegrationConfig, ProgramImage, ManualBetOrder } from './types';
@@ -83,7 +84,7 @@ const clearCachedActiveUser = (): void => {
     } catch {}
 };
 
-const lazyWithChunkRecovery = <T,>(importer: () => Promise<{ default: T }>) =>
+const lazyWithChunkRecovery = <T extends React.ComponentType<any>>(importer: () => Promise<{ default: T }>) =>
     lazy(async () => {
         try {
             const mod = await importer();
@@ -287,29 +288,9 @@ const AppContent: React.FC = () => {
     }, []);
 
   const syncEffectiveTimeWithServer = useCallback(async () => {
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-      if (!supabaseUrl || !supabaseAnonKey) return;
-
-      try {
-          const response = await fetch(`${supabaseUrl}/rest/v1/races?select=id&limit=1`, {
-              method: 'GET',
-              headers: {
-                  apikey: supabaseAnonKey,
-                  Authorization: `Bearer ${supabaseAnonKey}`,
-              },
-          });
-          const dateHeader = response.headers.get('date');
-          if (!dateHeader) return;
-
-          const serverNow = new Date(dateHeader);
-          if (Number.isNaN(serverNow.getTime())) return;
-
-          serverTimeOffsetMsRef.current = serverNow.getTime() - Date.now();
-          setEffectiveTime(new Date(Date.now() + serverTimeOffsetMsRef.current));
-      } catch {
-          // Fall back to device time when server time cannot be resolved.
-      }
+      // Server-time sync via a HEAD request to Firestore could be added later.
+      // For now we use device time; race-cutoff math tolerates small drift.
+      return;
   }, []);
 
   const loadLiveSystemData = async (user?: User) => {

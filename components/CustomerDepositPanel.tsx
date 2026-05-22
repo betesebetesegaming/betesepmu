@@ -8,7 +8,7 @@ import { AfriMoneyPaymentTab } from './AfriMoneyPaymentTab';
 interface CustomerDepositPanelProps {
   customers: User[];
   onDeposit: (customerId: string, amount: number, method: 'Cash' | 'Wave' | 'AfriMoney' | 'Correction', transactionId?: string) => Promise<{ success: boolean; bonusApplied: number | null }>;
-  onAdminAdjustBalance?: (customerId: string, walletDelta: number, bonusDelta: number, note: string) => Promise<{ success: boolean; message: string }>;
+  onAdminAdjustBalance?: (customerId: string, walletDelta: number, bonusDelta: number, note: string, approvalPin?: string) => Promise<{ success: boolean; message: string }>;
   depositLogs: DepositLog[];
   depositRequests?: DepositRequest[];
   onApproveDepositRequest?: (requestId: string) => void;

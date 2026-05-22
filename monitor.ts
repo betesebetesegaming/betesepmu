@@ -57,7 +57,7 @@ const logPerformanceMetrics = (): void => {
     console.log(`  TCP Connection: ${(perfData.connectEnd - perfData.connectStart).toFixed(2)}ms`);
     console.log(`  Time to First Byte: ${(perfData.responseStart - perfData.fetchStart).toFixed(2)}ms`);
     console.log(`  Content Download: ${(perfData.responseEnd - perfData.responseStart).toFixed(2)}ms`);
-    console.log(`  DOM Processing: ${(perfData.domInteractive - perfData.domLoading).toFixed(2)}ms`);
+    console.log(`  DOM Processing: ${(perfData.domInteractive - perfData.responseEnd).toFixed(2)}ms`);
     console.log(`  Total Load Time: ${metrics.pageLoad.toFixed(2)}ms`);
   }
 
@@ -103,7 +103,7 @@ const monitorCoreWebVitals = (): void => {
       const lcpObserver = new PerformanceObserver((list) => {
         const entries = list.getEntries();
         const lastEntry = entries[entries.length - 1];
-        const lcp = lastEntry.renderTime || lastEntry.loadTime;
+        const lcp = (lastEntry as any).renderTime || (lastEntry as any).loadTime;
         console.log(`🎨 Largest Contentful Paint: ${lcp.toFixed(2)}ms`);
         metrics.largestContentfulPaint = lcp;
       });
