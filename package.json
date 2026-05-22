@@ -12,7 +12,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "seed-admin": "node --env-file=.env.local scripts/seed-admin.js"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.4",
