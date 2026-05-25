@@ -172,19 +172,22 @@ export const triggerPrint = (elementId: string, options: TriggerPrintOptions = {
     const paperWidthMm = isAndroidTerminal ? 58 : requestedPaperWidthMm;
     const paperHeightMm = options.direct57x40 ? 40 : null;
     const pageSize = paperHeightMm ? `${paperWidthMm}mm ${paperHeightMm}mm` : `${paperWidthMm}mm auto`;
-    const stagePaddingMm = paperHeightMm ? 1 : 1.5;
+    // Use the absolute minimum margin so big text uses the full paper width.
+    const stagePaddingMm = paperHeightMm ? 0.5 : 0.8;
 
     console.log('📏 Paper size:', { paperWidthMm, paperHeightMm, pageSize, direct57x40: options.direct57x40 });
-    const qrWidthMm = clamp(Math.round(paperWidthMm * (isTicketPrint ? 0.32 : 0.55)), 14, 40);
+    const qrWidthMm = clamp(Math.round(paperWidthMm * (isTicketPrint ? 0.45 : 0.55)), 18, 48);
     const textColumns = clamp(Math.round(paperWidthMm * (32 / 58)), 24, 64);
     // Physical sizing — all in millimetres so the print is the same on every
-    // printer/DPI combination. These match the desired Sunmi sample ticket
-    // (big, easy to read at arm's length).
-    const baseFontMm = isTicketPrint ? 3.4 : 3.2;
-    const boldFontMm = isTicketPrint ? 3.8 : 3.4;
-    const hugeFontMm = isTicketPrint ? 7.0 : 5.0;
-    const bannerFontMm = isTicketPrint ? 5.0 : 4.2;
-    const baseLineHeight = isTicketPrint ? 1.18 : 1.3;
+    // printer/DPI combination. Bumped up ~2.5–3× the previous values so the
+    // ticket reads at arm's length on a 58 mm thermal printer. Long lines
+    // (e.g. multi-horse Pronostic numbers) will wrap to a second line, that's
+    // intentional — we keep the digits big and bold like the desired sample.
+    const baseFontMm = isTicketPrint ? 9.0 : 6.0;
+    const boldFontMm = isTicketPrint ? 10.0 : 6.5;
+    const hugeFontMm = isTicketPrint ? 16.0 : 11.0;
+    const bannerFontMm = isTicketPrint ? 13.0 : 8.5;
+    const baseLineHeight = isTicketPrint ? 1.12 : 1.25;
 
     const oldStage = document.getElementById('betese-print-stage');
     if (oldStage) oldStage.remove();
@@ -214,6 +217,10 @@ export const triggerPrint = (elementId: string, options: TriggerPrintOptions = {
             page-break-inside: avoid !important;
             break-inside: avoid-page !important;
             font-weight: 900 !important;
+            white-space: normal !important;
+            overflow-wrap: anywhere !important;
+            word-break: break-word !important;
+            max-width: 100% !important;
         }
         #betese-print-stage .c { text-align: center !important; }
         #betese-print-stage .b { font-weight: 900 !important; font-size: ${boldFontMm}mm !important; }
@@ -384,6 +391,10 @@ export const triggerPrint = (elementId: string, options: TriggerPrintOptions = {
                             -webkit-print-color-adjust: exact !important;
                             print-color-adjust: exact !important;
                             font-weight: 900 !important;
+                            white-space: normal !important;
+                            overflow-wrap: anywhere !important;
+                            word-break: break-word !important;
+                            max-width: 100% !important;
                         }
 
                         #betese-native-print-root .c { text-align: center !important; }

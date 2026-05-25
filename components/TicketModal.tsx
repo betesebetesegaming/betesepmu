@@ -1,8 +1,9 @@
 
 import React from 'react';
-import { Capacitor } from '@capacitor/core';
 import { Ticket, Race } from '../types';
 import { triggerPrint, formatWinningNumbersForDisplay } from '../utils';
+import { printEscPos, forgetPairedPrinter, hasSilentPrintTransport } from '../lib/printerBridge';
+import { buildTicketEscPos, buildPaidReceiptEscPos } from '../lib/ticketEscPos';
 
 interface TicketModalProps {
   ticket: Ticket;
@@ -14,55 +15,86 @@ interface TicketModalProps {
 export const TicketModal: React.FC<TicketModalProps> = ({ ticket, onClose, showPrintButton, races }) => {
   const [isPrinting, setIsPrinting] = React.useState(false);
   const [printStatus, setPrintStatus] = React.useState('');
+  const [hasRememberedPrinter, setHasRememberedPrinter] = React.useState(false);
   const autoPrintStartedRef = React.useRef(false);
-  const isAndroidTerminal = /android|sunmi/i.test(navigator.userAgent || '');
-  const isNativeAndroid = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
-  
-  const handlePrint = () => {
-    if (isPrinting) return;
-    setIsPrinting(true);
-    setPrintStatus('Starting print...');
-    console.log('📋 PRINT TICKET button clicked, ticket ID:', ticket.id);
-    try {
-      triggerPrint(`ticket-receipt-${ticket.id}`);
-      setPrintStatus('Print command sent.');
-    } catch (e) {
-      console.error('❌ Print failed:', e);
-      alert('Print failed - see console for details');
-      setPrintStatus('Print failed.');
-    } finally {
-      setTimeout(() => setIsPrinting(false), 3500);
-    }
-  };
 
-  const handleDirect57x40Print = () => {
-    if (isPrinting) return;
-    setIsPrinting(true);
-    console.log('📋 DIRECT 57x40 button clicked, ticket ID:', ticket.id);
-    try {
-      // Temporary reliability mode: use the stable print pipeline first.
-      // We can re-enable strict 57x40 once physical printing is confirmed.
-      triggerPrint(`ticket-receipt-${ticket.id}`);
-      setPrintStatus('Print command sent.');
-    } catch (e) {
-      console.error('❌ Direct print failed:', e);
-      alert('Direct print failed - see console for details');
-      setPrintStatus('Print failed.');
-    } finally {
-      setTimeout(() => setIsPrinting(false), 3500);
-    }
+  React.useEffect(() => {
+    let cancelled = false;
+    hasSilentPrintTransport().then((available) => {
+      if (!cancelled) setHasRememberedPrinter(available);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const buildBytes = React.useCallback(() => {
+    return ticket.status === 'Paid' ? buildPaidReceiptEscPos(ticket) : buildTicketEscPos(ticket);
+  }, [ticket]);
+
+  const cssPrintFallback = React.useCallback(() => {
+    triggerPrint(`ticket-receipt-${ticket.id}`);
+  }, [ticket.id]);
+
+  const handlePrint = React.useCallback(
+    async (allowPair: boolean = true) => {
+      if (isPrinting) return;
+      setIsPrinting(true);
+      setPrintStatus('Sending to printer…');
+      try {
+        const bytes = buildBytes();
+        const result = await printEscPos(bytes, { allowPair });
+        if (result.ok) {
+          setPrintStatus(
+            result.transport === 'web-bluetooth'
+              ? 'Sent over Bluetooth ✓'
+              : 'Sent to internal printer ✓',
+          );
+          setHasRememberedPrinter(true);
+        } else if (result.transport === 'none' || !allowPair) {
+          // Nothing reachable silently — fall back to CSS print so the OS
+          // print picker can still rescue the print job.
+          setPrintStatus(result.message || 'Falling back to OS print preview…');
+          cssPrintFallback();
+        } else {
+          setPrintStatus(result.message || 'Print failed');
+        }
+      } catch (err) {
+        const message = (err as Error)?.message || 'Print failed';
+        console.error('❌ Print failed:', err);
+        setPrintStatus(message);
+      } finally {
+        setTimeout(() => setIsPrinting(false), 1800);
+      }
+    },
+    [isPrinting, buildBytes, cssPrintFallback],
+  );
+
+  const handleForgetPrinter = () => {
+    forgetPairedPrinter();
+    setHasRememberedPrinter(false);
+    setPrintStatus('Printer forgotten. Next print will ask you to pair again.');
   };
 
   React.useEffect(() => {
-    if (!showPrintButton || !isAndroidTerminal) return;
+    if (!showPrintButton) return;
     if (autoPrintStartedRef.current) return;
     autoPrintStartedRef.current = true;
-    setPrintStatus('Auto print starting...');
-    const timer = window.setTimeout(() => {
-      handlePrint();
-    }, 320);
-    return () => window.clearTimeout(timer);
-  }, [showPrintButton, isAndroidTerminal]);
+    // Only auto-print if a printer is already remembered. We don't want to
+    // pop a pair-dialog the moment the modal opens — that would feel bad.
+    let cancelled = false;
+    (async () => {
+      const ready = await hasSilentPrintTransport();
+      if (cancelled) return;
+      if (ready) {
+        setPrintStatus('Auto print starting…');
+        window.setTimeout(() => handlePrint(false), 320);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [showPrintButton, handlePrint]);
 
   const isPaid = ticket.status === 'Paid';
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${ticket.id}`;
@@ -188,28 +220,27 @@ export const TicketModal: React.FC<TicketModalProps> = ({ ticket, onClose, showP
           <div className="p-4 bg-white border-t rounded-b-xl space-y-2">
             {showPrintButton && (
               <>
-                {!isAndroidTerminal && (
-                  <button
-                    onClick={handleDirect57x40Print}
-                    disabled={isPrinting}
-                    className="w-full py-3 bg-black text-white font-black text-lg rounded-lg shadow-xl active:scale-95 transition-all flex justify-center items-center gap-2 border-b-4 border-black/40 disabled:opacity-60"
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5" stroke="currentColor" strokeWidth="1.8"><rect x="7" y="4" width="10" height="5"/><rect x="5" y="9" width="14" height="8" rx="2"/><rect x="8" y="14" width="8" height="6"/></svg> DIRECT 57x40MM
-                  </button>
-                )}
                 <button
-                  onClick={handlePrint}
-                  onTouchEnd={handlePrint}
+                  onClick={() => handlePrint(true)}
+                  onTouchEnd={(e) => { e.preventDefault(); handlePrint(true); }}
                   disabled={isPrinting}
                   className="w-full py-4 bg-betese-green text-white font-black text-2xl rounded-lg shadow-xl active:scale-95 transition-all flex justify-center items-center gap-2 border-b-4 border-black/20 disabled:opacity-60"
                 >
                   <svg viewBox="0 0 24 24" fill="none" className="w-6 h-6" stroke="currentColor" strokeWidth="1.8"><rect x="7" y="4" width="10" height="5"/><rect x="5" y="9" width="14" height="8" rx="2"/><rect x="8" y="14" width="8" height="6"/></svg>
-                  {isPrinting ? 'PRINTING...' : (isAndroidTerminal ? (isNativeAndroid ? 'PRINT NOW' : 'OPEN PRINT PREVIEW') : 'PRINT TICKET')}
+                  {isPrinting ? 'PRINTING…' : hasRememberedPrinter ? 'PRINT TICKET' : 'PRINT — PAIR PRINTER'}
                 </button>
-                {isAndroidTerminal && (
-                  <div className="text-center text-xs font-semibold text-gray-600 py-1">
-                    {printStatus || (isNativeAndroid ? 'Print starts automatically when this window opens.' : 'Browser mode uses print preview. Install app for direct paper print.')}
-                  </div>
+                <div className="text-center text-xs font-semibold text-gray-600 py-1 min-h-[1.25rem]">
+                  {printStatus || (hasRememberedPrinter
+                    ? 'Sends bytes straight to your paired thermal printer.'
+                    : 'Tap PRINT once to pair your Bluetooth thermal printer. We\u2019ll remember it for next time.')}
+                </div>
+                {hasRememberedPrinter && (
+                  <button
+                    onClick={handleForgetPrinter}
+                    className="w-full py-1.5 text-gray-500 hover:text-gray-700 font-bold text-[10px] uppercase tracking-widest"
+                  >
+                    Use a different printer
+                  </button>
                 )}
               </>
             )}
