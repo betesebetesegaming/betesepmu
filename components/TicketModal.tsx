@@ -2,7 +2,7 @@
 import React from 'react';
 import { Ticket, Race } from '../types';
 import { formatWinningNumbersForDisplay } from '../utils';
-import { printViaThermer } from '../lib/printerBridge';
+import { printViaThermer, buildThermerHandoffUrl } from '../lib/printerBridge';
 import { buildThermerTicketEntries, buildThermerPaidReceiptEntries } from '../lib/thermerReceipt';
 
 interface TicketModalProps {
@@ -22,6 +22,15 @@ export const TicketModal: React.FC<TicketModalProps> = ({ ticket, onClose, showP
       ? buildThermerPaidReceiptEntries(ticket)
       : buildThermerTicketEntries(ticket);
   }, [ticket]);
+
+  const manualHandoffUrl = React.useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    try {
+      return buildThermerHandoffUrl(buildEntries());
+    } catch {
+      return '';
+    }
+  }, [buildEntries]);
 
   const handlePrint = React.useCallback(async () => {
     if (isPrinting) return;
@@ -194,6 +203,14 @@ export const TicketModal: React.FC<TicketModalProps> = ({ ticket, onClose, showP
                 <div className="text-center text-xs font-semibold text-gray-600 py-1 min-h-[1.25rem]">
                   {printStatus || 'Prints via the Thermer app on your device.'}
                 </div>
+                {manualHandoffUrl && (
+                  <a
+                    href={manualHandoffUrl}
+                    className="block w-full py-2 text-center text-xs font-bold uppercase tracking-widest text-betese-green underline"
+                  >
+                    Open in print app manually
+                  </a>
+                )}
               </>
             )}
             <button onClick={onClose} className="w-full py-2 text-gray-500 font-bold text-xs uppercase tracking-widest bg-gray-50 rounded-lg">Close</button>

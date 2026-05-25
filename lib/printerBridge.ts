@@ -38,7 +38,9 @@ const buildResponseUrl = (entries: ThermerEntry[]): string => {
 };
 
 const buildBluetoothPrintUrl = (responseUrl: string): string =>
-  `bluetoothprint:msg?msg=${encodeURIComponent(responseUrl)}`;
+  // Action keyword `print` (vs `msg`) tells the app to fire its print
+  // pipeline immediately on receipt, instead of opening preview mode.
+  `bluetoothprint:print?msg=${encodeURIComponent(responseUrl)}`;
 
 /**
  * Click a synthetic anchor tag pointing at the custom scheme. Android's
