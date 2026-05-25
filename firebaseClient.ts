@@ -1,8 +1,8 @@
 // Firestore-backed data layer.
-// Migrated from Supabase/Postgres to Firebase Firestore.
-// File name kept (`supabaseClient`) to avoid breaking imports across the app.
-// The exported `supabase` symbol is a thin Firestore-backed compat shim that
-// emulates Supabase's `.channel(...).on(...).subscribe()` realtime API.
+// Migrated from realtimeDb/Postgres to Firebase Firestore.
+// File name kept (`realtimeDbClient`) to avoid breaking imports across the app.
+// The exported `realtimeDb` symbol is a thin Firestore-backed compat shim that
+// emulates realtimeDb's `.channel(...).on(...).subscribe()` realtime API.
 
 import {
     collection,
@@ -62,8 +62,8 @@ export const checkBackendConnection = async (): Promise<boolean> => {
     }
 };
 
-// ---------- Supabase compat shim ----------
-// App.tsx uses `supabase.channel(...).on('postgres_changes', { event, schema, table, filter })`.
+// ---------- realtimeDb compat shim ----------
+// App.tsx uses `realtimeDb.channel(...).on('postgres_changes', { event, schema, table, filter })`.
 // We emulate that via Firestore onSnapshot listeners. Filter format: "field=eq.value".
 type RealtimeCallback = (payload: { eventType: 'INSERT' | 'UPDATE' | 'DELETE'; new: any; old: any }) => void;
 
@@ -88,7 +88,7 @@ const eventTypeFromChange = (changeType: 'added' | 'modified' | 'removed'): 'INS
 const matchesEventFilter = (filter: ChannelListener['event'], actual: 'INSERT' | 'UPDATE' | 'DELETE'): boolean =>
     filter === '*' || filter === actual;
 
-class SupabaseChannelShim {
+class realtimeDbChannelShim {
     private listeners: ChannelListener[] = [];
     private unsubscribers: Unsubscribe[] = [];
 
@@ -124,11 +124,11 @@ class SupabaseChannelShim {
     }
 }
 
-export const supabase = {
+export const realtimeDb = {
     channel(_name: string) {
-        return new SupabaseChannelShim();
+        return new realtimeDbChannelShim();
     },
-    removeChannel(ch: SupabaseChannelShim | null | undefined) {
+    removeChannel(ch: realtimeDbChannelShim | null | undefined) {
         if (ch && typeof ch.unsubscribe === 'function') ch.unsubscribe();
     },
     removeAllChannels() {

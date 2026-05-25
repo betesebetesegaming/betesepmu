@@ -12,7 +12,7 @@ import { LanguageProvider } from './LanguageContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { deferWork } from './perf';
 import { 
-    supabase, dbPlaceBet, dbPayoutTicket, dbFetchUsers, dbFetchRaces, 
+    realtimeDb, dbPlaceBet, dbPayoutTicket, dbFetchUsers, dbFetchRaces, 
     dbFetchLiveTickets, checkBackendConnection, dbSaveRace, 
     dbUpdateRace, dbDeleteRace, dbUpdateNonRunners, dbSaveRaceResult,
     dbFetchDepositRequests, dbFetchWithdrawalRequests, dbDepositRequest,
@@ -29,7 +29,7 @@ import {
     dbApplyCustomerDeposit, dbApplyCustomerBalanceAdjustment, dbFreshStart, dbFetchUserBalance,
     dbMigrateLegacyBookedTicketsToActive, dbFetchDepositLogs, dbInsertDepositLog,
     dbGenerateAndSendOTP, dbFetchOTPConfig, dbVerifyOTP
-} from './supabaseClient';
+} from './firebaseClient';
 
 const LAZY_CHUNK_RETRY_KEY = 'betese_lazy_chunk_retry';
 const ACTIVE_USER_ID_KEY = 'betese_active_user_id';
@@ -294,10 +294,10 @@ const AppContent: React.FC = () => {
   }, []);
 
   const loadLiveSystemData = async (user?: User) => {
-      if (!supabase) return;
+      if (!realtimeDb) return;
       try {
           // Always attempt to load data — don't gate on HEAD probe which can fail
-          // even when Supabase is fully reachable. Mark online after data loads.
+          // even when realtimeDb is fully reachable. Mark online after data loads.
           setIsOnline(true);
 
           if (!legacyBookedMigrationDoneRef.current) {
@@ -463,7 +463,7 @@ const AppContent: React.FC = () => {
           }
       }, 7000);
 
-      if (!supabase) {
+      if (!realtimeDb) {
           setUsersReady(true);
           setSessionRestorePending(false);
           return () => {
@@ -507,8 +507,8 @@ const AppContent: React.FC = () => {
   }, []);
 
   useEffect(() => {
-      if (!supabase || !currentUser) return;
-      const userSub = supabase.channel('public:users').on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'users', filter: `id=eq.${currentUser.id}` }, async (payload) => {
+      if (!realtimeDb || !currentUser) return;
+      const userSub = realtimeDb.channel('public:users').on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'users', filter: `id=eq.${currentUser.id}` }, async (payload) => {
           setCurrentUser(prev => prev ? {
               ...prev,
               name: (payload.new as any)?.name ?? prev.name,
@@ -531,17 +531,17 @@ const AppContent: React.FC = () => {
       if(currentUser.role === 'Vendor') ticketFilter = `vendor_id=eq.${currentUser.id}`;
       else if(currentUser.role === 'Customer') ticketFilter = `customer_id=eq.${currentUser.id}`;
       
-      const ticketSub = supabase.channel('public:tickets').on('postgres_changes', { event: '*', schema: 'public', table: 'tickets', filter: ticketFilter }, async () => {
+      const ticketSub = realtimeDb.channel('public:tickets').on('postgres_changes', { event: '*', schema: 'public', table: 'tickets', filter: ticketFilter }, async () => {
           const updatedTickets = await dbFetchLiveTickets(currentUser); setPlacedTickets(updatedTickets);
       }).subscribe();
-      const raceSub = supabase.channel('public:races').on('postgres_changes', { event: '*', schema: 'public', table: 'races' }, async () => {
+      const raceSub = realtimeDb.channel('public:races').on('postgres_changes', { event: '*', schema: 'public', table: 'races' }, async () => {
           const updatedRaces = await dbFetchRaces(); setRaces(updatedRaces);
       }).subscribe();
-      return () => { supabase?.removeChannel(userSub); supabase?.removeChannel(ticketSub); supabase?.removeChannel(raceSub); };
+      return () => { realtimeDb?.removeChannel(userSub); realtimeDb?.removeChannel(ticketSub); realtimeDb?.removeChannel(raceSub); };
   }, [currentUser?.id]);
 
   useEffect(() => {
-      if (!supabase || duplicatePhoneLockInFlightRef.current) return;
+      if (!realtimeDb || duplicatePhoneLockInFlightRef.current) return;
 
       const byPhone = new Map<string, User[]>();
       (users || [])
@@ -603,7 +603,7 @@ const AppContent: React.FC = () => {
       }
 
       try {
-          if (supabase) { await dbSaveRace(race); } 
+          if (realtimeDb) { await dbSaveRace(race); } 
           else { setRaces(prev => [...prev, race]); }
           loadLiveSystemData();
       } catch (e: any) { alert("Failed to save race: " + e.message); }
@@ -617,7 +617,7 @@ const AppContent: React.FC = () => {
           updatedAt: effectiveTime,
       };
       try {
-          if (supabase) { await dbUpdateRace(raceWithAudit); } 
+          if (realtimeDb) { await dbUpdateRace(raceWithAudit); } 
           else { setRaces(prev => (prev || []).map(r => r.id === race.id ? raceWithAudit : r)); }
       } catch (e: any) { alert("Failed to update race: " + e.message); }
   };
@@ -625,7 +625,7 @@ const AppContent: React.FC = () => {
   const handleDeleteRace = async (race: Race) => {
       if (!confirm("Are you sure you want to delete this race?")) return;
       try {
-          if (supabase) {
+          if (realtimeDb) {
               await dbDeleteRace(race.id);
               setRaces(prev => (prev || []).filter(r => r.id !== race.id));
           } else {
@@ -638,7 +638,7 @@ const AppContent: React.FC = () => {
       const normalized = [...new Set((nonRunners || []).map(n => Number(n)).filter(n => Number.isFinite(n) && n > 0))]
           .sort((a, b) => a - b);
       try {
-          if (supabase) {
+          if (realtimeDb) {
               await dbUpdateNonRunners(raceId, normalized);
               await loadLiveSystemData(currentUser || undefined);
           } else {
@@ -789,7 +789,7 @@ const AppContent: React.FC = () => {
       const nextRaces = (races || []).map(r => r.id === auditedResult.raceId ? { ...r, result: auditedResult } : r);
 
       try {
-          if (supabase) {
+          if (realtimeDb) {
               // 1. Save race result immediately (fast: single row update)
               await dbSaveRaceResult(auditedResult);
               // 2. Update UI immediately so modal can close
@@ -817,7 +817,7 @@ const AppContent: React.FC = () => {
           alert('Only Admin can recalculate all tickets.');
           return;
       }
-      if (!supabase) {
+      if (!realtimeDb) {
           alert('Recalculation requires database mode.');
           return;
       }
@@ -830,7 +830,7 @@ const AppContent: React.FC = () => {
           alert('Only Admin can perform fresh start.');
           return;
       }
-      if (!supabase) {
+      if (!realtimeDb) {
           alert('Fresh start requires database mode.');
           return;
       }
@@ -860,7 +860,7 @@ const AppContent: React.FC = () => {
           alert('Online customer tickets are settled automatically by the system. Manual payment is only for vendor cashout tickets.');
           return;
       }
-      if(supabase) {
+      if(realtimeDb) {
           try {
               const success = await dbPayoutTicket(ticketId, ticket.winnings, currentUser.id, currentUser.name);
               if(success) {
@@ -916,7 +916,7 @@ const AppContent: React.FC = () => {
         let liveWalletBalance = Number(currentUser.walletBalance || 0);
         let liveBonusBalance = Number(currentUser.bonusBalance || 0);
 
-        if (supabase) {
+        if (realtimeDb) {
             try {
                 const liveBalance = await dbFetchUserBalance(currentUser.id);
                 liveWalletBalance = liveBalance.walletBalance;
@@ -963,7 +963,7 @@ const AppContent: React.FC = () => {
     };
 
       try {
-          if (supabase) { 
+          if (realtimeDb) { 
               await dbPlaceBet(newTicket, currentUser); 
               setPlacedTickets(prev => {
                   const exists = (prev || []).some(t => t.id === newTicket.id);
@@ -1037,7 +1037,7 @@ const AppContent: React.FC = () => {
               ...validSlip
           };
 
-          if (supabase) {
+          if (realtimeDb) {
               await dbPlaceBet(newTicket, currentUser);
               setPlacedTickets(prev => {
                   const exists = (prev || []).some(t => t.id === newTicket.id);
@@ -1085,7 +1085,7 @@ const AppContent: React.FC = () => {
         );
 
         if (hasDuplicatePhone) {
-            if (supabase && !cust.isLocked) {
+            if (realtimeDb && !cust.isLocked) {
                 try {
                     await dbToggleUserLock(cust.id, true);
                 } catch (e) {
@@ -1113,7 +1113,7 @@ const AppContent: React.FC = () => {
         let nextFirstDepositAt = cust.firstDepositAt;
 
         try {
-            if (supabase) {
+            if (realtimeDb) {
                 const dbResult = await dbApplyCustomerDeposit(customerId, normalizedAmount, bonusApplied, effectiveTime);
                 nextWalletBalance = dbResult.walletBalance;
                 nextBonusBalance = dbResult.bonusBalance;
@@ -1139,7 +1139,7 @@ const AppContent: React.FC = () => {
             firstDepositAt: nextFirstDepositAt
         };
 
-                if (supabase) {
+                if (realtimeDb) {
                     const refreshedUsers = await dbFetchUsers();
                     const normalizedUsers = (refreshedUsers || []).map(u => ({ ...u, role: normalizeRole(u.role) }));
                     setUsers(normalizedUsers);
@@ -1169,7 +1169,7 @@ const AppContent: React.FC = () => {
         transactionId
     };
 
-    if (supabase) {
+    if (realtimeDb) {
         try {
             await dbInsertDepositLog(createdDepositLog);
             const latestLogs = await dbFetchDepositLogs();
@@ -1184,7 +1184,7 @@ const AppContent: React.FC = () => {
         return { success: true, bonusApplied };
   };
 
-    const handleCreateDepositRequest = async (amount: number, method: 'Wave' | 'AfriMoney', phone: string) => {
+    const handleCreateDepositRequest = async (amount: number, method: 'Wave' | 'AfriMoney' | 'APS', phone: string) => {
     if (!currentUser) return;
         const normalizedPhone = normalizeGambiaPhone(phone || '');
         if (!normalizedPhone) {
@@ -1208,7 +1208,7 @@ const AppContent: React.FC = () => {
     };
 
     try {
-        if (supabase) {
+        if (realtimeDb) {
             await dbDepositRequest(newRequest);
         }
         setDepositRequests(prev => [newRequest, ...(prev || []).filter(req => req.id !== newRequest.id)]);
@@ -1217,7 +1217,7 @@ const AppContent: React.FC = () => {
             // Wave payments are auto-credited immediately.
             // Backoffice receives a notification to verify on the Wave merchant portal.
             await handleDeposit(currentUser.id, normalizedAmount, 'Wave', normalizedPhone, { id: 'SYSTEM', name: 'Wave Auto-Credit' });
-            if (supabase) {
+            if (realtimeDb) {
                 await dbMarkDepositRequestApproved(newRequest.id, 'SYSTEM', 'Wave Auto-Credit', effectiveTime);
             }
             setDepositRequests(prev => (prev || []).map(req => req.id === newRequest.id
@@ -1251,7 +1251,7 @@ const AppContent: React.FC = () => {
               throw new Error('Unable to credit wallet for this request.');
           }
 
-          if (supabase) {
+          if (realtimeDb) {
               await dbMarkDepositRequestApproved(requestId, currentUser.id, currentUser.name, effectiveTime);
           }
 
@@ -1311,7 +1311,7 @@ const AppContent: React.FC = () => {
       let appliedWallet = nextWallet;
       let appliedBonus = nextBonus;
       try {
-          if (supabase) {
+          if (realtimeDb) {
               const dbResult = await dbApplyCustomerBalanceAdjustment(customerId, normalizedWalletDelta, normalizedBonusDelta);
               appliedWallet = dbResult.walletBalance;
               appliedBonus = dbResult.bonusBalance;
@@ -1338,7 +1338,7 @@ const AppContent: React.FC = () => {
           note: note?.trim() || undefined
       };
 
-      if (supabase) {
+      if (realtimeDb) {
           try {
               await dbInsertDepositLog(createdCorrectionLog);
               const latestLogs = await dbFetchDepositLogs();
@@ -1357,7 +1357,7 @@ const AppContent: React.FC = () => {
   const handleRejectDepositRequest = async (requestId: string) => {
       if(!currentUser) return;
       try {
-          if (supabase) {
+          if (realtimeDb) {
               await dbRejectDepositRequest(requestId, currentUser.id, currentUser.name, effectiveTime);
           }
           setDepositRequests(prev => (prev || []).map(r => r.id === requestId ? {
@@ -1402,9 +1402,9 @@ const AppContent: React.FC = () => {
     };
 
     try {
-        if (supabase) { await dbPlaceBet(newTicket, currentUser); } 
+        if (realtimeDb) { await dbPlaceBet(newTicket, currentUser); } 
         else { setPlacedTickets(prev => [...prev, newTicket]); }
-        if (supabase) {
+        if (realtimeDb) {
             await dbMarkManualBetOrderCompleted(orderId);
             loadLiveSystemData(currentUser);
         } else {
@@ -1420,7 +1420,7 @@ const AppContent: React.FC = () => {
       if (!normalizedCode || !currentUser) return { success: false, message: 'Not found' };
       const ticket = (placedTickets || []).find(t => normalizeBookingCode(t.bookingCode || '') === normalizedCode);
 
-      if (supabase) {
+      if (realtimeDb) {
           try {
               const success = await dbPayForBooking(normalizedCode, currentUser.id, currentUser.name, effectiveTime);
               const nextTickets = await dbFetchLiveTickets(currentUser);
@@ -1499,7 +1499,7 @@ const AppContent: React.FC = () => {
       if (!confirm(`Cancel ticket #${targetTicket.id}?`)) return;
 
       try {
-          if (supabase) {
+          if (realtimeDb) {
               const result = await dbCancelTicket(targetTicket.id, currentUser.id, currentUser.name, effectiveTime);
               if (!result.success) {
                   alert(result.message || 'Cancel failed.');
@@ -1536,7 +1536,7 @@ const AppContent: React.FC = () => {
           ? `${currentUser.name} [Wave${safeReference ? ` Ref:${safeReference}` : ''}]`
           : currentUser.name;
 
-      if (supabase) {
+      if (realtimeDb) {
           try {
               const success = await dbProcessWithdrawalRequest(code, currentUser.id, processedByName, effectiveTime);
               if (success) loadLiveSystemData(currentUser);
@@ -1557,7 +1557,7 @@ const AppContent: React.FC = () => {
       setCurrentUser(normalizedUser);
       try { localStorage.setItem(ACTIVE_USER_ID_KEY, normalizedUser.id); } catch {}
       writeCachedActiveUser(normalizedUser);
-      if (supabase) {
+      if (realtimeDb) {
           loadLiveSystemData(normalizedUser);
       }
   };
@@ -1571,7 +1571,7 @@ const AppContent: React.FC = () => {
 
   const handleCancelWithdrawal = async (requestId: string) => {
       try {
-          if (supabase) {
+          if (realtimeDb) {
               await dbCancelWithdrawal(requestId);
           } else {
               setWithdrawalRequests(prev => (prev || []).map(r => r.id === requestId ? { ...r, status: 'Canceled' } : r));
@@ -1593,7 +1593,7 @@ const AppContent: React.FC = () => {
       };
 
       try {
-          if (supabase) {
+          if (realtimeDb) {
               // Retry a few times in case random 6-digit code hits unique constraint.
               let savedRequest: WithdrawalRequest | null = null;
               for (let attempt = 0; attempt < 5; attempt++) {
@@ -1679,7 +1679,7 @@ const AppContent: React.FC = () => {
             return null;
         }
 
-        const latestUsers = supabase
+        const latestUsers = realtimeDb
             ? await dbFetchUsers().catch(() => users)
             : users;
         const normalizedLatestUsers = (latestUsers || []).map(u => ({ ...u, role: normalizeRole(u.role) }));
@@ -1729,7 +1729,7 @@ const AppContent: React.FC = () => {
         );
 
         if (duplicate) {
-            if (supabase && !duplicate.isLocked) {
+            if (realtimeDb && !duplicate.isLocked) {
                 try {
                     await dbToggleUserLock(duplicate.id, true);
                 } catch (e) {
@@ -1757,7 +1757,7 @@ const AppContent: React.FC = () => {
     };
     
     try {
-        if (supabase) {
+        if (realtimeDb) {
             await dbAddUser(newUser);
             // Refresh local users list so the new account is immediately searchable
             // by subsequent login attempts and duplicate-checks in this session.
@@ -1802,7 +1802,7 @@ const AppContent: React.FC = () => {
 
       const nextLocked = !targetUser.isLocked;
       try {
-          if (supabase) {
+          if (realtimeDb) {
               await dbToggleUserLock(userId, nextLocked);
               await loadLiveSystemData(currentUser || undefined);
           } else {
@@ -1821,7 +1821,7 @@ const AppContent: React.FC = () => {
 
       const run = async () => {
           try {
-              if (supabase) {
+              if (realtimeDb) {
                   await dbAdminResetPassword(userId, normalizedPassword);
                   await loadLiveSystemData(currentUser || undefined);
               } else {
@@ -1840,7 +1840,7 @@ const AppContent: React.FC = () => {
       const current = promotions.find(p => p.id === promoId);
       if (!current) return;
       const next = !current.isActive;
-      if (supabase) {
+      if (realtimeDb) {
           try {
               await dbTogglePromotionStatus(promoId, next);
           } catch (e: any) {
@@ -1865,7 +1865,7 @@ const AppContent: React.FC = () => {
           return;
       }
 
-      if (supabase) {
+      if (realtimeDb) {
           try {
               await dbUpdatePromotion(promoId, trimmedName, normalizedRules);
           } catch (e: any) {
@@ -1877,7 +1877,7 @@ const AppContent: React.FC = () => {
   };
 
   const handleMovePromotion = async (id: string, direction: 'up' | 'down') => {
-      if (supabase) {
+      if (realtimeDb) {
           try {
               await dbMovePromotion(id, direction);
               const refreshed = await dbFetchPromotions();
@@ -1924,7 +1924,7 @@ const AppContent: React.FC = () => {
           rules: []
       };
 
-      if (supabase) {
+      if (realtimeDb) {
           try {
               await dbCreatePromotion(promo, promotions.length + 1);
           } catch (e: any) {
@@ -1936,7 +1936,7 @@ const AppContent: React.FC = () => {
   };
 
   const handleDeletePromotion = async (id: string) => {
-      if (supabase) {
+      if (realtimeDb) {
           try {
               await dbDeletePromotion(id);
           } catch (e: any) {
@@ -1955,14 +1955,14 @@ const AppContent: React.FC = () => {
           mediaType
       };
 
-      if (supabase) {
+      if (realtimeDb) {
           try {
               const url = await dbUploadProgramFile(file);
               image.url = url;
               await dbAddProgramImage(image);
           } catch (e: any) {
               const rawMessage = String(e?.message || e || 'Unknown upload error');
-              const missingServerEnv = rawMessage.toLowerCase().includes('missing supabase server environment variables');
+              const missingServerEnv = rawMessage.toLowerCase().includes('missing realtimeDb server environment variables');
 
               if (missingServerEnv) {
                   try {
@@ -1971,7 +1971,7 @@ const AppContent: React.FC = () => {
                       await dbAddProgramImage(image);
                       setProgramImages(prev => [image, ...prev]);
                       alert('Media uploaded successfully.');
-                      console.warn('Program media uploaded in emergency fallback mode. Configure Netlify SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY for full storage mode.');
+                      console.warn('Program media uploaded in emergency fallback mode. Configure Netlify realtimeDb_URL and realtimeDb_SERVICE_ROLE_KEY for full storage mode.');
                       return;
                   } catch (fallbackErr: any) {
                       alert('Failed to upload media: server env missing and fallback failed. ' + String(fallbackErr?.message || fallbackErr));
@@ -1990,7 +1990,7 @@ const AppContent: React.FC = () => {
   };
 
   const handleDeleteProgramImage = async (id: string) => {
-      if (supabase) {
+      if (realtimeDb) {
           try {
               await dbDeleteProgramImage(id);
           } catch (e: any) {
@@ -2002,7 +2002,7 @@ const AppContent: React.FC = () => {
   };
 
   const handleSavePaymentConfig = async (config: PaymentIntegrationConfig) => {
-      if (supabase) {
+      if (realtimeDb) {
           try {
               await dbSavePaymentConfig(config);
           } catch (e: any) {
@@ -2039,7 +2039,7 @@ const AppContent: React.FC = () => {
           status: 'Pending'
       };
 
-      if (supabase) {
+      if (realtimeDb) {
           try {
               await dbCreateManualBetOrder(order);
           } catch (e: any) {
@@ -2051,7 +2051,7 @@ const AppContent: React.FC = () => {
   };
 
   const handleCancelManualBet = async (orderId: string) => {
-      if (supabase) {
+      if (realtimeDb) {
           try {
               await dbCancelManualBetOrder(orderId);
           } catch (e: any) {
@@ -2065,7 +2065,7 @@ const AppContent: React.FC = () => {
   const handleSendMessage = async (threadId: string | 'new', content: string, recipients: string[], audioData?: { base64: string; duration: number }) => {
       if (!currentUser) return;
       try {
-          if (supabase) {
+          if (realtimeDb) {
               await dbSendChatMessage(threadId, currentUser, content, recipients, audioData);
               const [nextThreads, nextMessages] = await Promise.all([dbFetchChatThreads(), dbFetchChatMessages()]);
               setThreads(nextThreads);
@@ -2078,7 +2078,7 @@ const AppContent: React.FC = () => {
 
   const handleMarkThreadAsRead = async (threadId: string) => {
       if (!currentUser || !threadId) return;
-      if (supabase) {
+      if (realtimeDb) {
           try {
               await dbMarkThreadAsRead(threadId, currentUser.id);
           } catch (e) {

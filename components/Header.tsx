@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { User, ChatMessage, ChatThread } from '../types';
 import { Logo } from './Logo';
 import { useLanguage } from '../LanguageContext';
-import { checkBackendConnection } from '../supabaseClient';
+import { checkBackendConnection } from '../firebaseClient';
 
 interface HeaderProps {
   user: User | null;

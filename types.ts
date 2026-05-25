@@ -176,7 +176,7 @@ export interface DepositRequest {
     customerId: string;
     customerName: string;
     amount: number;
-    method: 'Wave' | 'AfriMoney';
+    method: 'Wave' | 'AfriMoney' | 'APS';
     transactionId: string; // Storing Phone Number here
     status: 'Pending' | 'Approved' | 'Rejected';
     timestamp: Date;
@@ -201,7 +201,7 @@ export interface DepositLog {
   processedById: string;
   processedByName: string;
   timestamp: Date;
-  method: 'Cash' | 'Wave' | 'AfriMoney' | 'Correction'; // Added Correction
+  method: 'Cash' | 'Wave' | 'AfriMoney' | 'APS' | 'Correction'; // Added Correction
   transactionId?: string;
   note?: string;
 }
@@ -267,7 +267,7 @@ export interface OTPConfig {
 }
 
 export interface PaymentIntegrationConfig {
-    provider: 'Wave' | 'AfriMoney';
+    provider: 'Wave' | 'AfriMoney' | 'APS';
     isEnabled: boolean;
   environment: 'sandbox' | 'production';
     apiKey: string; 

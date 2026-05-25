@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { User } from '../types';
-import { AfriMoneyLogo } from './AfriMoneyLogo';
+import { WaveLogo } from './WaveLogo';
 
 interface Props {
   customers: User[];
@@ -9,7 +9,7 @@ interface Props {
 
 const generateRef = () => `BETESE-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
 
-export const AfriMoneyPaymentTab: React.FC<Props> = ({ customers, onDeposit }) => {
+export const WavePaymentTab: React.FC<Props> = ({ customers, onDeposit }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<User | null>(null);
   const [phone, setPhone] = useState('');
@@ -29,7 +29,7 @@ export const AfriMoneyPaymentTab: React.FC<Props> = ({ customers, onDeposit }) =
     e.preventDefault();
     setMessage(null);
     if (!selectedCustomer) { setMessage({ ok: false, text: 'Please select a customer.' }); return; }
-    if (!phone.trim()) { setMessage({ ok: false, text: 'Please enter AfriMoney phone number.' }); return; }
+    if (!phone.trim()) { setMessage({ ok: false, text: 'Please enter Wave phone number.' }); return; }
     const numAmount = Number(amount);
     if (!numAmount || numAmount <= 0) { setMessage({ ok: false, text: 'Please enter a valid amount.' }); return; }
 
@@ -38,7 +38,7 @@ export const AfriMoneyPaymentTab: React.FC<Props> = ({ customers, onDeposit }) =
       const externalRef = generateRef();
       const cleanPhone = phone.replace(/^\+220/, '').replace(/\D/g, '');
 
-      const res = await fetch('/.netlify/functions/afrimoney-payment', {
+      const res = await fetch('/api/wave-payment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -52,11 +52,11 @@ export const AfriMoneyPaymentTab: React.FC<Props> = ({ customers, onDeposit }) =
       const data = await res.json().catch(() => ({}));
 
       if (res.ok && data.ok) {
-        const result = await onDeposit(selectedCustomer.id, numAmount, 'AfriMoney', externalRef);
+        const result = await onDeposit(selectedCustomer.id, numAmount, 'Wave', externalRef);
         if (result.success) {
           setMessage({
             ok: true,
-            text: `✅ Payment of ${numAmount.toFixed(2)} GMD successful! Wallet credited.${result.bonusApplied ? ` Bonus: ${result.bonusApplied.toFixed(2)} GMD` : ''}`
+            text: `Payment of ${numAmount.toFixed(2)} GMD successful! Wallet credited.${result.bonusApplied ? ` Bonus: ${result.bonusApplied.toFixed(2)} GMD` : ''}`
           });
           setAmount('');
           setPhone('');
@@ -66,7 +66,7 @@ export const AfriMoneyPaymentTab: React.FC<Props> = ({ customers, onDeposit }) =
           setMessage({ ok: false, text: 'Payment sent but wallet credit failed. Contact admin.' });
         }
       } else {
-        setMessage({ ok: false, text: data.error || 'AfriMoney payment failed. Please try again.' });
+        setMessage({ ok: false, text: data.error || 'Wave payment failed. Please try again.' });
       }
     } catch {
       setMessage({ ok: false, text: 'Network error. Please check connection.' });
@@ -77,13 +77,13 @@ export const AfriMoneyPaymentTab: React.FC<Props> = ({ customers, onDeposit }) =
 
   return (
     <div className="space-y-4 animate-fade-in">
-      <div className="bg-orange-50 border-2 border-orange-200 rounded-xl p-4">
+      <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
         <div className="flex items-center gap-2 mb-2">
-          <AfriMoneyLogo height={24} />
-          <h4 className="text-lg font-black text-orange-900">AfriMoney Direct Payment</h4>
+          <WaveLogo height={24} />
+          <h4 className="text-lg font-black text-blue-900">Wave Direct Payment</h4>
         </div>
-        <p className="text-sm text-orange-700 mb-4">
-          Customer will receive a prompt on their phone to confirm payment with their PIN.
+        <p className="text-sm text-blue-700 mb-4">
+          Customer will receive a prompt on their phone to confirm payment with their Wave PIN.
         </p>
 
         {message && (
@@ -118,7 +118,7 @@ export const AfriMoneyPaymentTab: React.FC<Props> = ({ customers, onDeposit }) =
           </div>
 
           {selectedCustomer && (
-            <div className="bg-white border-2 border-orange-300 rounded-lg p-3">
+            <div className="bg-white border-2 border-blue-300 rounded-lg p-3">
               <p className="text-sm text-gray-600">Selected Customer:</p>
               <p className="font-black text-lg">{selectedCustomer.name}</p>
               <p className="text-sm">Wallet: <span className="font-bold">{selectedCustomer.walletBalance?.toFixed(2)} GMD</span></p>
@@ -126,7 +126,7 @@ export const AfriMoneyPaymentTab: React.FC<Props> = ({ customers, onDeposit }) =
           )}
 
           <div>
-            <label className="block text-sm font-bold text-gray-700 mb-1">Customer AfriMoney Phone</label>
+            <label className="block text-sm font-bold text-gray-700 mb-1">Customer Wave Phone</label>
             <input
               type="text"
               value={phone}
@@ -154,13 +154,13 @@ export const AfriMoneyPaymentTab: React.FC<Props> = ({ customers, onDeposit }) =
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 bg-orange-600 text-white font-black rounded-xl hover:bg-orange-700 disabled:opacity-50 text-lg"
+            className="w-full py-3 bg-blue-600 text-white font-black rounded-xl hover:bg-blue-700 disabled:opacity-50 text-lg"
           >
-            {loading ? '⏳ Processing...' : '💳 Send AfriMoney Payment Request'}
+            {loading ? 'Processing...' : 'Send Wave Payment Request'}
           </button>
 
           <p className="text-xs text-gray-500 text-center">
-            Customer will receive a confirmation request on their AfriMoney account.
+            Customer will receive a confirmation request on their Wave account.
           </p>
         </form>
       </div>

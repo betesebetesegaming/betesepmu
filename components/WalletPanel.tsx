@@ -6,16 +6,18 @@ import { WithdrawalCodeModal } from './WithdrawalCodeModal';
 import { normalizeGambiaPhone } from '../utils';
 import { AfriMoneyLogo } from './AfriMoneyLogo';
 import { WaveLogo } from './WaveLogo';
+import { APSLogo } from './APSLogo';
 
 const WAVE_MERCHANT_URL = 'https://pay.wave.com/m/M_gm_W5puv7Atyy-N/c/gm/';
 const AFRIMONEY_MERCHANT_URL = ''; // TODO: paste AfriMoney payment link here
+const APS_MERCHANT_URL = ''; // TODO: paste APS Wallet payment link here
 
 interface WalletPanelProps {
   user: User;
     onWithdrawalRequest: (amount: number) => Promise<WithdrawalRequest | null>;
   withdrawalRequests: WithdrawalRequest[];
   onWalletFlash: () => void;
-  onDepositRequest: (amount: number, method: 'Wave' | 'AfriMoney', transactionId: string) => void;
+  onDepositRequest: (amount: number, method: 'Wave' | 'AfriMoney' | 'APS', transactionId: string) => void;
   depositRequests: DepositRequest[];
     tickets: Ticket[];
   onCancelWithdrawal?: (requestId: string) => void; // New Prop
@@ -54,12 +56,12 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
   
   // Deposit Form State
   const [depositAmount, setDepositAmount] = useState<number | ''>('');
-  const [depositMethod, setDepositMethod] = useState<'Wave' | 'AfriMoney'>('Wave');
+  const [depositMethod, setDepositMethod] = useState<'Wave' | 'AfriMoney' | 'APS'>('Wave');
     const [depositStage, setDepositStage] = useState<'pay' | 'confirm'>('pay');
   const [depositPhone, setDepositPhone] = useState(''); // Renamed logic var, used to be txnId
   const [depositMessage, setDepositMessage] = useState('');
   const [lastDepositData, setLastDepositData] = useState<{amount: number, method: string, phone: string} | null>(null);
-    const [paymentHandoff, setPaymentHandoff] = useState<'Wave' | 'AfriMoney' | null>(null);
+    const [paymentHandoff, setPaymentHandoff] = useState<'Wave' | 'AfriMoney' | 'APS' | null>(null);
 
   // Withdrawal Form State
   const [withdrawAmount, setWithdrawAmount] = useState<number | ''>('');
@@ -172,6 +174,19 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
       setPaymentHandoff('AfriMoney');
       window.setTimeout(() => {
           window.open(AFRIMONEY_MERCHANT_URL, '_blank', 'noopener,noreferrer');
+      }, 350);
+  };
+
+  const openAPSCheckout = () => {
+      if (!APS_MERCHANT_URL) {
+          setDepositStage('confirm');
+          return;
+      }
+      const activeElement = document.activeElement as HTMLElement | null;
+      activeElement?.blur();
+      setPaymentHandoff('APS');
+      window.setTimeout(() => {
+          window.open(APS_MERCHANT_URL, '_blank', 'noopener,noreferrer');
       }, 350);
   };
 
@@ -314,9 +329,9 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
           <div className="space-y-6 animate-fade-in">
               {paymentHandoff && (
                   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-                      <div className={`w-full max-w-md rounded-3xl p-6 shadow-2xl ${paymentHandoff === 'Wave' ? 'bg-blue-50' : 'bg-purple-50'}`}>
-                          <p className={`text-xs font-black uppercase tracking-widest ${paymentHandoff === 'Wave' ? 'text-blue-700' : 'text-purple-700'}`}>Payment handoff active</p>
-                          <h4 className="mt-2 text-2xl font-black text-betese-dark">{paymentHandoff === 'Wave' ? 'Opening Wave' : 'Opening AfriMoney'}</h4>
+                      <div className={`w-full max-w-md rounded-3xl p-6 shadow-2xl ${paymentHandoff === 'Wave' ? 'bg-blue-50' : paymentHandoff === 'APS' ? 'bg-indigo-50' : 'bg-purple-50'}`}>
+                          <p className={`text-xs font-black uppercase tracking-widest ${paymentHandoff === 'Wave' ? 'text-blue-700' : paymentHandoff === 'APS' ? 'text-indigo-700' : 'text-purple-700'}`}>Payment handoff active</p>
+                          <h4 className="mt-2 text-2xl font-black text-betese-dark">{paymentHandoff === 'Wave' ? 'Opening Wave' : paymentHandoff === 'APS' ? 'Opening APS Wallet' : 'Opening AfriMoney'}</h4>
                           <p className="mt-3 text-sm text-gray-700">
                               The Betese keyboard is hidden now. Finish the payment in the app that opens, then come back to Betese.
                           </p>
@@ -335,17 +350,62 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
                   </div>
               )}
 
+              {!paymentHandoff && depositStage === 'pay' && (
+                <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-4 rounded-xl border-2 border-betese-green shadow-sm">
+                  <p className="text-xs font-black uppercase tracking-widest text-betese-green mb-2 text-center">Step 1 — Choose your payment method</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setDepositMethod('Wave')}
+                      className={`flex items-center justify-center py-3 px-2 rounded-lg border-2 transition-all ${depositMethod === 'Wave' ? 'border-blue-500 bg-blue-50 shadow-md' : 'border-gray-200 bg-white hover:border-gray-400'}`}
+                    >
+                      <WaveLogo height={26} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDepositMethod('AfriMoney')}
+                      className={`flex items-center justify-center py-3 px-2 rounded-lg border-2 transition-all ${depositMethod === 'AfriMoney' ? 'border-purple-700 bg-purple-50 shadow-md' : 'border-gray-200 bg-white hover:border-gray-400'}`}
+                    >
+                      <AfriMoneyLogo height={22} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDepositMethod('APS')}
+                      className={`flex items-center justify-center py-3 px-2 rounded-lg border-2 transition-all ${depositMethod === 'APS' ? 'border-indigo-700 bg-indigo-50 shadow-md' : 'border-gray-200 bg-white hover:border-gray-400'}`}
+                    >
+                      <APSLogo height={36} />
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div className="bg-blue-50 p-4 rounded border border-blue-200 text-sm text-blue-800">
                   <p className="font-bold mb-2">{t('how_to_deposit')}</p>
-                  
-                  <div className="my-3 p-3 bg-white rounded border border-blue-100 text-center shadow-sm">
+
+                  {depositMethod === 'Wave' && (
+                    <div className="my-3 p-3 bg-white rounded border border-blue-100 text-center shadow-sm">
                         <p className="text-xs text-gray-500 uppercase font-bold mb-1">Wave Payment Link</p>
                         <p className="text-sm font-black text-betese-dark break-all px-2">{WAVE_MERCHANT_URL}</p>
                         <div className="flex items-center justify-center gap-2 mt-1">
                             <span className="w-2 h-2 rounded-full bg-blue-500"></span>
                             <p className="text-sm text-blue-700 font-bold">Desktop shows QR, phone opens Wave app</p>
                         </div>
-                  </div>
+                    </div>
+                  )}
+
+                  {depositMethod === 'AfriMoney' && (
+                    <div className="my-3 p-3 bg-white rounded border border-purple-100 text-center shadow-sm">
+                        <p className="text-xs text-gray-500 uppercase font-bold mb-1">AfriMoney Payment Link</p>
+                        <p className="text-sm font-black text-betese-dark break-all px-2">{AFRIMONEY_MERCHANT_URL || 'Link will be provided after AfriMoney onboarding.'}</p>
+                    </div>
+                  )}
+
+                  {depositMethod === 'APS' && (
+                    <div className="my-3 p-3 bg-white rounded border border-indigo-100 text-center shadow-sm">
+                        <p className="text-xs text-gray-500 uppercase font-bold mb-1">APS Wallet Payment Link</p>
+                        <p className="text-sm font-black text-betese-dark break-all px-2">{APS_MERCHANT_URL || 'Link will be provided after APS onboarding.'}</p>
+                    </div>
+                  )}
 
                   <ol className="list-decimal pl-5 space-y-1">
                       <li>{t('deposit_step_1')}</li>
@@ -410,6 +470,34 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
                   </div>
               )}
 
+              {/* APS pay button */}
+              {depositMethod === 'APS' && !paymentHandoff && (
+                  <div className="rounded-2xl border-2 border-indigo-400 bg-indigo-50 p-4 flex flex-col items-center gap-3">
+                      <p className="text-xs font-black uppercase tracking-widest text-indigo-700">Step 1 — Pay with APS Wallet first</p>
+                      <button
+                          type="button"
+                          onClick={openAPSCheckout}
+                          className="w-full flex items-center justify-center gap-3 rounded-xl bg-indigo-800 px-5 py-4 font-black text-white text-base shadow-lg hover:bg-indigo-900 active:scale-95 transition-all border-b-4 border-indigo-950"
+                      >
+                          <APSLogo height={30} />
+                          PAY WITH APS
+                      </button>
+                      <p className="text-[11px] text-indigo-700 font-semibold text-center">
+                          Tap the button — APS Wallet opens in a new window.<br/>
+                          Log in with <strong>your own APS Wallet account</strong> and pay.<br/>
+                          Then come back here and fill in the form below.
+                      </p>
+                      <button
+                          type="button"
+                          onClick={() => setDepositStage('confirm')}
+                          className="w-full rounded-xl border-2 border-indigo-500 bg-white px-4 py-3 font-black text-indigo-700 hover:bg-indigo-100 active:scale-95 transition-all"
+                      >
+                          I HAVE PAID - ENTER PHONE NUMBER
+                      </button>
+                      <p className="text-xs font-black uppercase tracking-widest text-indigo-500 mt-1">Step 2 — Confirm your payment below</p>
+                  </div>
+              )}
+
               {!paymentHandoff && depositStage === 'confirm' && (
               <form onSubmit={handleDepositSubmit} className="space-y-3">
                   <div>
@@ -423,25 +511,18 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
                         required
                       />
                   </div>
-                  <div>
-                      <label className="block text-sm font-medium text-gray-700">{t('payment_method')}</label>
-                      {/* Custom method picker — shows logos instead of plain text */}
-                      <div className="flex gap-2 mt-1">
-                          <button
-                              type="button"
-                              onClick={() => setDepositMethod('Wave')}
-                              className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md border-2 transition-all ${depositMethod === 'Wave' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}
-                          >
-                              <WaveLogo height={20} />
-                          </button>
-                          <button
-                              type="button"
-                              onClick={() => setDepositMethod('AfriMoney')}
-                              className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md border-2 transition-all ${depositMethod === 'AfriMoney' ? 'border-purple-700 bg-purple-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}
-                          >
-                              <AfriMoneyLogo height={20} />
-                          </button>
-                      </div>
+                  <div className="rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 flex items-center gap-2 text-sm">
+                      <span className="text-gray-500 font-semibold">Paying with:</span>
+                      <span className="font-black text-gray-800">
+                          {depositMethod === 'Wave' ? 'Wave' : depositMethod === 'AfriMoney' ? 'AfriMoney' : 'APS Wallet'}
+                      </span>
+                      <button
+                          type="button"
+                          onClick={() => { setDepositStage('pay'); setDepositMessage(''); }}
+                          className="ml-auto text-xs font-bold text-betese-green hover:underline"
+                      >
+                          Change
+                      </button>
                   </div>
                   <div>
                       <label className="block text-sm font-medium text-gray-700">{t('sender_phone')}</label>
@@ -473,7 +554,7 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
                   )}
                   {!depositMessage && (
                     <button type="submit" className="w-full px-4 py-3 bg-betese-green text-white font-bold rounded-lg hover:brightness-110 active:scale-95 transition-all">
-                        {depositMethod === 'Wave' ? 'Confirm Wave Payment' : depositMethod === 'AfriMoney' ? 'Confirm AfriMoney Payment' : t('submit_deposit')}
+                        {depositMethod === 'Wave' ? 'Confirm Wave Payment' : depositMethod === 'AfriMoney' ? 'Confirm AfriMoney Payment' : depositMethod === 'APS' ? 'Confirm APS Payment' : t('submit_deposit')}
                     </button>
                   )}
               </form>

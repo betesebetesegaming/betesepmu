@@ -3,11 +3,14 @@ import { User, DepositLog, DepositRequest, Role } from '../types';
 import { TableScrollNavigator } from './TableScrollNavigator';
 import { AfriMoneyLogo } from './AfriMoneyLogo';
 import { WaveLogo } from './WaveLogo';
+import { APSLogo } from './APSLogo';
 import { AfriMoneyPaymentTab } from './AfriMoneyPaymentTab';
+import { WavePaymentTab } from './WavePaymentTab';
+import { APSPaymentTab } from './APSPaymentTab';
 
 interface CustomerDepositPanelProps {
   customers: User[];
-  onDeposit: (customerId: string, amount: number, method: 'Cash' | 'Wave' | 'AfriMoney' | 'Correction', transactionId?: string) => Promise<{ success: boolean; bonusApplied: number | null }>;
+  onDeposit: (customerId: string, amount: number, method: 'Cash' | 'Wave' | 'AfriMoney' | 'APS' | 'Correction', transactionId?: string) => Promise<{ success: boolean; bonusApplied: number | null }>;
   onAdminAdjustBalance?: (customerId: string, walletDelta: number, bonusDelta: number, note: string, approvalPin?: string) => Promise<{ success: boolean; message: string }>;
   depositLogs: DepositLog[];
   depositRequests?: DepositRequest[];
@@ -20,14 +23,14 @@ interface CustomerDepositPanelProps {
 export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ customers, onDeposit, onAdminAdjustBalance, depositLogs, depositRequests = [], onApproveDepositRequest, onRejectDepositRequest, currentUserRole, currentUserName }) => {
   const isBackofficeApprover = currentUserRole === 'Admin' || currentUserRole === 'Supervisor';
   const approverDisplayName = currentUserName?.trim() || currentUserRole;
-  const [activeTab, setActiveTab] = useState<'requests' | 'manual' | 'afrimoney' | 'history'>(
+  const [activeTab, setActiveTab] = useState<'requests' | 'manual' | 'wave' | 'afrimoney' | 'aps' | 'history'>(
     isBackofficeApprover ? 'requests' : 'manual'
   );
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<User | null>(null);
   const [amount, setAmount] = useState<number | ''>('');
   const [successMessage, setSuccessMessage] = useState('');
-  const [methodFilter, setMethodFilter] = useState<'All' | 'Cash' | 'Wave' | 'AfriMoney' | 'Correction'>('All');
+  const [methodFilter, setMethodFilter] = useState<'All' | 'Cash' | 'Wave' | 'AfriMoney' | 'APS' | 'Correction'>('All');
   const [trackingCustomerId, setTrackingCustomerId] = useState('');
   const [walletAdjustment, setWalletAdjustment] = useState<number | ''>('');
   const [bonusAdjustment, setBonusAdjustment] = useState<number | ''>('');
@@ -290,29 +293,51 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
         </div>
       </div>
 
-      <div className="flex mb-4 border-b overflow-x-auto">
+      <div className="flex mb-4 border-b overflow-x-auto gap-1 sm:gap-2">
         {isBackofficeApprover && (
           <button onClick={() => setActiveTab('requests')}
-            className={`flex-1 py-2 text-center font-bold text-sm whitespace-nowrap ${activeTab === 'requests' ? 'border-b-4 border-betese-green text-betese-green' : 'text-gray-500'}`}>
-            Approve Online {pendingRequests.length > 0 && <span className="ml-1 bg-red-500 text-white rounded-full px-2 py-0.5 text-xs animate-pulse">{pendingRequests.length}</span>}
+            className={`flex-1 min-w-[64px] px-1.5 sm:px-3 py-2 text-center font-bold text-xs sm:text-sm whitespace-nowrap ${activeTab === 'requests' ? 'border-b-4 border-betese-green text-betese-green' : 'text-gray-500'}`}>
+            <span className="sm:hidden">Approve</span>
+            <span className="hidden sm:inline">Approve Online</span>
+            {pendingRequests.length > 0 && <span className="ml-1 bg-red-500 text-white rounded-full px-2 py-0.5 text-xs animate-pulse">{pendingRequests.length}</span>}
           </button>
         )}
         <button onClick={() => setActiveTab('manual')}
-          className={`flex-1 py-2 text-center font-bold text-sm whitespace-nowrap ${activeTab === 'manual' ? 'border-b-4 border-betese-green text-betese-green' : 'text-gray-500'}`}>
-          Cash Deposit
+          className={`flex-1 min-w-[64px] px-1.5 sm:px-3 py-2 text-center font-bold text-xs sm:text-sm whitespace-nowrap ${activeTab === 'manual' ? 'border-b-4 border-betese-green text-betese-green' : 'text-gray-500'}`}>
+          <span className="sm:hidden">Cash</span>
+          <span className="hidden sm:inline">Cash Deposit</span>
+        </button>
+        <button onClick={() => setActiveTab('wave')}
+          className={`flex-1 min-w-[56px] px-1.5 sm:px-3 py-2 text-center font-bold text-xs sm:text-sm whitespace-nowrap ${activeTab === 'wave' ? 'border-b-4 border-betese-green text-betese-green' : 'text-gray-500'}`}>
+          <span className="sm:hidden">Wave</span>
+          <span className="hidden sm:inline">Wave Pay</span>
         </button>
         <button onClick={() => setActiveTab('afrimoney')}
-          className={`flex-1 py-2 text-center font-bold text-sm whitespace-nowrap ${activeTab === 'afrimoney' ? 'border-b-4 border-betese-green text-betese-green' : 'text-gray-500'}`}>
-          AfriMoney Pay
+          className={`flex-1 min-w-[72px] px-1.5 sm:px-3 py-2 text-center font-bold text-xs sm:text-sm whitespace-nowrap ${activeTab === 'afrimoney' ? 'border-b-4 border-betese-green text-betese-green' : 'text-gray-500'}`}>
+          <span className="sm:hidden">AfriMoney</span>
+          <span className="hidden sm:inline">AfriMoney Pay</span>
+        </button>
+        <button onClick={() => setActiveTab('aps')}
+          className={`flex-1 min-w-[48px] px-1.5 sm:px-3 py-2 text-center font-bold text-xs sm:text-sm whitespace-nowrap ${activeTab === 'aps' ? 'border-b-4 border-betese-green text-betese-green' : 'text-gray-500'}`}>
+          <span className="sm:hidden">APS</span>
+          <span className="hidden sm:inline">APS Pay</span>
         </button>
         <button onClick={() => setActiveTab('history')}
-          className={`flex-1 py-2 text-center font-bold text-sm whitespace-nowrap ${activeTab === 'history' ? 'border-b-4 border-betese-green text-betese-green' : 'text-gray-500'}`}>
+          className={`flex-1 min-w-[56px] px-1.5 sm:px-3 py-2 text-center font-bold text-xs sm:text-sm whitespace-nowrap ${activeTab === 'history' ? 'border-b-4 border-betese-green text-betese-green' : 'text-gray-500'}`}>
           History
         </button>
       </div>
 
+      {activeTab === 'wave' && (
+        <WavePaymentTab customers={customers} onDeposit={onDeposit} />
+      )}
+
       {activeTab === 'afrimoney' && (
         <AfriMoneyPaymentTab customers={customers} onDeposit={onDeposit} />
+      )}
+
+      {activeTab === 'aps' && (
+        <APSPaymentTab customers={customers} onDeposit={onDeposit} />
       )}
 
       {activeTab === 'requests' && isBackofficeApprover && (
@@ -478,10 +503,10 @@ export const CustomerDepositPanel: React.FC<CustomerDepositPanelProps> = ({ cust
           )}
 
           <div className="flex flex-wrap items-center gap-2 bg-gray-50 p-3 rounded-lg border">
-            {(['All', 'Cash', 'Wave', 'AfriMoney', 'Correction'] as const).map(opt => (
+            {(['All', 'Cash', 'Wave', 'AfriMoney', 'APS', 'Correction'] as const).map(opt => (
               <button key={opt} type="button" onClick={() => setMethodFilter(opt)}
                 className={`px-3 py-1.5 rounded-full border text-xs font-bold ${methodFilter === opt ? 'bg-betese-green text-white' : 'bg-white text-gray-600'}`}>
-                {opt === 'Wave' ? <WaveLogo height={14} /> : opt === 'AfriMoney' ? <AfriMoneyLogo height={14} /> : opt}
+                {opt === 'Wave' ? <WaveLogo height={14} /> : opt === 'AfriMoney' ? <AfriMoneyLogo height={14} /> : opt === 'APS' ? <APSLogo height={20} iconOnly /> : opt}
               </button>
             ))}
             <button type="button" onClick={exportHistoryCsv}

@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { DepositLog, Ticket, User } from '../types';
 import { TableScrollNavigator } from './TableScrollNavigator';
-import { supabase, dbFetchVendorCommissionConfig, dbSaveVendorCommissionConfig } from '../supabaseClient';
+import { realtimeDb, dbFetchVendorCommissionConfig, dbSaveVendorCommissionConfig } from '../firebaseClient';
 
 interface VendorMonitorPanelProps {
     allTickets: Ticket[];
@@ -112,15 +112,15 @@ export const VendorMonitorPanel: React.FC<VendorMonitorPanelProps> = ({
         };
 
         const loadCommissionConfig = async () => {
-            // Load ONLY from online Supabase (required - no offline fallback)
-            if (supabase) {
+            // Load ONLY from online realtimeDb (required - no offline fallback)
+            if (realtimeDb) {
                 try {
                     const remote = await dbFetchVendorCommissionConfig();
                     if (remote) {
                         applyLoadedConfig(remote);
                     }
                 } catch (err) {
-                    console.error("Failed to load commission config from Supabase:", err);
+                    console.error("Failed to load commission config from realtimeDb:", err);
                 }
             }
 
@@ -143,10 +143,10 @@ export const VendorMonitorPanel: React.FC<VendorMonitorPanelProps> = ({
             settlementPlans: vendorSettlementPlans,
         };
 
-        // Save ONLY to online Supabase (no local storage fallback)
-        if (supabase) {
+        // Save ONLY to online realtimeDb (no local storage fallback)
+        if (realtimeDb) {
             dbSaveVendorCommissionConfig(payload).catch((err) => {
-                console.error("Failed to save commission config to Supabase:", err);
+                console.error("Failed to save commission config to realtimeDb:", err);
             });
         }
     }, [defaultRates, vendorRateOverrides, vendorSettlementPlans, commissionConfigLoaded]);

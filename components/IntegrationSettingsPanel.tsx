@@ -3,7 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { PaymentIntegrationConfig, OTPConfig } from '../types';
 import { AfriMoneyLogo } from './AfriMoneyLogo';
 import { WaveLogo } from './WaveLogo';
-import { dbFetchOTPConfig, dbSaveOTPConfig } from '../supabaseClient';
+import { APSLogo } from './APSLogo';
+import { dbFetchOTPConfig, dbSaveOTPConfig } from '../firebaseClient';
 
 interface IntegrationSettingsPanelProps {
     configs: PaymentIntegrationConfig[];
@@ -11,7 +12,7 @@ interface IntegrationSettingsPanelProps {
 }
 
 export const IntegrationSettingsPanel: React.FC<IntegrationSettingsPanelProps> = ({ configs, onSave }) => {
-    const [activeProvider, setActiveProvider] = useState<'Wave' | 'AfriMoney' | 'OTP'>('Wave');
+    const [activeProvider, setActiveProvider] = useState<'Wave' | 'AfriMoney' | 'APS' | 'OTP'>('Wave');
     const [showOTPConfig, setShowOTPConfig] = useState(false);
     const [otpConfig, setOTPConfig] = useState<OTPConfig>({
         isEnabled: false,
@@ -192,12 +193,22 @@ export const IntegrationSettingsPanel: React.FC<IntegrationSettingsPanelProps> =
                 <button
                     onClick={() => setActiveProvider('AfriMoney')}
                     className={`flex-1 py-3 flex items-center justify-center gap-2 font-bold text-lg transition-colors ${
-                        activeProvider === 'AfriMoney' 
-                            ? 'border-b-4 border-purple-700 bg-purple-50' 
+                        activeProvider === 'AfriMoney'
+                            ? 'border-b-4 border-purple-700 bg-purple-50'
                             : 'text-gray-500 hover:bg-gray-50'
                     }`}
                 >
                     <AfriMoneyLogo height={24} />
+                </button>
+                <button
+                    onClick={() => setActiveProvider('APS')}
+                    className={`flex-1 py-3 flex items-center justify-center gap-2 font-bold text-lg transition-colors ${
+                        activeProvider === 'APS'
+                            ? 'border-b-4 border-blue-900 bg-blue-50'
+                            : 'text-gray-500 hover:bg-gray-50'
+                    }`}
+                >
+                    <APSLogo height={36} />
                 </button>
                 <button
                     onClick={() => setActiveProvider('OTP')}
@@ -272,7 +283,7 @@ export const IntegrationSettingsPanel: React.FC<IntegrationSettingsPanelProps> =
                             <input 
                                 type="text" 
                                 className="w-full p-2 border border-gray-300 rounded font-mono text-sm"
-                                placeholder={`e.g., ${activeProvider === 'Wave' ? 'wave_ci_...' : 'afri_key_...'}`}
+                                placeholder={`e.g., ${activeProvider === 'Wave' ? 'wave_ci_...' : activeProvider === 'APS' ? 'aps_key_...' : 'afri_key_...'}`}
                                 value={formData.apiKey}
                                 onChange={(e) => handleChange('apiKey', e.target.value)}
                             />
@@ -360,7 +371,7 @@ export const IntegrationSettingsPanel: React.FC<IntegrationSettingsPanelProps> =
                         <input
                             type="text"
                             className="w-full p-2 border border-gray-300 rounded font-mono text-sm"
-                            placeholder={activeProvider === 'Wave' ? 'https://api.wave.com/...' : 'https://api.afrimoney.com/...'}
+                            placeholder={activeProvider === 'Wave' ? 'https://api.wave.com/...' : activeProvider === 'APS' ? 'https://api.aps.com/...' : 'https://api.afrimoney.com/...'}
                             value={formData.baseUrl}
                             onChange={(e) => handleChange('baseUrl', e.target.value)}
                         />

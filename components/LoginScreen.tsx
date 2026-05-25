@@ -5,7 +5,7 @@ import { Logo } from './Logo';
 import { RulesModal } from './RulesModal';
 import { useLanguage } from '../LanguageContext';
 import { normalizeGambiaPhone } from '../utils';
-import { dbFindUser, dbAuthenticateViaFunction } from '../supabaseClient';
+import { dbFindUser, dbAuthenticateViaFunction } from '../firebaseClient';
 
 interface LoginScreenProps {
   onLogin: (user: User) => void;
@@ -209,7 +209,7 @@ const LoginForm: React.FC<{ onLogin: (user: User) => void; users: User[]; onSwit
             return;
         }
 
-        // Fallback 1: direct Supabase query (catches users not yet in preloaded array)
+        // Fallback 1: direct database query (catches users not yet in preloaded array)
         let user: User | null = null;
         try {
             user = await dbFindUser(rawUsername);

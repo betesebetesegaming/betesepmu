@@ -28,7 +28,7 @@
     "constants.ts",
     "monitor.ts",
     "perf.ts",
-    "supabaseClient.ts",
+    "firebaseClient.ts",
     "types.ts",
     "utils.ts",
     ".next/types/**/*.ts"
