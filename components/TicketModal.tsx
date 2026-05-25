@@ -1,9 +1,9 @@
 
 import React from 'react';
 import { Ticket, Race } from '../types';
-import { triggerPrint, formatWinningNumbersForDisplay } from '../utils';
-import { printEscPos, hasThermalService } from '../lib/printerBridge';
-import { buildTicketEscPos, buildPaidReceiptEscPos } from '../lib/ticketEscPos';
+import { formatWinningNumbersForDisplay } from '../utils';
+import { printViaThermer } from '../lib/printerBridge';
+import { buildThermerTicketEntries, buildThermerPaidReceiptEntries } from '../lib/thermerReceipt';
 
 interface TicketModalProps {
   ticket: Ticket;
@@ -17,46 +17,38 @@ export const TicketModal: React.FC<TicketModalProps> = ({ ticket, onClose, showP
   const [printStatus, setPrintStatus] = React.useState('');
   const autoPrintStartedRef = React.useRef(false);
 
-  const buildBytes = React.useCallback(() => {
-    return ticket.status === 'Paid' ? buildPaidReceiptEscPos(ticket) : buildTicketEscPos(ticket);
+  const buildEntries = React.useCallback(() => {
+    return ticket.status === 'Paid'
+      ? buildThermerPaidReceiptEntries(ticket)
+      : buildThermerTicketEntries(ticket);
   }, [ticket]);
-
-  const cssPrintFallback = React.useCallback(() => {
-    triggerPrint(`ticket-receipt-${ticket.id}`);
-  }, [ticket.id]);
 
   const handlePrint = React.useCallback(async () => {
     if (isPrinting) return;
     setIsPrinting(true);
-    setPrintStatus('Printing…');
+    setPrintStatus('Sending to Thermer…');
     try {
-      const bytes = buildBytes();
-      const result = await printEscPos(bytes);
+      const entries = buildEntries();
+      const result = await printViaThermer(entries);
       if (result.ok) {
-        setPrintStatus('Printed ✓');
-      } else if (result.transport === 'none') {
-        // No on-device thermal service (e.g. desktop QA). Use CSS print
-        // silently — never a Bluetooth dialog, never a pairing prompt.
-        setPrintStatus('No on-device printer — using preview…');
-        cssPrintFallback();
+        setPrintStatus(
+          result.transport === 'thermer-intent' ? 'Sent to Thermer ✓' : 'Sent to Thermer ✓',
+        );
       } else {
-        setPrintStatus(result.message || 'Print failed');
+        setPrintStatus(result.message || 'Could not reach Thermer');
       }
     } catch (err) {
-      console.error('❌ Print failed:', err);
+      console.error('Print failed:', err);
       setPrintStatus((err as Error)?.message || 'Print failed');
     } finally {
-      setTimeout(() => setIsPrinting(false), 1500);
+      setTimeout(() => setIsPrinting(false), 1200);
     }
-  }, [isPrinting, buildBytes, cssPrintFallback]);
+  }, [isPrinting, buildEntries]);
 
   React.useEffect(() => {
     if (!showPrintButton) return;
     if (autoPrintStartedRef.current) return;
     autoPrintStartedRef.current = true;
-    // Auto-fire on the device's thermal service. Never on web (would be a
-    // surprise OS print preview).
-    if (!hasThermalService()) return;
     let cancelled = false;
     setPrintStatus('Auto print starting…');
     const timer = window.setTimeout(() => {
@@ -202,7 +194,7 @@ export const TicketModal: React.FC<TicketModalProps> = ({ ticket, onClose, showP
                   {isPrinting ? 'PRINTING…' : 'PRINT TICKET'}
                 </button>
                 <div className="text-center text-xs font-semibold text-gray-600 py-1 min-h-[1.25rem]">
-                  {printStatus || 'Prints directly on the device\u2019s built-in thermal printer.'}
+                  {printStatus || 'Prints via the Thermer app on your device.'}
                 </div>
               </>
             )}

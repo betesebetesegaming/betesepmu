@@ -1,121 +1,119 @@
 /**
- * Direct print bridge for the device's built-in thermal printer.
+ * Thermer-only print bridge.
  *
- * No Bluetooth pairing, no picker dialog, no redirection. The ESC/POS bytes
- * are pushed straight into the on-device thermal printer service (Sunmi AIDL
- * via the SunmiPrint Capacitor plugin, or the SunmiInnerPrinter WebView JS
- * bridge if the page is hosted inside a Sunmi browser).
+ * The user's V2 Pro / Sunmi handhelds have the Thermer app
+ * (`mate.bluetoothprint`, "Bluetooth Mini Thermal Printer") installed with
+ * Browser-Print enabled. Printing is a single URL hand-off:
  *
- * If neither transport is reachable (e.g. running on a desktop browser for
- * QA), the caller can fall back to CSS print.
+ *   1. We build a JSON payload of print entries (lib/thermerReceipt.ts).
+ *   2. We base64-encode it and put it in the URL of our Next.js route
+ *      `/api/print-receipt?data=<base64>` — the Response URL.
+ *   3. We navigate to a custom-scheme URL whose `msg=` param is that
+ *      Response URL. Android hands the link to the Thermer app, which
+ *      fetches the JSON and prints it on whichever printer it has
+ *      configured (the V2 Pro's internal printer — no Bluetooth, no
+ *      pairing, no picker).
+ *
+ * Public docs strip the literal scheme; the most-cited candidate is
+ * `bluetoothprint:msg?msg=<URL>`. We try that first, and if Android
+ * doesn't pick it up within a short window we fall back to the
+ * intent:// form with the package pinned to `mate.bluetoothprint`.
+ *
+ * No Bluetooth, no AIDL, no Web Bluetooth, no pairing — by design.
  */
 
-import { registerPlugin, Capacitor } from '@capacitor/core';
+import { ThermerEntry, encodeThermerPayload } from './thermerReceipt';
 
-interface SunmiPrintPlugin {
-  /** Send raw ESC/POS bytes (base64) straight to the AIDL printer service. */
-  sendRaw(options: { base64: string }): Promise<{ success: boolean; bytes?: number }>;
-  /** Forward plain text (honours embedded ESC/POS commands). */
-  printText(options: { text: string }): Promise<{ success: boolean }>;
-  /** Feed + partial cut. */
-  cutPaper(): Promise<{ success: boolean }>;
-}
-
-const SunmiPrint = registerPlugin<SunmiPrintPlugin>('SunmiPrint');
-
-type SunmiWebBridge = {
-  sendRAWData?: (base64: string) => void;
-  printerInit?: () => void;
-  printerFeedPaper?: (n: number) => void;
-  cutpaper?: () => void;
-};
-
-const getSunmiWebBridge = (): SunmiWebBridge | null => {
-  if (typeof window === 'undefined') return null;
-  const w = window as unknown as { SunmiInnerPrinter?: SunmiWebBridge };
-  return w.SunmiInnerPrinter ?? null;
-};
-
-const toBase64 = (bytes: Uint8Array): string => {
-  let binary = '';
-  const chunkSize = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunkSize)));
-  }
-  return btoa(binary);
-};
+const THERMER_PACKAGE = 'mate.bluetoothprint';
 
 export type PrintResult = {
   ok: boolean;
-  transport: 'sunmi-aidl' | 'sunmi-webview' | 'none';
+  transport: 'thermer' | 'thermer-intent' | 'none';
   message?: string;
 };
 
+const buildResponseUrl = (entries: ThermerEntry[]): string => {
+  if (typeof window === 'undefined') {
+    throw new Error('printEscPos must be called in the browser');
+  }
+  const data = encodeThermerPayload(entries);
+  const origin = window.location.origin.replace(/\/$/, '');
+  return `${origin}/api/print-receipt?data=${encodeURIComponent(data)}`;
+};
+
+const buildBluetoothPrintUrl = (responseUrl: string): string =>
+  `bluetoothprint:msg?msg=${encodeURIComponent(responseUrl)}`;
+
+const buildIntentUrl = (responseUrl: string): string =>
+  `intent://msg?msg=${encodeURIComponent(responseUrl)}` +
+  `#Intent;scheme=bluetoothprint;package=${THERMER_PACKAGE};end`;
+
+const navigateTo = (url: string): void => {
+  // Using window.location is the most reliable cross-browser way to fire a
+  // custom-scheme URL on Android. window.open and <a target=_blank> are
+  // sometimes blocked or break the handoff.
+  window.location.href = url;
+};
+
 /**
- * Push ESC/POS bytes to the built-in thermal printer.
- *
- * No dialogs, no pairing — if a thermal print service is on the device the
- * paper comes out immediately. Returns `{ok:false, transport:'none'}` when
- * we're running off-device (e.g. a desktop browser); the caller can then
- * trigger a regular CSS print as a last-resort fallback.
+ * Send the entries to Thermer. Resolves immediately after firing the URL —
+ * we can't observe whether the app actually printed; that's between the
+ * user, the app, and the printer. The promise resolves with `ok:false` only
+ * when we can't even attempt the navigation (e.g. SSR).
  */
-export const printEscPos = async (bytes: Uint8Array): Promise<PrintResult> => {
-  const base64 = toBase64(bytes);
-
-  // 1. Native AIDL via Capacitor plugin — fastest, byte-perfect, no dialog.
-  if (Capacitor.isNativePlatform()) {
-    try {
-      const res = await SunmiPrint.sendRaw({ base64 });
-      if (res?.success) {
-        return { ok: true, transport: 'sunmi-aidl' };
-      }
-    } catch (err) {
-      const message = (err as Error)?.message || 'Sunmi printer not available';
-      // Sunmi service refused (probably not a Sunmi device). Try the JS
-      // bridge in case the page runs inside a non-Capacitor Sunmi WebView.
-      const bridge = getSunmiWebBridge();
-      if (bridge?.sendRAWData) {
-        try {
-          bridge.printerInit?.();
-          bridge.sendRAWData(base64);
-          bridge.printerFeedPaper?.(3);
-          bridge.cutpaper?.();
-          return { ok: true, transport: 'sunmi-webview' };
-        } catch {
-          /* fall through */
-        }
-      }
-      return { ok: false, transport: 'none', message };
-    }
+export const printViaThermer = async (entries: ThermerEntry[]): Promise<PrintResult> => {
+  if (typeof window === 'undefined') {
+    return { ok: false, transport: 'none', message: 'Not running in a browser' };
+  }
+  if (!Array.isArray(entries) || entries.length === 0) {
+    return { ok: false, transport: 'none', message: 'Nothing to print' };
   }
 
-  // 2. Sunmi WebView JS bridge (page running inside a Sunmi browser shell).
-  const bridge = getSunmiWebBridge();
-  if (bridge?.sendRAWData) {
-    try {
-      bridge.printerInit?.();
-      bridge.sendRAWData(base64);
-      bridge.printerFeedPaper?.(3);
-      bridge.cutpaper?.();
-      return { ok: true, transport: 'sunmi-webview' };
-    } catch (err) {
-      return {
-        ok: false,
-        transport: 'sunmi-webview',
-        message: (err as Error)?.message || 'Sunmi WebView print failed',
-      };
-    }
+  let responseUrl: string;
+  try {
+    responseUrl = buildResponseUrl(entries);
+  } catch (err) {
+    return {
+      ok: false,
+      transport: 'none',
+      message: err instanceof Error ? err.message : String(err),
+    };
   }
 
-  return {
-    ok: false,
-    transport: 'none',
-    message: 'No on-device thermal printer service detected.',
+  const primary = buildBluetoothPrintUrl(responseUrl);
+  const intentUrl = buildIntentUrl(responseUrl);
+
+  // Mark that we attempted a handoff. If the page is still visible after a
+  // moment we assume the primary scheme wasn't recognised and try the
+  // intent:// form, which Android Chrome resolves to the specific Thermer
+  // package even if the custom scheme isn't registered system-wide.
+  const startedAt = Date.now();
+  let handedOff = false;
+  const onVisibilityChange = () => {
+    if (document.hidden) handedOff = true;
   };
+  document.addEventListener('visibilitychange', onVisibilityChange);
+
+  navigateTo(primary);
+
+  await new Promise<void>((resolve) => {
+    window.setTimeout(resolve, 700);
+  });
+
+  document.removeEventListener('visibilitychange', onVisibilityChange);
+
+  if (handedOff || Date.now() - startedAt > 1500) {
+    return { ok: true, transport: 'thermer' };
+  }
+
+  // Browser is still on our page — the custom scheme didn't resolve. Try
+  // the intent fallback, which forces Android to dispatch to the Thermer
+  // package directly.
+  navigateTo(intentUrl);
+  return { ok: true, transport: 'thermer-intent' };
 };
 
-/** True if a built-in thermal printer service is reachable from this page. */
-export const hasThermalService = (): boolean => {
-  if (Capacitor.isNativePlatform()) return true;
-  return !!getSunmiWebBridge()?.sendRAWData;
-};
+/** Build the Thermer Response URL without navigating — useful for "open in
+ *  app" buttons that the user taps themselves. */
+export const buildThermerHandoffUrl = (entries: ThermerEntry[]): string =>
+  buildBluetoothPrintUrl(buildResponseUrl(entries));
