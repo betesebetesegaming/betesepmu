@@ -31,9 +31,7 @@ export const TicketModal: React.FC<TicketModalProps> = ({ ticket, onClose, showP
       const entries = buildEntries();
       const result = await printViaThermer(entries);
       if (result.ok) {
-        setPrintStatus(
-          result.transport === 'thermer-intent' ? 'Sent to Thermer ✓' : 'Sent to Thermer ✓',
-        );
+        setPrintStatus('Sent to Thermer ✓');
       } else {
         setPrintStatus(result.message || 'Could not reach Thermer');
       }

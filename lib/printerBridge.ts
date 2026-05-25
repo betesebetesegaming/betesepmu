@@ -1,40 +1,36 @@
 /**
  * Thermer-only print bridge.
  *
- * The user's V2 Pro / Sunmi handhelds have the Thermer app
- * (`mate.bluetoothprint`, "Bluetooth Mini Thermal Printer") installed with
- * Browser-Print enabled. Printing is a single URL hand-off:
+ * The user's V2 Pro / Sunmi handhelds have a Browser-Print thermal app
+ * installed (Thermer / Bluetooth Mini Thermal Printer). Printing is one
+ * URL hand-off, no Bluetooth pairing, no picker:
  *
- *   1. We build a JSON payload of print entries (lib/thermerReceipt.ts).
- *   2. We base64-encode it and put it in the URL of our Next.js route
- *      `/api/print-receipt?data=<base64>` — the Response URL.
- *   3. We navigate to a custom-scheme URL whose `msg=` param is that
- *      Response URL. Android hands the link to the Thermer app, which
- *      fetches the JSON and prints it on whichever printer it has
- *      configured (the V2 Pro's internal printer — no Bluetooth, no
- *      pairing, no picker).
+ *   1. Build a JSON payload of print entries (lib/thermerReceipt.ts).
+ *   2. Base64-encode it and put it in /api/print-receipt?data=<base64>.
+ *      That URL is the "Response URL" the print app fetches.
+ *   3. Click a link with the custom-scheme URL whose `msg=` param is
+ *      that Response URL. Android hands the link to the print app, which
+ *      fetches the JSON and prints it on whatever printer it's
+ *      configured to use.
  *
- * Public docs strip the literal scheme; the most-cited candidate is
- * `bluetoothprint:msg?msg=<URL>`. We try that first, and if Android
- * doesn't pick it up within a short window we fall back to the
- * intent:// form with the package pinned to `mate.bluetoothprint`.
- *
- * No Bluetooth, no AIDL, no Web Bluetooth, no pairing — by design.
+ * IMPORTANT: we use a synthesised <a> click — never a window.location
+ * change and never an intent:// URL with a `package=` fallback. Both of
+ * those forms cause Android Chrome to bounce the user to the Play Store
+ * if the scheme isn't recognised. With a plain anchor click, an
+ * unrecognised scheme just stays on our page silently.
  */
 
 import { ThermerEntry, encodeThermerPayload } from './thermerReceipt';
 
-const THERMER_PACKAGE = 'mate.bluetoothprint';
-
 export type PrintResult = {
   ok: boolean;
-  transport: 'thermer' | 'thermer-intent' | 'none';
+  transport: 'thermer' | 'none';
   message?: string;
 };
 
 const buildResponseUrl = (entries: ThermerEntry[]): string => {
   if (typeof window === 'undefined') {
-    throw new Error('printEscPos must be called in the browser');
+    throw new Error('printViaThermer must be called in the browser');
   }
   const data = encodeThermerPayload(entries);
   const origin = window.location.origin.replace(/\/$/, '');
@@ -44,22 +40,38 @@ const buildResponseUrl = (entries: ThermerEntry[]): string => {
 const buildBluetoothPrintUrl = (responseUrl: string): string =>
   `bluetoothprint:msg?msg=${encodeURIComponent(responseUrl)}`;
 
-const buildIntentUrl = (responseUrl: string): string =>
-  `intent://msg?msg=${encodeURIComponent(responseUrl)}` +
-  `#Intent;scheme=bluetoothprint;package=${THERMER_PACKAGE};end`;
-
-const navigateTo = (url: string): void => {
-  // Using window.location is the most reliable cross-browser way to fire a
-  // custom-scheme URL on Android. window.open and <a target=_blank> are
-  // sometimes blocked or break the handoff.
-  window.location.href = url;
+/**
+ * Click a synthetic anchor tag pointing at the custom scheme. Android's
+ * link handler picks this up and either opens the registered app or does
+ * nothing. Critically, an unhandled scheme on an <a> click does NOT
+ * bounce to the Play Store the way `window.location.href = 'foo:'` or an
+ * intent:// URL with a `package=` fallback would.
+ */
+const clickHandoffLink = (url: string): void => {
+  const a = document.createElement('a');
+  a.href = url;
+  a.rel = 'noopener noreferrer';
+  // Some Android versions need the link to be in the DOM for the click to
+  // be honoured by the OS link handler.
+  a.style.position = 'fixed';
+  a.style.left = '-9999px';
+  a.style.opacity = '0';
+  document.body.appendChild(a);
+  try {
+    a.click();
+  } finally {
+    window.setTimeout(() => {
+      try { document.body.removeChild(a); } catch {}
+    }, 1000);
+  }
 };
 
 /**
- * Send the entries to Thermer. Resolves immediately after firing the URL —
- * we can't observe whether the app actually printed; that's between the
- * user, the app, and the printer. The promise resolves with `ok:false` only
- * when we can't even attempt the navigation (e.g. SSR).
+ * Hand the entries off to the Thermer app. Resolves once the link has
+ * been clicked — we can't observe whether the app actually accepted it
+ * (that's between the user, the app, and the printer). If the scheme
+ * isn't registered the browser stays on our page silently; we never
+ * redirect to the Play Store.
  */
 export const printViaThermer = async (entries: ThermerEntry[]): Promise<PrintResult> => {
   if (typeof window === 'undefined') {
@@ -80,40 +92,11 @@ export const printViaThermer = async (entries: ThermerEntry[]): Promise<PrintRes
     };
   }
 
-  const primary = buildBluetoothPrintUrl(responseUrl);
-  const intentUrl = buildIntentUrl(responseUrl);
-
-  // Mark that we attempted a handoff. If the page is still visible after a
-  // moment we assume the primary scheme wasn't recognised and try the
-  // intent:// form, which Android Chrome resolves to the specific Thermer
-  // package even if the custom scheme isn't registered system-wide.
-  const startedAt = Date.now();
-  let handedOff = false;
-  const onVisibilityChange = () => {
-    if (document.hidden) handedOff = true;
-  };
-  document.addEventListener('visibilitychange', onVisibilityChange);
-
-  navigateTo(primary);
-
-  await new Promise<void>((resolve) => {
-    window.setTimeout(resolve, 700);
-  });
-
-  document.removeEventListener('visibilitychange', onVisibilityChange);
-
-  if (handedOff || Date.now() - startedAt > 1500) {
-    return { ok: true, transport: 'thermer' };
-  }
-
-  // Browser is still on our page — the custom scheme didn't resolve. Try
-  // the intent fallback, which forces Android to dispatch to the Thermer
-  // package directly.
-  navigateTo(intentUrl);
-  return { ok: true, transport: 'thermer-intent' };
+  clickHandoffLink(buildBluetoothPrintUrl(responseUrl));
+  return { ok: true, transport: 'thermer' };
 };
 
-/** Build the Thermer Response URL without navigating — useful for "open in
- *  app" buttons that the user taps themselves. */
+/** Build the Thermer hand-off URL without navigating — useful when the
+ *  caller wants to render a real `<a href>` for the user to tap manually. */
 export const buildThermerHandoffUrl = (entries: ThermerEntry[]): string =>
   buildBluetoothPrintUrl(buildResponseUrl(entries));
