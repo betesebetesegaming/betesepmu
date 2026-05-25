@@ -1,7 +1,7 @@
 # PMU Payout API Structure
 
 ## Endpoint
-- POST /.netlify/functions/calculate-pmu-payouts
+- POST /api/calculate-pmu-payouts
 
 ## Request Body
 ```json

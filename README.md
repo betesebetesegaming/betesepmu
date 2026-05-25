@@ -129,32 +129,30 @@ Create `.env.local` with:
 
 Without these values, the app will run disconnected from Supabase.
 
-### 2) Netlify function
+### 2) Next.js API routes (Vercel)
 
-Serverless function path:
+All server functionality runs as Next.js Route Handlers under `app/api/*`:
 
-`netlify/functions/calculate-pmu-payouts.js`
+- `app/api/calculate-pmu-payouts/route.ts` — pari-mutuel payout math
+- `app/api/support-ai/route.ts` — AI diagnosis endpoint for the Support panel
+- `app/api/program-media-upload/route.ts` — program media upload fallback
+- `app/api/program-media-insert/route.ts` — program media insert fallback
+- `app/api/afrimoney-payment/route.ts` — AfriMoney direct API
+- `app/api/modempay-checkout/route.ts` — Wave / APS hosted checkout
+- `app/api/authenticate-user/route.ts` — server-side auth fallback
+- `app/api/print-receipt/route.ts` — Thermer Browser-Print response endpoint
 
-AI support function path:
+Required Vercel environment variables:
 
-`netlify/functions/support-ai.js`
-
-Program media fallback functions (for storage/table RLS environments):
-
-`netlify/functions/program-media-upload.js`
-
-`netlify/functions/program-media-insert.js`
-
-Required Netlify environment variables:
-
-- `SUPABASE_URL` (or `VITE_SUPABASE_URL`)
-- `SUPABASE_SERVICE_ROLE_KEY`
 - `OPENAI_API_KEY` (required for AI diagnosis in Support panel)
 - `OPENAI_MODEL` (optional, default: `gpt-4o-mini`)
+- `AFRIMONEY_*` (see `.env.local.example`)
+- `MODEMPAY_SECRET_KEY` / `MODEMPAY_PUBLIC_KEY` (for Wave/APS checkout)
+- Firebase service-account env (`FIREBASE_*`) for server-side reads
 
 Optional frontend override:
 
-- `VITE_SUPPORT_AI_WEBHOOK` (defaults to `/.netlify/functions/support-ai` if not set)
+- `VITE_SUPPORT_AI_WEBHOOK` (defaults to `/api/support-ai` if not set)
 
 ### 3) Admin back-office payout box
 

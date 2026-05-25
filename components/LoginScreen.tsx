@@ -226,7 +226,7 @@ const LoginForm: React.FC<{ onLogin: (user: User) => void; users: User[]; onSwit
             return;
         }
 
-        // Fallback 2: server-side Netlify function (bypasses client-side RLS/grant issues)
+        // Fallback 2: server-side API route (bypasses client-side RLS/grant issues)
         try {
             const serverUser = await dbAuthenticateViaFunction(rawUsername, trimmedPassword);
             if (serverUser) {

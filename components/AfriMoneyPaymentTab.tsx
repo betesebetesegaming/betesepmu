@@ -38,7 +38,7 @@ export const AfriMoneyPaymentTab: React.FC<Props> = ({ customers, onDeposit }) =
       const externalRef = generateRef();
       const cleanPhone = phone.replace(/^\+220/, '').replace(/\D/g, '');
 
-      const res = await fetch('/.netlify/functions/afrimoney-payment', {
+      const res = await fetch('/api/afrimoney-payment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -102,7 +102,7 @@ export const PaymentSheet: React.FC<PaymentSheetProps> = ({
   };
 
   const handleAfriMoneyPay = async (numAmount: number, cleanPhone: string, externalRef: string) => {
-    const res = await fetch('/.netlify/functions/afrimoney-payment', {
+    const res = await fetch('/api/afrimoney-payment', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -121,7 +121,7 @@ export const PaymentSheet: React.FC<PaymentSheetProps> = ({
   };
 
   const handleModemPay = async (provider: 'wave' | 'aps', numAmount: number, cleanPhone: string, externalRef: string) => {
-    const res = await fetch('/.netlify/functions/modempay-checkout', {
+    const res = await fetch('/api/modempay-checkout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

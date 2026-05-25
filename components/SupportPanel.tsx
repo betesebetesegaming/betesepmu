@@ -70,7 +70,7 @@ export const SupportPanel: React.FC<SupportPanelProps> = ({ onRecalculateAllTick
         setAiDiagnosis(null);
 
         const snapshot = collectLocalSnapshot();
-        const aiWebhookUrl = (import.meta as any)?.env?.VITE_SUPPORT_AI_WEBHOOK || '/.netlify/functions/support-ai';
+        const aiWebhookUrl = (import.meta as any)?.env?.VITE_SUPPORT_AI_WEBHOOK || '/api/support-ai';
 
         try {
             if (aiWebhookUrl) {

@@ -198,7 +198,7 @@ export const buildThermerPaidReceiptEntries = (ticket: Ticket): ThermerEntry[] =
   return entries;
 };
 
-/** Encode the entries as the base64-of-JSON payload our Netlify function expects. */
+/** Encode the entries as the base64-of-JSON payload our /api/print-receipt route expects. */
 export const encodeThermerPayload = (entries: ThermerEntry[]): string => {
   const json = JSON.stringify(entries);
   if (typeof btoa === 'function') {
