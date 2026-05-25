@@ -3,14 +3,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { User, WithdrawalRequest, DepositRequest, Ticket } from '../types';
 import { useLanguage } from '../LanguageContext';
 import { WithdrawalCodeModal } from './WithdrawalCodeModal';
-import { normalizeGambiaPhone } from '../utils';
-import { AfriMoneyLogo } from './AfriMoneyLogo';
-import { WaveLogo } from './WaveLogo';
-import { APSLogo } from './APSLogo';
-
-const WAVE_MERCHANT_URL = 'https://pay.wave.com/m/M_gm_W5puv7Atyy-N/c/gm/';
-const AFRIMONEY_MERCHANT_URL = ''; // TODO: paste AfriMoney payment link here
-const APS_MERCHANT_URL = ''; // TODO: paste APS Wallet payment link here
+import { PaymentSheet } from './PaymentSheet';
 
 interface WalletPanelProps {
   user: User;
@@ -53,26 +46,15 @@ const getVerificationBadge = (request: DepositRequest) => {
 
 export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequest, withdrawalRequests, onWalletFlash, onDepositRequest, depositRequests, tickets, onCancelWithdrawal }) => {
   const [activeTab, setActiveTab] = useState<'deposit' | 'withdraw'>('deposit');
-  
-  // Deposit Form State
-  const [depositAmount, setDepositAmount] = useState<number | ''>('');
-  const [depositMethod, setDepositMethod] = useState<'Wave' | 'AfriMoney' | 'APS'>('Wave');
-    const [depositStage, setDepositStage] = useState<'pay' | 'confirm'>('pay');
-  const [depositPhone, setDepositPhone] = useState(''); // Renamed logic var, used to be txnId
-  const [depositMessage, setDepositMessage] = useState('');
-  const [lastDepositData, setLastDepositData] = useState<{amount: number, method: string, phone: string} | null>(null);
-    const [paymentHandoff, setPaymentHandoff] = useState<'Wave' | 'AfriMoney' | 'APS' | null>(null);
+
+  // Payment sheet
+  const [isPaymentSheetOpen, setIsPaymentSheetOpen] = useState(false);
 
   // Withdrawal Form State
   const [withdrawAmount, setWithdrawAmount] = useState<number | ''>('');
   const [withdrawError, setWithdrawError] = useState('');
     const [latestWithdrawalRequest, setLatestWithdrawalRequest] = useState<WithdrawalRequest | null>(null);
   const { t } = useLanguage();
-
-    const isMobileDevice = useMemo(() => {
-            if (typeof navigator === 'undefined') return false;
-            return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
-    }, []);
 
     useEffect(() => {
         if (!latestWithdrawalRequest) return;
@@ -120,76 +102,6 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
         };
     }, [bonusPlayTickets]);
 
-  const handleDepositSubmit = (e: React.FormEvent) => {
-      e.preventDefault();
-      setDepositMessage('');
-      setLastDepositData(null);
-      setPaymentHandoff(null);
-
-      if (typeof depositAmount !== 'number' || depositAmount <= 0) {
-          setDepositMessage('Please enter a valid deposit amount.');
-          return;
-      }
-      if (!depositPhone) {
-          setDepositMessage('Please enter the phone number you sent the payment from.');
-          return;
-      }
-
-      const normalizedSenderPhone = normalizeGambiaPhone(depositPhone);
-      if (!normalizedSenderPhone) {
-          setDepositMessage('Gambia: local 7 digits or +220XXXXXXX. Senegal: +221XXXXXXXXX only.');
-          return;
-      }
-      
-      // Passing phone number as transactionId for now as per requirements
-      onDepositRequest(depositAmount, depositMethod, normalizedSenderPhone);
-      
-      setLastDepositData({ amount: depositAmount, method: depositMethod, phone: normalizedSenderPhone });
-      setDepositMessage(
-          depositMethod === 'Wave'
-              ? 'Wave deposit request submitted. Your account will be credited once verified.'
-              : t('success_deposit')
-      );
-      setDepositStage('pay');
-      setDepositAmount('');
-      setDepositPhone('');
-  }
-
-  const openWaveCheckout = () => {
-      const activeElement = document.activeElement as HTMLElement | null;
-      activeElement?.blur();
-      setPaymentHandoff('Wave');
-      window.setTimeout(() => {
-          window.open(WAVE_MERCHANT_URL, '_blank', 'noopener,noreferrer');
-      }, 350);
-  };
-
-  const openAfriMoneyCheckout = () => {
-      if (!AFRIMONEY_MERCHANT_URL) {
-          setDepositStage('confirm');
-          return;
-      }
-      const activeElement = document.activeElement as HTMLElement | null;
-      activeElement?.blur();
-      setPaymentHandoff('AfriMoney');
-      window.setTimeout(() => {
-          window.open(AFRIMONEY_MERCHANT_URL, '_blank', 'noopener,noreferrer');
-      }, 350);
-  };
-
-  const openAPSCheckout = () => {
-      if (!APS_MERCHANT_URL) {
-          setDepositStage('confirm');
-          return;
-      }
-      const activeElement = document.activeElement as HTMLElement | null;
-      activeElement?.blur();
-      setPaymentHandoff('APS');
-      window.setTimeout(() => {
-          window.open(APS_MERCHANT_URL, '_blank', 'noopener,noreferrer');
-      }, 350);
-  };
-
     const handleWithdrawalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setWithdrawError('');
@@ -207,15 +119,6 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
             setLatestWithdrawalRequest(createdRequest);
             setWithdrawAmount('');
         }
-  };
-
-  const openWhatsAppProof = () => {
-      if (!lastDepositData) return;
-      const supportNumber = "2204176003"; // Updated Number
-      const text = `Hello Betese Support,\n\nI have submitted a deposit request.\nAmount: ${lastDepositData.amount} GMD\nMethod: ${lastDepositData.method}\nSender Phone: ${lastDepositData.phone}\nCustomer ID: ${user.id}\n\nPlease verify and credit my account.`;
-      
-      const url = `https://wa.me/${supportNumber}?text=${encodeURIComponent(text)}`;
-      window.open(url, '_blank');
   };
 
   return (
@@ -327,245 +230,26 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
 
       {activeTab === 'deposit' && (
           <div className="space-y-6 animate-fade-in">
-              {paymentHandoff && (
-                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-                      <div className={`w-full max-w-md rounded-3xl p-6 shadow-2xl ${paymentHandoff === 'Wave' ? 'bg-blue-50' : paymentHandoff === 'APS' ? 'bg-indigo-50' : 'bg-purple-50'}`}>
-                          <p className={`text-xs font-black uppercase tracking-widest ${paymentHandoff === 'Wave' ? 'text-blue-700' : paymentHandoff === 'APS' ? 'text-indigo-700' : 'text-purple-700'}`}>Payment handoff active</p>
-                          <h4 className="mt-2 text-2xl font-black text-betese-dark">{paymentHandoff === 'Wave' ? 'Opening Wave' : paymentHandoff === 'APS' ? 'Opening APS Wallet' : 'Opening AfriMoney'}</h4>
-                          <p className="mt-3 text-sm text-gray-700">
-                              The Betese keyboard is hidden now. Finish the payment in the app that opens, then come back to Betese.
-                          </p>
-                          <div className="mt-6 flex items-center justify-center gap-3">
-                              <div className="h-3 w-3 rounded-full bg-green-500 animate-pulse"></div>
-                              <p className="text-xs font-bold text-gray-600 uppercase tracking-widest">Waiting for payment app</p>
-                          </div>
-                          <button
-                              type="button"
-                              onClick={() => setPaymentHandoff(null)}
-                              className="mt-6 w-full rounded-xl bg-gray-900 px-4 py-3 font-black text-white hover:bg-gray-800 active:scale-95 transition-all"
-                          >
-                              Return to deposit form
-                          </button>
+              <div className="rounded-2xl border-2 border-betese-green bg-gradient-to-br from-green-50 to-emerald-50 p-5 shadow-sm">
+                  <p className="text-xs font-black uppercase tracking-widest text-betese-green">Add money</p>
+                  <h4 className="mt-1 text-xl font-black text-betese-dark">Top up with AfriMoney, Wave or APS</h4>
+                  <p className="mt-2 text-sm text-gray-600">Choose your favourite payment method and we’ll credit your wallet as soon as the provider confirms.</p>
+
+                  <div className="mt-4 flex items-center gap-3">
+                      <div className="flex-1 flex items-center gap-2 bg-white rounded-xl p-2 shadow-inner border border-gray-200 overflow-hidden">
+                          <img src="/payment-logos/africell.png" alt="AfriMoney" className="h-8 w-auto object-contain" />
+                          <img src="/payment-logos/wave.png" alt="Wave" className="h-8 w-auto object-contain" />
+                          <img src="/payment-logos/aps.svg" alt="APS Wallet" className="h-8 w-auto object-contain" />
                       </div>
+                      <button
+                          type="button"
+                          onClick={() => setIsPaymentSheetOpen(true)}
+                          className="px-5 py-3 rounded-xl bg-betese-green text-white font-black uppercase tracking-widest text-sm shadow-lg active:scale-95 transition-all"
+                      >
+                          Top up
+                      </button>
                   </div>
-              )}
-
-              {!paymentHandoff && depositStage === 'pay' && (
-                <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-4 rounded-xl border-2 border-betese-green shadow-sm">
-                  <p className="text-xs font-black uppercase tracking-widest text-betese-green mb-2 text-center">Step 1 — Choose your payment method</p>
-                  <div className="grid grid-cols-3 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setDepositMethod('Wave')}
-                      className={`flex items-center justify-center py-3 px-2 rounded-lg border-2 transition-all ${depositMethod === 'Wave' ? 'border-blue-500 bg-blue-50 shadow-md' : 'border-gray-200 bg-white hover:border-gray-400'}`}
-                    >
-                      <WaveLogo height={26} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setDepositMethod('AfriMoney')}
-                      className={`flex items-center justify-center py-3 px-2 rounded-lg border-2 transition-all ${depositMethod === 'AfriMoney' ? 'border-purple-700 bg-purple-50 shadow-md' : 'border-gray-200 bg-white hover:border-gray-400'}`}
-                    >
-                      <AfriMoneyLogo height={22} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setDepositMethod('APS')}
-                      className={`flex items-center justify-center py-3 px-2 rounded-lg border-2 transition-all ${depositMethod === 'APS' ? 'border-indigo-700 bg-indigo-50 shadow-md' : 'border-gray-200 bg-white hover:border-gray-400'}`}
-                    >
-                      <APSLogo height={36} />
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              <div className="bg-blue-50 p-4 rounded border border-blue-200 text-sm text-blue-800">
-                  <p className="font-bold mb-2">{t('how_to_deposit')}</p>
-
-                  {depositMethod === 'Wave' && (
-                    <div className="my-3 p-3 bg-white rounded border border-blue-100 text-center shadow-sm">
-                        <p className="text-xs text-gray-500 uppercase font-bold mb-1">Wave Payment Link</p>
-                        <p className="text-sm font-black text-betese-dark break-all px-2">{WAVE_MERCHANT_URL}</p>
-                        <div className="flex items-center justify-center gap-2 mt-1">
-                            <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-                            <p className="text-sm text-blue-700 font-bold">Desktop shows QR, phone opens Wave app</p>
-                        </div>
-                    </div>
-                  )}
-
-                  {depositMethod === 'AfriMoney' && (
-                    <div className="my-3 p-3 bg-white rounded border border-purple-100 text-center shadow-sm">
-                        <p className="text-xs text-gray-500 uppercase font-bold mb-1">AfriMoney Payment Link</p>
-                        <p className="text-sm font-black text-betese-dark break-all px-2">{AFRIMONEY_MERCHANT_URL || 'Link will be provided after AfriMoney onboarding.'}</p>
-                    </div>
-                  )}
-
-                  {depositMethod === 'APS' && (
-                    <div className="my-3 p-3 bg-white rounded border border-indigo-100 text-center shadow-sm">
-                        <p className="text-xs text-gray-500 uppercase font-bold mb-1">APS Wallet Payment Link</p>
-                        <p className="text-sm font-black text-betese-dark break-all px-2">{APS_MERCHANT_URL || 'Link will be provided after APS onboarding.'}</p>
-                    </div>
-                  )}
-
-                  <ol className="list-decimal pl-5 space-y-1">
-                      <li>{t('deposit_step_1')}</li>
-                      <li>{t('deposit_step_2')}</li>
-                      <li>{t('deposit_step_3')}</li>
-                  </ol>
               </div>
-
-              {/* Wave pay button */}
-              {depositMethod === 'Wave' && !paymentHandoff && (
-                  <div className="rounded-2xl border-2 border-blue-400 bg-blue-50 p-4 flex flex-col items-center gap-3">
-                      <p className="text-xs font-black uppercase tracking-widest text-blue-700">Step 1 — Pay with Wave first</p>
-                      <button
-                          type="button"
-                          onClick={openWaveCheckout}
-                          className="w-full flex items-center justify-center gap-3 rounded-xl bg-blue-600 px-5 py-4 font-black text-white text-base shadow-lg hover:bg-blue-700 active:scale-95 transition-all border-b-4 border-blue-900"
-                      >
-                          <WaveLogo height={26} />
-                          PAY WITH WAVE
-                      </button>
-                      <p className="text-[11px] text-blue-700 font-semibold text-center">
-                          Tap the button — Wave opens in a new window.<br/>
-                          Log in with <strong>your own Wave account</strong> and pay.<br/>
-                          Then come back here and fill in the form below.
-                      </p>
-                      <button
-                          type="button"
-                          onClick={() => setDepositStage('confirm')}
-                          className="w-full rounded-xl border-2 border-blue-500 bg-white px-4 py-3 font-black text-blue-700 hover:bg-blue-100 active:scale-95 transition-all"
-                      >
-                          I HAVE PAID - ENTER PHONE NUMBER
-                      </button>
-                      <p className="text-xs font-black uppercase tracking-widest text-blue-500 mt-1">Step 2 — Confirm your payment below</p>
-                  </div>
-              )}
-
-              {/* AfriMoney pay button */}
-              {depositMethod === 'AfriMoney' && !paymentHandoff && (
-                  <div className="rounded-2xl border-2 border-purple-400 bg-purple-50 p-4 flex flex-col items-center gap-3">
-                      <p className="text-xs font-black uppercase tracking-widest text-purple-700">Step 1 — Pay with AfriMoney first</p>
-                      <button
-                          type="button"
-                          onClick={openAfriMoneyCheckout}
-                          className="w-full flex items-center justify-center gap-3 rounded-xl bg-purple-700 px-5 py-4 font-black text-white text-base shadow-lg hover:bg-purple-800 active:scale-95 transition-all border-b-4 border-purple-900"
-                      >
-                          <AfriMoneyLogo height={26} />
-                          PAY WITH AFRIMONEY
-                      </button>
-                      <p className="text-[11px] text-purple-700 font-semibold text-center">
-                          Tap the button — AfriMoney opens in a new window.<br/>
-                          Log in with <strong>your own AfriMoney account</strong> and pay.<br/>
-                          Then come back here and fill in the form below.
-                      </p>
-                      <button
-                          type="button"
-                          onClick={() => setDepositStage('confirm')}
-                          className="w-full rounded-xl border-2 border-purple-500 bg-white px-4 py-3 font-black text-purple-700 hover:bg-purple-100 active:scale-95 transition-all"
-                      >
-                          I HAVE PAID - ENTER PHONE NUMBER
-                      </button>
-                      <p className="text-xs font-black uppercase tracking-widest text-purple-500 mt-1">Step 2 — Confirm your payment below</p>
-                  </div>
-              )}
-
-              {/* APS pay button */}
-              {depositMethod === 'APS' && !paymentHandoff && (
-                  <div className="rounded-2xl border-2 border-indigo-400 bg-indigo-50 p-4 flex flex-col items-center gap-3">
-                      <p className="text-xs font-black uppercase tracking-widest text-indigo-700">Step 1 — Pay with APS Wallet first</p>
-                      <button
-                          type="button"
-                          onClick={openAPSCheckout}
-                          className="w-full flex items-center justify-center gap-3 rounded-xl bg-indigo-800 px-5 py-4 font-black text-white text-base shadow-lg hover:bg-indigo-900 active:scale-95 transition-all border-b-4 border-indigo-950"
-                      >
-                          <APSLogo height={30} />
-                          PAY WITH APS
-                      </button>
-                      <p className="text-[11px] text-indigo-700 font-semibold text-center">
-                          Tap the button — APS Wallet opens in a new window.<br/>
-                          Log in with <strong>your own APS Wallet account</strong> and pay.<br/>
-                          Then come back here and fill in the form below.
-                      </p>
-                      <button
-                          type="button"
-                          onClick={() => setDepositStage('confirm')}
-                          className="w-full rounded-xl border-2 border-indigo-500 bg-white px-4 py-3 font-black text-indigo-700 hover:bg-indigo-100 active:scale-95 transition-all"
-                      >
-                          I HAVE PAID - ENTER PHONE NUMBER
-                      </button>
-                      <p className="text-xs font-black uppercase tracking-widest text-indigo-500 mt-1">Step 2 — Confirm your payment below</p>
-                  </div>
-              )}
-
-              {!paymentHandoff && depositStage === 'confirm' && (
-              <form onSubmit={handleDepositSubmit} className="space-y-3">
-                  <div>
-                      <label className="block text-sm font-medium text-gray-700">{t('amount_sent')}</label>
-                      <input 
-                        type="number" 
-                        value={depositAmount} 
-                        onChange={e => setDepositAmount(e.target.value === '' ? '' : parseFloat(e.target.value))} 
-                        className="w-full p-2 border border-gray-300 rounded-md"
-                        placeholder="e.g., 500"
-                        required
-                      />
-                  </div>
-                  <div className="rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 flex items-center gap-2 text-sm">
-                      <span className="text-gray-500 font-semibold">Paying with:</span>
-                      <span className="font-black text-gray-800">
-                          {depositMethod === 'Wave' ? 'Wave' : depositMethod === 'AfriMoney' ? 'AfriMoney' : 'APS Wallet'}
-                      </span>
-                      <button
-                          type="button"
-                          onClick={() => { setDepositStage('pay'); setDepositMessage(''); }}
-                          className="ml-auto text-xs font-bold text-betese-green hover:underline"
-                      >
-                          Change
-                      </button>
-                  </div>
-                  <div>
-                      <label className="block text-sm font-medium text-gray-700">{t('sender_phone')}</label>
-                      <input 
-                        type="tel" 
-                        value={depositPhone} 
-                        onChange={e => setDepositPhone(e.target.value)} 
-                        className="w-full p-2 border border-gray-300 rounded-md"
-                                                placeholder="e.g., +2207XXXXXX or +2217XXXXXXX"
-                        required
-                      />
-                  </div>
-                  {depositMessage && (
-                      <div className="bg-green-50 p-3 rounded border border-green-200">
-                          <p className="text-sm text-green-700 font-bold mb-2">{depositMessage}</p>
-                          {lastDepositData && (
-                              <button 
-                                type="button" 
-                                onClick={openWhatsAppProof}
-                                className="w-full flex items-center justify-center gap-2 bg-green-600 text-white py-2 rounded font-bold hover:bg-green-700 transition-colors"
-                              >
-                                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                                    <path d="M13.601 2.326A7.854 7.854 0 0 0 7.994 0C3.627 0 .068 3.558.064 7.926c0 1.399.366 2.76 1.057 3.965L0 16l4.204-1.102a7.933 7.933 0 0 0 3.79.965h.004c4.368 0 7.926-3.558 7.93-7.93A7.898 7.898 0 0 0 13.6 2.326zM7.994 14.521a6.573 6.573 0 0 1-3.356-.92l-.24-.144-2.494.654.666-2.433-.156-.251a6.56 6.56 0 0 1-1.007-3.505c0-3.626 2.957-6.584 6.591-6.584a6.56 6.56 0 0 1 4.66 1.931 6.557 6.557 0 0 1 1.928 4.66c-.004 3.639-2.961 6.592-6.592 6.592zm3.615-4.934c-.197-.099-1.17-.578-1.353-.646-.182-.065-.315-.099-.445.099-.133.197-.513.646-.627.775-.114.133-.232.148-.43.05-.197-.1-.836-.308-1.592-.985-.59-.525-.985-1.175-1.103-1.372-.114-.198-.011-.304.088-.403.087-.088.197-.232.296-.346.1-.114.133-.198.198-.33.065-.134.034-.248-.015-.347-.05-.099-.445-1.076-.612-1.47-.16-.389-.323-.335-.445-.34-.114-.007-.247-.007-.38-.007a.729.729 0 0 0-.529.247c-.182.198-.691.677-.691 1.654 0 .977.71 1.916.81 2.049.098.133 1.394 2.132 3.383 2.992.47.205.84.326 1.129.418.475.152.904.129 1.246.08.38-.058 1.171-.48 1.338-.943.164-.464.164-.86.114-.943-.049-.084-.182-.133-.38-.232z"/>
-                                  </svg>
-                                  👉 Send Proof on WhatsApp
-                              </button>
-                          )}
-                      </div>
-                  )}
-                  {!depositMessage && (
-                    <button type="submit" className="w-full px-4 py-3 bg-betese-green text-white font-bold rounded-lg hover:brightness-110 active:scale-95 transition-all">
-                        {depositMethod === 'Wave' ? 'Confirm Wave Payment' : depositMethod === 'AfriMoney' ? 'Confirm AfriMoney Payment' : depositMethod === 'APS' ? 'Confirm APS Payment' : t('submit_deposit')}
-                    </button>
-                  )}
-              </form>
-              )}
-
-              {!paymentHandoff && depositStage === 'pay' && (
-                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-                      <p className="text-xs font-bold uppercase tracking-widest text-gray-600">Confirm step locked</p>
-                      <p className="text-sm text-gray-700 mt-1">Complete payment first, then tap "I HAVE PAID - ENTER PHONE NUMBER" to unlock the form.</p>
-                  </div>
-              )}
 
               <div>
                   <h4 className="font-bold text-gray-700 mb-2">{t('deposit_history')}</h4>
@@ -585,6 +269,14 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
               </div>
           </div>
       )}
+
+      <PaymentSheet
+          isOpen={isPaymentSheetOpen}
+          onClose={() => setIsPaymentSheetOpen(false)}
+          user={user}
+          onDepositRequest={onDepositRequest}
+      />
+
 
       {activeTab === 'withdraw' && (
           <div className="space-y-6 animate-fade-in">

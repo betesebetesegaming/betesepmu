@@ -10,12 +10,16 @@ interface BetSlipPanelProps {
   onRemove: (index: number) => void;
   onUpdateSelectionMultiplier: (index: number, multiplier: number) => void;
   onInitiateBookBet?: () => void;
+  onTopUp?: (amount: number) => void;
+  availableBalance?: number;
   isPlacingBet?: boolean;
 }
 
-export const BetSlipPanel: React.FC<BetSlipPanelProps> = ({ betSlip, onClear, onInitiatePlaceBet, onRemove, onUpdateSelectionMultiplier, onInitiateBookBet, isPlacingBet = false }) => {
+export const BetSlipPanel: React.FC<BetSlipPanelProps> = ({ betSlip, onClear, onInitiatePlaceBet, onRemove, onUpdateSelectionMultiplier, onInitiateBookBet, onTopUp, availableBalance, isPlacingBet = false }) => {
   const hasSelections = betSlip.selections.length === 0;
   const { t } = useLanguage();
+  const shortfall = availableBalance != null ? Math.max(0, betSlip.totalCost - availableBalance) : 0;
+  const needsTopUp = shortfall > 0 && !hasSelections;
   
   return (
     <div className="bg-white p-6 rounded-2xl shadow-xl border-t-4 border-betese-green sticky top-6">
@@ -103,6 +107,21 @@ export const BetSlipPanel: React.FC<BetSlipPanelProps> = ({ betSlip, onClear, on
           <span className="text-3xl font-black text-betese-dark tracking-tighter">GMD {betSlip.totalCost.toFixed(0)}</span>
         </div>
       </div>
+
+      {needsTopUp && onTopUp && (
+        <div className="mt-4 rounded-xl border-2 border-yellow-300 bg-yellow-50 p-3 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-yellow-700">Not enough funds</p>
+            <p className="text-sm font-black text-betese-dark">Top up GMD {shortfall.toFixed(0)} to place this bet</p>
+          </div>
+          <button
+            onClick={() => onTopUp(shortfall)}
+            className="px-3 py-2 rounded-lg bg-betese-green text-white font-black text-xs uppercase tracking-widest active:scale-95"
+          >
+            Top up
+          </button>
+        </div>
+      )}
 
       <div className="mt-6 space-y-3">
         <button

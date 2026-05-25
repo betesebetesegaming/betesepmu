@@ -12,7 +12,8 @@
       "Bash(curl -s -X POST -o /dev/null -w \"AfriMoney API: %{http_code}\\\\n\" -H \"Content-Type: application/json\" -d '{}' http://localhost:3000/api/afrimoney-payment)",
       "Bash(curl -s -X POST -o /dev/null -w \"Support AI: %{http_code}\\\\n\" -H \"Content-Type: application/json\" -d '{}' http://localhost:3000/api/support-ai)",
       "Bash(curl -s -X POST -o /dev/null -w \"Auth \\(retired\\): %{http_code}\\\\n\" -H \"Content-Type: application/json\" -d '{}' http://localhost:3000/api/authenticate-user)",
-      "Bash(curl -s -X POST -o /dev/null -w \"PMU calc \\(501\\): %{http_code}\\\\n\" -H \"Content-Type: application/json\" -d '{}' http://localhost:3000/api/calculate-pmu-payouts)"
+      "Bash(curl -s -X POST -o /dev/null -w \"PMU calc \\(501\\): %{http_code}\\\\n\" -H \"Content-Type: application/json\" -d '{}' http://localhost:3000/api/calculate-pmu-payouts)",
+      "Bash(npx tsc *)"
     ]
   }
 }

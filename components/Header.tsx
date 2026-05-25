@@ -104,9 +104,8 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="flex justify-between items-center h-16">
           
           <div className="flex items-center flex-shrink-0">
-            <Logo className="h-8 sm:h-10 w-auto" />
-            <span className="ml-2 font-bold text-lg sm:text-xl text-betese-dark hidden md:block">Betese PMU</span>
-            
+            <Logo className="h-10 sm:h-12 w-auto" />
+
             <button 
                 onClick={handleManualRefresh}
                 className={`ml-2 flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold transition-all ${isRefreshing ? 'bg-yellow-100 text-yellow-700 animate-spin' : 'bg-gray-100 text-gray-500 hover:bg-blue-100 hover:text-blue-600'}`}

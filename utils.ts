@@ -164,22 +164,27 @@ export const triggerPrint = (elementId: string, options: TriggerPrintOptions = {
     const measuredContentWidthMm = Math.ceil(measuredSourceWidthPx / pxPerMm) + 4;
     const paperMode = getPrintPaperMode();
     const fixedPaperWidthMm = getPrintPaperWidthMm();
-    const minimumPaperWidthMm = isAndroidTerminal ? 57 : 48;
+    const minimumPaperWidthMm = isAndroidTerminal ? 58 : 48;
     const requestedPaperWidthMm = paperMode === 'fixed'
         ? clamp(fixedPaperWidthMm, minimumPaperWidthMm, 112)
         : clamp(measuredContentWidthMm, minimumPaperWidthMm, 112);
-    // Android terminal print services are most stable at ISO C8-equivalent 57mm width.
-    const paperWidthMm = isAndroidTerminal ? 57 : requestedPaperWidthMm;
+    // Most Sunmi / Africell-issued thermal handhelds use 58 mm paper.
+    const paperWidthMm = isAndroidTerminal ? 58 : requestedPaperWidthMm;
     const paperHeightMm = options.direct57x40 ? 40 : null;
     const pageSize = paperHeightMm ? `${paperWidthMm}mm ${paperHeightMm}mm` : `${paperWidthMm}mm auto`;
-    const stagePaddingMm = paperHeightMm ? 1 : 2;
-    
+    const stagePaddingMm = paperHeightMm ? 1 : 1.5;
+
     console.log('📏 Paper size:', { paperWidthMm, paperHeightMm, pageSize, direct57x40: options.direct57x40 });
-    const qrWidthMm = clamp(Math.round(paperWidthMm * (isTicketPrint ? 0.56 : 0.68)), 26, 72);
+    const qrWidthMm = clamp(Math.round(paperWidthMm * (isTicketPrint ? 0.32 : 0.55)), 14, 40);
     const textColumns = clamp(Math.round(paperWidthMm * (32 / 58)), 24, 64);
-    const baseFontPx = isAndroidTerminal ? (isTicketPrint ? 22 : 20) : (isTicketPrint ? 18 : 18);
-    const baseLineHeight = isAndroidTerminal ? (isTicketPrint ? 1.22 : 1.32) : (isTicketPrint ? 1.3 : 1.4);
-    const hugeFontPx = isAndroidTerminal ? (isTicketPrint ? 40 : 36) : (isTicketPrint ? 34 : 32);
+    // Physical sizing — all in millimetres so the print is the same on every
+    // printer/DPI combination. These match the desired Sunmi sample ticket
+    // (big, easy to read at arm's length).
+    const baseFontMm = isTicketPrint ? 3.4 : 3.2;
+    const boldFontMm = isTicketPrint ? 3.8 : 3.4;
+    const hugeFontMm = isTicketPrint ? 7.0 : 5.0;
+    const bannerFontMm = isTicketPrint ? 5.0 : 4.2;
+    const baseLineHeight = isTicketPrint ? 1.18 : 1.3;
 
     const oldStage = document.getElementById('betese-print-stage');
     if (oldStage) oldStage.remove();
@@ -211,12 +216,26 @@ export const triggerPrint = (elementId: string, options: TriggerPrintOptions = {
             font-weight: 900 !important;
         }
         #betese-print-stage .c { text-align: center !important; }
-        #betese-print-stage .b { font-weight: 900 !important; font-size: ${baseFontPx}px !important; }
-        #betese-print-stage .huge { font-size: ${hugeFontPx}px !important; font-weight: 900 !important; letter-spacing: -1px; line-height: 1.1; margin: 4px 0; }
-        #betese-print-stage .solid { border-top: 2px solid black !important; margin: 5px 0 !important; }
-        #betese-print-stage .dashed { border-top: 1px dashed black !important; margin: 5px 0 !important; }
+        #betese-print-stage .b { font-weight: 900 !important; font-size: ${boldFontMm}mm !important; }
+        #betese-print-stage .huge {
+            font-family: 'Arial Black', 'Arial', sans-serif !important;
+            font-size: ${hugeFontMm}mm !important;
+            font-weight: 900 !important;
+            letter-spacing: 0.6mm !important;
+            line-height: 1.05 !important;
+            margin: 1mm 0 !important;
+        }
+        #betese-print-stage .banner {
+            font-family: 'Arial Black', 'Arial', sans-serif !important;
+            font-size: ${bannerFontMm}mm !important;
+            font-weight: 900 !important;
+            line-height: 1.1 !important;
+            letter-spacing: 0.4mm !important;
+        }
+        #betese-print-stage .solid { border-top: 0.4mm solid black !important; margin: 1.5mm 0 !important; }
+        #betese-print-stage .dashed { border-top: 0.2mm dashed black !important; margin: 1.5mm 0 !important; }
         #betese-print-stage .flex { display: flex !important; justify-content: space-between !important; align-items: center !important; }
-        #betese-print-stage img { display: block !important; margin: 5px auto !important; max-width: ${qrWidthMm}mm !important; }
+        #betese-print-stage img { display: block !important; margin: 1.5mm auto !important; max-width: ${qrWidthMm}mm !important; }
         #betese-print-stage, #betese-print-stage * { visibility: visible !important; }
         #betese-print-stage { page: receipt !important; }
         @media print {
@@ -240,8 +259,8 @@ export const triggerPrint = (elementId: string, options: TriggerPrintOptions = {
                 margin: 0 !important;
                 padding: ${stagePaddingMm}mm !important;
                 overflow: ${paperHeightMm ? 'hidden' : 'visible'} !important;
-                font-family: 'Courier New', Courier, monospace !important;
-                font-size: ${baseFontPx}px !important;
+                font-family: 'Arial Black', 'Helvetica Neue', Arial, sans-serif !important;
+                font-size: ${baseFontMm}mm !important;
                 font-weight: 900 !important;
                 line-height: ${baseLineHeight} !important;
                 color: #000 !important;
@@ -352,8 +371,8 @@ export const triggerPrint = (elementId: string, options: TriggerPrintOptions = {
                             padding: ${stagePaddingMm}mm !important;
                             background: #fff !important;
                             color: #000 !important;
-                            font-family: 'Courier New', Courier, monospace !important;
-                            font-size: ${baseFontPx}px !important;
+                            font-family: 'Arial Black', 'Helvetica Neue', Arial, sans-serif !important;
+                            font-size: ${baseFontMm}mm !important;
                             font-weight: 900 !important;
                             line-height: ${baseLineHeight} !important;
                             box-sizing: border-box !important;
@@ -368,12 +387,26 @@ export const triggerPrint = (elementId: string, options: TriggerPrintOptions = {
                         }
 
                         #betese-native-print-root .c { text-align: center !important; }
-                        #betese-native-print-root .b { font-weight: 900 !important; font-size: ${baseFontPx}px !important; }
-                        #betese-native-print-root .huge { font-size: ${hugeFontPx}px !important; font-weight: 900 !important; letter-spacing: -1px; line-height: 1.1; margin: 4px 0; }
-                        #betese-native-print-root .solid { border-top: 2px solid black !important; margin: 5px 0 !important; }
-                        #betese-native-print-root .dashed { border-top: 1px dashed black !important; margin: 5px 0 !important; }
+                        #betese-native-print-root .b { font-weight: 900 !important; font-size: ${boldFontMm}mm !important; }
+                        #betese-native-print-root .huge {
+                            font-family: 'Arial Black', 'Arial', sans-serif !important;
+                            font-size: ${hugeFontMm}mm !important;
+                            font-weight: 900 !important;
+                            letter-spacing: 0.6mm !important;
+                            line-height: 1.05 !important;
+                            margin: 1mm 0 !important;
+                        }
+                        #betese-native-print-root .banner {
+                            font-family: 'Arial Black', 'Arial', sans-serif !important;
+                            font-size: ${bannerFontMm}mm !important;
+                            font-weight: 900 !important;
+                            line-height: 1.1 !important;
+                            letter-spacing: 0.4mm !important;
+                        }
+                        #betese-native-print-root .solid { border-top: 0.4mm solid black !important; margin: 1.5mm 0 !important; }
+                        #betese-native-print-root .dashed { border-top: 0.2mm dashed black !important; margin: 1.5mm 0 !important; }
                         #betese-native-print-root .flex { display: flex !important; justify-content: space-between !important; align-items: center !important; }
-                        #betese-native-print-root img { display: block !important; margin: 5px auto !important; max-width: ${qrWidthMm}mm !important; }
+                        #betese-native-print-root img { display: block !important; margin: 1.5mm auto !important; max-width: ${qrWidthMm}mm !important; }
 
                         @page { margin: 0; size: ${pageSize}; }
                     </style>

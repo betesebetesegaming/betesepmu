@@ -2,9 +2,18 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Betese PMU System',
+  title: 'Betese PMU',
   description: 'Fast horse racing betting terminal system',
   manifest: '/manifest.json',
+  icons: {
+    icon: [
+      { url: '/icon.png', type: 'image/png' },
+    ],
+    apple: [
+      { url: '/icon.png', type: 'image/png' },
+    ],
+    shortcut: '/icon.png',
+  },
 };
 
 export const viewport: Viewport = {

@@ -73,47 +73,63 @@ export const TicketModal: React.FC<TicketModalProps> = ({ ticket, onClose, showP
     return `${race.name}: ${numbers === 'N/A' ? 'Pending' : numbers}`;
   });
 
+  const ticketDate = ticket.timestamp.toLocaleDateString([], {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+  });
+  const ticketTime = ticket.timestamp.toLocaleTimeString([], {
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  });
+  const ticketSerial = (ticket.id || '').toString();
+  const ticketRefLong = `#${ticketDate.replace(/\//g, '')}-${(ticket.vendorName || ticket.vendorId || 'BETESE').toUpperCase()}-${ticketSerial}`;
+  const agentLabel = (ticket.vendorName || ticket.vendorId || 'BETESE').toUpperCase();
+
   const renderStandardTicket = () => (
-    <div className="text-black bg-white font-mono leading-tight overflow-hidden px-1 py-1">
-      {/* Header */}
-      <div className="c b text-base border-b-2 border-black text-center pb-1 uppercase bg-black text-white py-0.5">Betese PMU</div>
+    <div className="text-black bg-white leading-tight overflow-hidden px-1 py-1" style={{ fontFamily: '"Arial Black", Arial, sans-serif' }}>
+      {/* Big BETESE banner */}
+      <div className="c banner bg-black text-white py-1 mb-1 text-center uppercase">betese</div>
 
-      {/* Reference & Vendor Info */}
-      <div className="border-b border-black py-1 mb-1">
-        <div className="c b text-xs text-black">REF: #{ticket.id}</div>
-        <div className="c b text-xs text-black">
-          {ticket.timestamp.toLocaleDateString([], { day: '2-digit', month: '2-digit', year: 'numeric' })} {ticket.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
-        </div>
-        <div className="c b text-sm mt-0.5 text-black uppercase">VENDOR: {ticket.vendorName || ticket.vendorId || 'N/A'}</div>
-      </div>
+      {/* Ticket reference + serial + date */}
+      <div className="c b text-black mt-1">Ticket {ticketRefLong}</div>
+      <div className="c huge text-black my-1">{ticketSerial}</div>
+      <div className="c b text-black">{ticketDate} at {ticketTime}</div>
+      <div className="c b text-black uppercase mb-1">Agent {agentLabel}</div>
 
-      {/* Race Selections */}
-      <div className="space-y-1.5">
-        {ticket.selections.map((sel, i) => (
-          <div key={i} className="border-b border-black pb-1.5">
-            <div className="c b text-xs text-black uppercase">{sel.raceName} {sel.betType}</div>
-            
-            {/* Print-safe high-contrast number box for sharper thermal output */}
-            <div className="c b huge text-xl bg-white text-black border-2 border-black rounded-none px-1 py-1.5 my-1 text-center font-black tracking-tight leading-none">
-              {sel.pattern && sel.pattern.length > 0
-                ? sel.pattern.join('-')
-                : (sel.xCount > 0 ? 'X-'.repeat(sel.xCount) : '') + sel.numbers.join('-')}
+      <div className="solid" />
+
+      {/* Race selections */}
+      {ticket.selections.map((sel, i) => {
+        const numbersText = sel.pattern && sel.pattern.length > 0
+          ? sel.pattern.join(' ')
+          : ((sel.xCount > 0 ? Array(sel.xCount).fill('X').join(' ') + ' ' : '') + sel.numbers.join(' ')).trim();
+        return (
+          <div key={i} className="mb-1">
+            <div className="c b text-black">{sel.raceName}</div>
+            <div className="c b text-black">
+              {ticket.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
             </div>
-            
-            <div className="c b text-xs text-black">STAKE X{sel.multiplier} GMD {(sel.cost * sel.multiplier).toFixed(0)}</div>
+            <div className="c b text-black uppercase">{sel.betType}</div>
+            <div className="c b text-black">{sel.multiplier} ticket(s)</div>
+            <div className="c b text-black">Amount {(sel.cost * sel.multiplier).toFixed(0)} GMD</div>
+            <div className="c b text-black mt-1">Pronostic</div>
+            <div className="c huge text-black">{numbersText}</div>
+            {i < ticket.selections.length - 1 && <div className="dashed" />}
           </div>
-        ))}
-      </div>
+        );
+      })}
+
+      <div className="solid" />
 
       {/* Total */}
-      <div className="border-t-2 border-black mt-1.5 pt-1 bg-white">
-        <div className="c b text-base text-black font-black text-center">Total {ticket.totalCost.toFixed(0)} GMD</div>
-      </div>
+      <div className="c b text-black">Total {ticket.totalCost.toFixed(0)} GMD</div>
+
+      <div className="dashed" />
 
       {/* Footer */}
-      <div className="c b text-xs text-black mt-1 text-center">*** Valid for 7 days ***</div>
-      <div className="text-center mt-1 pb-0.5">
-        <img src={qrUrl} alt="QR" className="w-[50px] h-[50px] mx-auto block" />
+      <div className="c b text-black">*** Valid for 7 days ***</div>
+      <div className="c b text-black mt-1">{ticketRefLong}</div>
+
+      <div className="text-center mt-1">
+        <img src={qrUrl} alt="QR" />
       </div>
     </div>
   );
@@ -155,14 +171,14 @@ export const TicketModal: React.FC<TicketModalProps> = ({ ticket, onClose, showP
 
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-2 overflow-y-auto">
-        <div className="bg-white rounded-xl shadow-2xl w-full max-w-[280px] flex flex-col animate-fade-in my-auto">
+        <div className="bg-white rounded-xl shadow-2xl w-full max-w-[320px] flex flex-col animate-fade-in my-auto">
           <div className="p-2 border-b flex justify-between items-center bg-gray-100 rounded-t-xl">
-              <span className="font-black text-[10px] text-gray-500 uppercase tracking-widest">Printer View</span>
+              <span className="font-black text-[10px] text-gray-500 uppercase tracking-widest">Printer View (58mm)</span>
               <button onClick={onClose} className="text-gray-400 text-2xl leading-none">&times;</button>
           </div>
 
           <div className="p-2 bg-gray-200">
-            <div id={`p-box-${ticket.id}`} className="bg-white p-1.5 shadow-inner mx-auto border border-gray-300 w-[195px]">
+            <div id={`p-box-${ticket.id}`} className="bg-white p-2 shadow-inner mx-auto border border-gray-300" style={{ width: '58mm' }}>
                 <div id={`ticket-receipt-${ticket.id}`}>
                   {isPaid ? renderPaidReceipt() : renderStandardTicket()}
                 </div>

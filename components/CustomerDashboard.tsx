@@ -1,10 +1,8 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { BetSlip, BetTypeOption, Race, Ticket, BetSelection, User, WithdrawalRequest, Promotion, DepositRequest, ProgramImage } from '../types';
+import { BetSlip, Race, Ticket, BetSelection, User, WithdrawalRequest, Promotion, DepositRequest, ProgramImage } from '../types';
 import { BetSlipPanel } from './BetSlipPanel';
-import { HorseSelector } from './HorseSelector';
 import { TicketModal } from './TicketModal';
-import { BET_PRICING } from '../constants';
 import { TicketHistoryPanel } from './TicketHistoryPanel';
 import { WinningTicketModal } from './WinningTicketModal';
 import { BookingCodeModal } from './BookingCodeModal';
@@ -16,28 +14,12 @@ import { PromotionCarousel } from './PromotionCarousel';
 import { PromotionTicker } from './PromotionTicker';
 import { PasswordChangePanel } from './PasswordChangePanel';
 import { OfficialPayoutsPanel } from './AllBetsPricesPanel';
-import RaceTimerButton from './RaceTimerButton';
 import { RulesModal } from './RulesModal';
 import { useLanguage } from '../LanguageContext';
 import { BETTING_CUTOFF_MS } from '../utils';
 import { WhatsAppButton } from './WhatsAppButton';
-
-const Icon: React.FC<{ name: string }> = ({ name }) => {
-    const icons: { [key: string]: React.ReactNode } = {
-        'Simple Gagnant': <img src="https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=64&h=64&fit=crop&q=80" alt="Win" className="w-7 h-7 rounded-full object-cover border-2 border-yellow-400" />,
-        'Simple Placé': <img src="https://images.unsplash.com/photo-1553284965-83fd3e82fa5a?w=64&h=64&fit=crop&q=80" alt="Place" className="w-7 h-7 rounded-full object-cover border-2 border-blue-400" />,
-        'Couplé Gagnant': <img src="https://images.unsplash.com/photo-1530651788726-1dbf58eeef1f?w=64&h=64&fit=crop&q=80" alt="Exacta" className="w-7 h-7 rounded-full object-cover border-2 border-green-400" />,
-        'Couplé Placé': <img src="https://images.unsplash.com/photo-1598974357801-cbca100e65d3?w=64&h=64&fit=crop&q=80" alt="Quinella" className="w-7 h-7 rounded-full object-cover border-2 border-purple-400" />,
-        'Tiercé': <img src="https://images.unsplash.com/photo-1548535880-2b8e15c86e5e?w=64&h=64&fit=crop&q=80" alt="Trifecta" className="w-7 h-7 rounded-full object-cover border-2 border-orange-400" />,
-        'Quarté+': <img src="https://images.unsplash.com/photo-1452378174528-d6fd5f5ad2da?w=64&h=64&fit=crop&q=80" alt="Superfecta" className="w-7 h-7 rounded-full object-cover border-2 border-red-400" />,
-        'Quinté+': <img src="https://images.unsplash.com/photo-1467516116939-81dc148a39ce?w=64&h=64&fit=crop&q=80" alt="Pick5" className="w-7 h-7 rounded-full object-cover border-2 border-pink-400" />,
-        'Multi 4': <img src="https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=64&h=64&fit=crop&q=80&crop=left" alt="Multi4" className="w-7 h-7 rounded-full object-cover border-2 border-teal-400" />,
-        'Multi 5': <img src="https://images.unsplash.com/photo-1553284965-83fd3e82fa5a?w=64&h=64&fit=crop&q=80&crop=right" alt="Multi5" className="w-7 h-7 rounded-full object-cover border-2 border-indigo-400" />,
-        'Multi 6': <img src="https://images.unsplash.com/photo-1530651788726-1dbf58eeef1f?w=64&h=64&fit=crop&q=80&crop=top" alt="Multi6" className="w-7 h-7 rounded-full object-cover border-2 border-amber-400" />,
-        'Multi 7': <img src="https://images.unsplash.com/photo-1598974357801-cbca100e65d3?w=64&h=64&fit=crop&q=80&crop=bottom" alt="Multi7" className="w-7 h-7 rounded-full object-cover border-2 border-lime-400" />,
-    };
-    return icons[name] || null;
-}
+import { BetSheet } from './BetSheet';
+import { PaymentSheet } from './PaymentSheet';
 
 const TabButton: React.FC<{ label: string; isActive: boolean; onClick: () => void }> = ({ label, isActive, onClick }) => (
     <button
@@ -117,6 +99,10 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   const [isProgramModalOpen, setIsProgramModalOpen] = useState(false);
   const [isRulesModalOpen, setIsRulesModalOpen] = useState(false);
   const [showPromoTV, setShowPromoTV] = useState(true);
+  const [isBetSheetOpen, setIsBetSheetOpen] = useState(false);
+  const [betSheetInitialRaceId, setBetSheetInitialRaceId] = useState<string | null>(null);
+  const [paymentSheetAmount, setPaymentSheetAmount] = useState<number | undefined>(undefined);
+  const [isPaymentSheetOpen, setIsPaymentSheetOpen] = useState(false);
   const { t } = useLanguage();
 
   // Sync external trigger (from Header PROGRAM button)
@@ -126,16 +112,11 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
       onExternalProgramClose?.();
     }
   }, [externalOpenProgram]);
-  
+
   const availableRaces = useMemo(
     () => [...races].filter(r => r.endDate > effectiveTime).sort((a,b) => a.endDate.getTime() - b.endDate.getTime()),
     [races, effectiveTime]
   );
-  const [selectedRace, setSelectedRace] = useState<Race | null>(availableRaces[0] || null);
-  const [selectedBetType, setSelectedBetType] = useState<BetTypeOption | null>(null);
-  const [selectedNumbers, setSelectedNumbers] = useState<number[]>([]);
-  const [xCount, setXCount] = useState<number>(0);
-  const [pattern, setPattern] = useState<string[]>([]);
 
   const winningTicketToShow = useMemo(() => {
       return (placedTickets || []).find(t => t.status === 'Winning' && !seenWinningTickets.has(t.id));
@@ -160,52 +141,19 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
       return typeValue === 'advertisement' || typeValue.includes('ad');
     });
   }, [programImages]);
-  
-  useEffect(() => {
-    if (!selectedRace && availableRaces.length > 0) {
-      setSelectedRace(availableRaces[0]);
-      return;
-    }
-    if (selectedRace && effectiveTime >= selectedRace.endDate) {
-      setSelectedRace(availableRaces[0] || null);
-    }
-    }, [effectiveTime, selectedRace, availableRaces]);
 
-  const timeRemaining = selectedRace ? selectedRace.endDate.getTime() - effectiveTime.getTime() : 0;
-  const isBettingClosed = timeRemaining <= BETTING_CUTOFF_MS;
+  const nextRace = availableRaces[0] || null;
+  const nextRaceTimeRemaining = nextRace ? nextRace.endDate.getTime() - effectiveTime.getTime() : 0;
+  const nextRaceClosed = !nextRace || nextRaceTimeRemaining <= BETTING_CUTOFF_MS;
 
-  const handleAddBet = () => {
-    if (!selectedRace || !selectedBetType) {
-      alert('Please select a race and a bet type.');
-      return;
-    }
+  const formatRaceCountdown = (ms: number) => {
+    const total = Math.max(0, Math.floor(ms / 1000));
+    return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+  };
 
-    // STRICT MULTI VALIDATION
-    const pricing = BET_PRICING[selectedBetType];
-    const totalSelected = selectedNumbers.length + xCount;
-    
-    if (totalSelected < pricing.minHorses) {
-        alert(`INVALID SELECTION: ${selectedBetType} requires at least ${pricing.minHorses} horses. You only have ${totalSelected}.`);
-        return;
-    }
-
-    if (isBettingClosed) {
-        alert("Betting for this race is CLOSED (2 min cutoff).");
-        return;
-    }
-
-    onUpdateBetSlip({
-        raceId: selectedRace.id,
-        raceName: selectedRace.name,
-        betType: selectedBetType,
-        numbers: selectedNumbers,
-        xCount: xCount,
-        pattern: pattern,
-    });
-    setSelectedNumbers([]);
-    setXCount(0);
-    setPattern([]);
-    setSelectedBetType(null);
+  const openBetSheet = (raceId?: string | null) => {
+    setBetSheetInitialRaceId(raceId ?? null);
+    setIsBetSheetOpen(true);
   };
   
   return (
@@ -236,101 +184,79 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
             </div>
 
             {activeTab === 'bet' && (
-              <div className="bg-white p-6 rounded-lg shadow-lg relative">
-                  {/* view_program button — always shown in bet tab */}
+              <div className="bg-white p-5 rounded-2xl shadow-lg relative space-y-4">
                   <button
                     onClick={() => setIsProgramModalOpen(true)}
-                    className="w-full mb-5 flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-black uppercase rounded-xl shadow-md transition-all text-sm"
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-black uppercase rounded-xl shadow-md transition-all text-sm"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
-                    view_program
+                    View Program
                     {programItems.length > 0 && (
                       <span className="bg-yellow-400 text-blue-900 text-[10px] font-black px-2 py-0.5 rounded-full">
                         {programItems.length} {programItems.length === 1 ? 'page' : 'pages'}
                       </span>
                     )}
                   </button>
-                  {selectedRace && (
-                    <div className={`sticky top-0 z-10 -mx-6 -mt-6 mb-6 p-4 border-b-4 flex justify-between items-center shadow-md transition-colors ${isBettingClosed ? 'bg-red-600 border-red-800 text-white' : 'bg-betese-green border-green-800 text-white'}`}>
+
+                  {nextRace ? (
+                    <div className={`rounded-2xl p-4 text-white shadow-md ${nextRaceClosed ? 'bg-red-600' : 'bg-betese-green'}`}>
+                      <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-[10px] font-black uppercase opacity-80 leading-none">Racing Console</p>
-                            <h4 className="text-xl font-black uppercase leading-none">{selectedRace.name}</h4>
+                          <p className="text-[10px] font-black uppercase opacity-90 leading-none">Next Race</p>
+                          <h4 className="text-2xl font-black leading-tight">{nextRace.name}</h4>
                         </div>
                         <div className="text-right">
-                             <p className="text-[10px] font-black uppercase opacity-80 leading-none">{isBettingClosed ? 'Status' : 'Betting Closes'}</p>
-                             <p className="text-3xl font-mono font-black leading-none">
-                                {isBettingClosed ? 'CLOSED' : `${Math.floor(timeRemaining / 60000).toString().padStart(2, '0')}:${Math.floor((timeRemaining % 60000) / 1000).toString().padStart(2, '0')}`}
-                             </p>
+                          <p className="text-[10px] font-black uppercase opacity-90 leading-none">{nextRaceClosed ? 'Status' : 'Closes in'}</p>
+                          <p className="text-3xl font-mono font-black leading-none">
+                            {nextRaceClosed ? 'CLOSED' : formatRaceCountdown(nextRaceTimeRemaining)}
+                          </p>
                         </div>
-                    </div>
-                  )}
-
-                  <div className="mb-6">
-                    <h3 className="text-lg font-black uppercase mb-3 text-gray-700">{t('select_race')}</h3>
-                    <div className="flex flex-wrap gap-3">
-                        {availableRaces.map((race) => (
-                            <RaceTimerButton
-                                key={race.id}
-                                race={race}
-                                isSelected={selectedRace?.id === race.id}
-                            onClick={(id) => setSelectedRace(availableRaces.find(r => r.id === id) || null)}
-                                initialEffectiveTime={effectiveTime}
-                                variant="customer"
-                            />
-                        ))}
-                    </div>
-                  </div>
-
-                  {selectedRace && (
-                      <>
-                      <div className="mb-6">
-                          <h3 className="text-lg font-black uppercase mb-3 text-gray-700">{t('select_bet_type')}</h3>
-                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                          {Object.values(BetTypeOption).map((bt) => {
-                              const isDisabled = selectedRace.disabledBetTypes?.includes(bt);
-                              return (
-                                  <button
-                                      key={bt}
-                                      onClick={() => { setSelectedBetType(bt); setSelectedNumbers([]); setXCount(0); setPattern([]); }}
-                                      disabled={isDisabled}
-                                      className={`relative p-3 rounded-xl text-xs font-black transition-all flex flex-col items-center justify-center h-20 gap-1 border-2 ${
-                                          isDisabled 
-                                              ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                                              : (selectedBetType === bt ? 'bg-yellow-400 text-betese-dark border-betese-green shadow-lg scale-105' : 'bg-gray-50 text-gray-700 border-gray-200 hover:border-yellow-400 shadow-sm')
-                                      }`}
-                                  >
-                                      <span className="text-xl"><Icon name={bt} /></span>
-                                      <span>{bt}</span>
-                                  </button>
-                              );
-                          })}
-                          </div>
                       </div>
-
-                      {selectedBetType && (
-                          <HorseSelector
-                              race={selectedRace}
-                              betType={selectedBetType}
-                              selectedNumbers={selectedNumbers}
-                              xCount={xCount}
-                              onNumberSelect={setSelectedNumbers}
-                              onXSelect={setXCount}
-                              onPatternChange={setPattern}
-                              disabled={isBettingClosed}
-                          />
-                      )}
-                      </>
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl p-6 bg-gray-100 text-center text-gray-500 font-bold uppercase text-sm">
+                      {t('no_races')}
+                    </div>
                   )}
 
-                  <div className="mt-8">
-                      <button
-                          onClick={handleAddBet}
-                          disabled={!selectedRace || !selectedBetType || (selectedNumbers.length + xCount === 0) || isBettingClosed}
-                          className="w-full py-5 bg-betese-green text-white font-black rounded-2xl shadow-xl hover:brightness-110 disabled:bg-gray-300 disabled:opacity-50 transition-all active:scale-95 text-xl uppercase tracking-widest"
-                      >
-                          {t('add_to_slip')}
-                      </button>
-                  </div>
+                  <button
+                    onClick={() => openBetSheet(nextRace?.id ?? null)}
+                    disabled={availableRaces.length === 0}
+                    className="w-full py-5 bg-betese-green text-white font-black rounded-2xl shadow-xl hover:brightness-110 disabled:bg-gray-300 disabled:opacity-50 transition-all active:scale-95 text-xl uppercase tracking-widest flex items-center justify-center gap-3"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.4}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                    </svg>
+                    Place a Bet
+                  </button>
+
+                  {availableRaces.length > 1 && (
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Or pick a race directly</p>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {availableRaces.slice(0, 6).map((race) => {
+                          const remaining = race.endDate.getTime() - effectiveTime.getTime();
+                          const closed = remaining <= BETTING_CUTOFF_MS;
+                          return (
+                            <button
+                              key={race.id}
+                              onClick={() => openBetSheet(race.id)}
+                              disabled={closed}
+                              className={`text-left p-3 rounded-xl border-2 transition-all active:scale-95 ${
+                                closed
+                                  ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
+                                  : 'border-gray-200 bg-white hover:border-betese-green'
+                              }`}
+                            >
+                              <p className="text-[10px] font-black uppercase text-gray-400">Race</p>
+                              <p className="text-sm font-black text-betese-dark truncate">{race.name}</p>
+                              <p className="text-xs font-mono font-bold">{closed ? 'CLOSED' : formatRaceCountdown(remaining)}</p>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
               </div>
             )}
             {activeTab === 'history' && <TicketHistoryPanel tickets={placedTickets} onCancelTicket={onCancelTicket} races={races} effectiveTime={effectiveTime} />}
@@ -354,18 +280,40 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
           </div>
 
           <div className="lg:col-span-1 space-y-6">
-            <BetSlipPanel 
-              betSlip={betSlip} 
-              onClear={onClearBetSlip} 
-              onInitiatePlaceBet={onInitiatePlaceBet} 
-              onInitiateBookBet={onInitiateBookBet} 
-              onRemove={onRemoveSelection} 
-              onUpdateSelectionMultiplier={onUpdateSelectionMultiplier} 
+            <BetSlipPanel
+              betSlip={betSlip}
+              onClear={onClearBetSlip}
+              onInitiatePlaceBet={onInitiatePlaceBet}
+              onInitiateBookBet={onInitiateBookBet}
+              onRemove={onRemoveSelection}
+              onUpdateSelectionMultiplier={onUpdateSelectionMultiplier}
               isPlacingBet={isBettingInProgress}
+              availableBalance={(user.walletBalance ?? 0) + (user.bonusBalance ?? 0)}
+              onTopUp={(amount) => {
+                setPaymentSheetAmount(amount);
+                setIsPaymentSheetOpen(true);
+              }}
             />
             <RaceResultsPanel races={races} onSelectRace={setRapportModalRace} effectiveTime={effectiveTime} />
           </div>
       </div>
+
+      <BetSheet
+        isOpen={isBetSheetOpen}
+        onClose={() => setIsBetSheetOpen(false)}
+        races={races}
+        effectiveTime={effectiveTime}
+        onAddToSlip={onUpdateBetSlip}
+        initialRaceId={betSheetInitialRaceId}
+      />
+
+      <PaymentSheet
+        isOpen={isPaymentSheetOpen}
+        onClose={() => { setIsPaymentSheetOpen(false); setPaymentSheetAmount(undefined); }}
+        user={user}
+        initialAmount={paymentSheetAmount}
+        onDepositRequest={onDepositRequest}
+      />
     </div>
   );
 };
