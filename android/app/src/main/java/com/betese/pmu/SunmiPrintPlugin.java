@@ -139,6 +139,55 @@ public class SunmiPrintPlugin extends Plugin {
         call.resolve(new JSObject());
     }
 
+    /**
+     * Send raw ESC/POS bytes to the Sunmi inner printer.
+     * Transaction code 5 = sendRAWData(byte[] data, ICallback callback).
+     * The bytes are passed in as base64 so they survive the JS bridge intact.
+     */
+    @PluginMethod
+    public void sendRaw(PluginCall call) {
+        String base64 = call.getString("base64", "");
+        if (base64 == null || base64.isEmpty()) {
+            call.reject("Missing base64 payload");
+            return;
+        }
+        if (!serviceBound || sunmiBinder == null) {
+            retrySendRawAfterBind(call, base64, 0);
+            return;
+        }
+        try {
+            byte[] bytes = android.util.Base64.decode(base64, android.util.Base64.DEFAULT);
+            android.os.Parcel data  = android.os.Parcel.obtain();
+            android.os.Parcel reply = android.os.Parcel.obtain();
+            data.writeInterfaceToken(SUNMI_SERVICE_CLASS);
+            data.writeByteArray(bytes);
+            data.writeStrongBinder(null);
+            // AIDL transaction 5 = sendRAWData(byte[], ICallback)
+            sunmiBinder.transact(5, data, reply, 0);
+            reply.recycle();
+            data.recycle();
+            JSObject ret = new JSObject();
+            ret.put("success", true);
+            ret.put("bytes", bytes.length);
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("Sunmi sendRaw failed: " + e.getMessage());
+        }
+    }
+
+    private void retrySendRawAfterBind(PluginCall call, String base64, int attempt) {
+        if (attempt >= MAX_BIND_RETRY_COUNT) {
+            call.reject("Sunmi printer not available");
+            return;
+        }
+        if (serviceBound && sunmiBinder != null) {
+            sendRaw(call);
+            return;
+        }
+        bindSunmiService();
+        handler.postDelayed(() -> retrySendRawAfterBind(call, base64, attempt + 1), BIND_RETRY_DELAY_MS);
+    }
+
     /** Print a bitmap (base64 encoded, width in pixels). Transaction 26 = printBitmap. */
     @PluginMethod
     public void printBitmap(PluginCall call) {
