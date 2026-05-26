@@ -18,7 +18,7 @@ import {
     dbFetchDepositRequests, dbFetchWithdrawalRequests, dbDepositRequest,
     dbMarkDepositRequestApproved, dbRejectDepositRequest, dbCancelWithdrawal,
     dbCreateWithdrawalRequest, dbAddUser, dbFetchPromotions,
-    dbTogglePromotionStatus, dbUpdatePromotion, dbMovePromotion,
+    dbTogglePromotionStatus, dbSetPromotionDisplayMode, dbUpdatePromotion, dbMovePromotion,
     dbCreatePromotion, dbDeletePromotion, dbFetchProgramImages,
     dbAddProgramImage, dbDeleteProgramImage, dbUploadProgramFile, dbFetchPaymentConfigs,
     dbSavePaymentConfig, dbFetchManualBetOrders, dbCreateManualBetOrder,
@@ -1851,6 +1851,21 @@ const AppContent: React.FC = () => {
       setPromotions(prev => prev.map(p => p.id === promoId ? { ...p, isActive: next } : p));
   };
 
+  const handleTogglePromotionDisplayMode = async (promoId: string) => {
+      const current = promotions.find(p => p.id === promoId);
+      if (!current) return;
+      const next: 'scroll' | 'static' = (current.displayMode === 'static') ? 'scroll' : 'static';
+      if (realtimeDb) {
+          try {
+              await dbSetPromotionDisplayMode(promoId, next);
+          } catch (e: any) {
+              alert("Failed to update banner mode: " + e.message);
+              return;
+          }
+      }
+      setPromotions(prev => prev.map(p => p.id === promoId ? { ...p, displayMode: next } : p));
+  };
+
   const handleUpdatePromotion = async (promoId: string, newName: string, newRules: PromotionRule[]) => {
       const trimmedName = (newName || '').trim();
       if (!trimmedName) {
@@ -2182,6 +2197,7 @@ const AppContent: React.FC = () => {
                     onDeleteProgramImage={handleDeleteProgramImage}
                     promotions={promotions}
                     onTogglePromotionStatus={handleTogglePromotionStatus}
+                    onTogglePromotionDisplayMode={handleTogglePromotionDisplayMode}
                     onUpdatePromotion={handleUpdatePromotion}
                     onMovePromotion={handleMovePromotion}
                     onCreatePromotion={handleCreatePromotion}
@@ -2222,6 +2238,7 @@ const AppContent: React.FC = () => {
                     onDeleteProgramImage={handleDeleteProgramImage}
                     promotions={promotions}
                     onTogglePromotionStatus={handleTogglePromotionStatus}
+                    onTogglePromotionDisplayMode={handleTogglePromotionDisplayMode}
                     onUpdatePromotion={handleUpdatePromotion}
                     onMovePromotion={handleMovePromotion}
                     onCreatePromotion={handleCreatePromotion}

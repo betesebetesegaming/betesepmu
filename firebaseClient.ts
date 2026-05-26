@@ -1162,12 +1162,15 @@ export const dbFetchPromotions = async (): Promise<Promotion[]> => {
         const snap = await getDocs(query(collection(db, 'promotions'), orderBy('sort_order', 'asc')));
         return snap.docs.map((d) => {
             const p = d.data() as any;
+            const rawDisplayMode = p.display_mode;
+            const displayMode: 'scroll' | 'static' = rawDisplayMode === 'static' ? 'static' : 'scroll';
             return {
                 id: d.id,
                 name: p.name,
                 type: p.type,
                 isActive: !!p.is_active,
                 rules: Array.isArray(p.rules) ? p.rules : [],
+                displayMode,
             };
         });
     } catch {
@@ -1183,6 +1186,7 @@ export const dbCreatePromotion = async (promo: Promotion, sortOrder: number) => 
         is_active: promo.isActive,
         rules: promo.rules || [],
         sort_order: sortOrder,
+        display_mode: promo.displayMode || 'scroll',
     });
 };
 
@@ -1192,6 +1196,10 @@ export const dbUpdatePromotion = async (promoId: string, name: string, rules: an
 
 export const dbTogglePromotionStatus = async (promoId: string, nextStatus: boolean) => {
     await updateDoc(doc(db, 'promotions', promoId), { is_active: nextStatus });
+};
+
+export const dbSetPromotionDisplayMode = async (promoId: string, mode: 'scroll' | 'static') => {
+    await updateDoc(doc(db, 'promotions', promoId), { display_mode: mode });
 };
 
 export const dbDeletePromotion = async (promoId: string) => {
@@ -1574,17 +1582,63 @@ export const dbSaveOTPConfig = async (config: OTPConfig): Promise<void> => {
 };
 
 export const dbGenerateAndSendOTP = async (
-    _phone: string,
-    _forcedCode?: string
+    phone: string,
+    forcedCode?: string
 ): Promise<{ success: boolean; message: string; expirySeconds?: number }> => {
-    // Firebase Phone Auth issues OTPs directly via the client SDK in Phase 4.
-    // For now, allow the old LoginScreen flow to proceed by returning success.
-    return { success: true, message: 'OTP step bypassed (Firebase Phone Auth integration pending).', expirySeconds: 300 };
+    // Calls the server-side /api/send-otp route, which uses the Africell SMS
+    // gateway to deliver the code. When `forcedCode` is provided (e.g. the
+    // withdrawal code generated when a withdrawal request is created), the SMS
+    // carries that exact code and no hash is persisted — verification is the
+    // caller's responsibility (vendor enters code, system matches against
+    // WithdrawalRequest.code). When `forcedCode` is omitted, the server
+    // generates a fresh 6-digit code and stores a salted SHA-256 hash for
+    // later validation by /api/verify-otp. The plaintext code is never
+    // returned to the client.
+    try {
+        const payload: { phone: string; code?: string } = { phone };
+        if (forcedCode) payload.code = forcedCode;
+        const res = await fetch('/api/send-otp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        const data = await res.json().catch(() => ({} as any));
+        if (!res.ok || !data?.ok) {
+            return {
+                success: false,
+                message: data?.error || `OTP send failed (HTTP ${res.status})`,
+            };
+        }
+        return {
+            success: true,
+            message: 'OTP sent via SMS.',
+            expirySeconds: Number(data?.expirySeconds || 300),
+        };
+    } catch (err: any) {
+        return { success: false, message: err?.message || 'Network error sending OTP' };
+    }
 };
 
 export const dbVerifyOTP = async (
-    _phone: string,
-    _code: string
+    phone: string,
+    code: string
 ): Promise<{ success: boolean; message: string; isValid?: boolean }> => {
-    return { success: true, message: 'OTP step bypassed (Firebase Phone Auth integration pending).', isValid: true };
+    try {
+        const res = await fetch('/api/verify-otp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone, code }),
+        });
+        const data = await res.json().catch(() => ({} as any));
+        if (res.ok && data?.ok) {
+            return { success: true, message: 'OTP verified.', isValid: true };
+        }
+        return {
+            success: false,
+            message: data?.error || `OTP verification failed (HTTP ${res.status})`,
+            isValid: false,
+        };
+    } catch (err: any) {
+        return { success: false, message: err?.message || 'Network error verifying OTP', isValid: false };
+    }
 };

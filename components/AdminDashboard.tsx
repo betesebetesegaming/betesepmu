@@ -74,6 +74,7 @@ interface AdminDashboardProps {
     onDeleteProgramImage: (id: string) => void;
     promotions: Promotion[];
     onTogglePromotionStatus: (promoId: string) => void;
+    onTogglePromotionDisplayMode: (promoId: string) => void;
     onUpdatePromotion: (promoId: string, newName: string, newRules: PromotionRule[]) => void;
     onMovePromotion: (id: string, direction: 'up' | 'down') => void;
     onCreatePromotion: (name: string, type: 'first-deposit' | 'weekly' | 'special') => void;
@@ -252,7 +253,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
     const { 
         users = [], onToggleLock, onLockAllVendors, onAddUser, onDeposit, depositLogs = [], races = [], onAddRace,
         onUpdateRace, onDeleteRace, allTickets = [], onCancelTicket, programImages = [], onAddProgramImage,
-        onDeleteProgramImage, promotions = [], onTogglePromotionStatus, onUpdatePromotion, onAdminResetPassword,
+        onDeleteProgramImage, promotions = [], onTogglePromotionStatus, onTogglePromotionDisplayMode, onUpdatePromotion, onAdminResetPassword,
         effectiveTime, currentUser, onPayoutTicket, onSaveRaceResult, onReprintTicket,
         onMovePromotion, onCreatePromotion, onDeletePromotion, paymentConfigs = [], onSavePaymentConfig,
         manualBetOrders = [], onCreateManualBet, onCancelManualBet, depositRequests = []
@@ -278,7 +279,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
         switch (view) {
             case 'VENDOR_MONITOR': return <VendorMonitorPanel allTickets={allTickets} depositLogs={depositLogs} users={users} onCancelTicket={onCancelTicket} onToggleLock={onToggleLock} />;
             case 'ANALYTICS': return <div className="space-y-6"><AnalyticsDashboard tickets={allTickets} races={races} /></div>;
-            case 'BANNER': return <div className="space-y-6"><PromotionManagementPanel promotions={promotions} onToggleStatus={onTogglePromotionStatus} onUpdatePromotion={onUpdatePromotion} onMovePromotion={onMovePromotion} onCreatePromotion={onCreatePromotion} onDeletePromotion={onDeletePromotion} /></div>;
+            case 'BANNER': return <div className="space-y-6"><PromotionManagementPanel promotions={promotions} onToggleStatus={onTogglePromotionStatus} onToggleDisplayMode={onTogglePromotionDisplayMode} onUpdatePromotion={onUpdatePromotion} onMovePromotion={onMovePromotion} onCreatePromotion={onCreatePromotion} onDeletePromotion={onDeletePromotion} /></div>;
             case 'RAFFLE_DRAW': return <AutomaticRaffleDrawerPanel users={users} tickets={allTickets} effectiveTime={effectiveTime} />;
             case 'PROGRAM': return <div className="space-y-6"><ProgramManagementPanel programImages={programImages} onUpload={onAddProgramImage} onDelete={onDeleteProgramImage} /><CombinationSearch allTickets={allTickets} races={races} onCancelTicket={onCancelTicket} effectiveTime={effectiveTime} /></div>;
             case 'USERS': return <div className="flex flex-col md:flex-row gap-6"><RoleFilter selectedRole={selectedRole} onSelectRole={setSelectedRole} /><div className="flex-1 space-y-6"><UserAccountManagement users={selectedRole === 'All' ? users : users.filter(u => u.role === selectedRole)} onToggleLock={onToggleLock} onAddUser={onAddUser} onAdminResetPassword={onAdminResetPassword} creatableRoles={['Admin', 'Supervisor', 'Vendor', 'Customer']} /><CustomerDepositPanel customers={users.filter(u => u.role === 'Customer')} onDeposit={onDeposit} onAdminAdjustBalance={props.onAdminAdjustBalance} depositLogs={depositLogs} depositRequests={depositRequests} onApproveDepositRequest={props.onApproveDepositRequest} onRejectDepositRequest={props.onRejectDepositRequest} currentUserRole={currentUser.role} currentUserName={currentUser.name} /></div></div>;

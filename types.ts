@@ -238,6 +238,8 @@ export interface Promotion {
   type: 'first-deposit' | 'weekly' | 'special'; // Extensible for future promo types
   isActive: boolean;
   rules: PromotionRule[];
+  /** Banner display mode for the customer scrolling ticker. Defaults to 'scroll'. */
+  displayMode?: 'scroll' | 'static';
 }
 
 export interface ManualBetOrder {

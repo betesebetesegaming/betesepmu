@@ -18,8 +18,13 @@ export const PromotionTicker: React.FC<PromotionTickerProps> = ({ promotions }) 
     return null;
   }
 
-  // If there's only one promotion, display it statically.
-  if (activePromotions.length === 1) {
+  // Static mode only when there's a single active promotion AND the admin
+  // explicitly switched its display mode to "static". Default is to scroll
+  // so the banner can carry longer messages.
+  const single = activePromotions.length === 1;
+  const isStatic = single && activePromotions[0].displayMode === 'static';
+
+  if (isStatic) {
     return (
         <div className="bg-yellow-400 text-betese-dark font-bold overflow-hidden whitespace-nowrap py-2.5 shadow-md rounded-md">
             <div className="flex justify-center items-center">
@@ -31,8 +36,12 @@ export const PromotionTicker: React.FC<PromotionTickerProps> = ({ promotions }) 
     );
   }
 
-  // If there are multiple promotions, use the scrolling marquee.
-  const duration = activePromotions.length * 10; // Adjust speed based on number of promotions
+  // Scrolling marquee. For a single promotion we still produce a smooth loop
+  // by duplicating the item so the animation has content to scroll through.
+  const renderList = single
+    ? [activePromotions[0], activePromotions[0], activePromotions[0], activePromotions[0]]
+    : [...activePromotions, ...activePromotions];
+  const duration = Math.max(activePromotions.length * 10, 20); // Adjust speed; min 20s for single
 
   return (
     <>
@@ -47,8 +56,7 @@ export const PromotionTicker: React.FC<PromotionTickerProps> = ({ promotions }) 
       `}</style>
       <div className="bg-yellow-400 text-betese-dark font-bold overflow-hidden whitespace-nowrap py-2.5 shadow-md rounded-md">
         <div className="flex animate-marquee hover:[animation-play-state:paused]">
-          {/* Render list twice for seamless loop */}
-          {[...activePromotions, ...activePromotions].map((promo, index) => (
+          {renderList.map((promo, index) => (
             <div key={`${promo.id}-${index}`} className="flex-shrink-0 flex items-center">
                 <StarIcon />
                 <span className="text-lg">{promo.name}</span>

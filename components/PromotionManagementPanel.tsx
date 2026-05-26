@@ -5,6 +5,7 @@ import { Promotion, PromotionRule } from '../types';
 interface PromotionManagementPanelProps {
     promotions: Promotion[];
     onToggleStatus: (promoId: string) => void;
+    onToggleDisplayMode: (promoId: string) => void;
     onUpdatePromotion: (promoId: string, newName: string, newRules: PromotionRule[]) => void;
     onMovePromotion: (id: string, direction: 'up' | 'down') => void;
     onCreatePromotion: (name: string, type: 'first-deposit' | 'weekly' | 'special') => void;
@@ -30,15 +31,16 @@ const normalizeRules = (rules: PromotionRule[]): PromotionRule[] => {
         .map(([depositAmount, bonusAmount]) => ({ depositAmount, bonusAmount }));
 };
 
-const PromotionEditor: React.FC<{ 
-    promotion: Promotion; 
+const PromotionEditor: React.FC<{
+    promotion: Promotion;
     index: number;
     total: number;
     onToggleStatus: (promoId: string) => void;
+    onToggleDisplayMode: (promoId: string) => void;
     onUpdatePromotion: (promoId: string, newName: string, newRules: PromotionRule[]) => void;
     onMove: (id: string, direction: 'up' | 'down') => void;
     onDelete: (id: string) => void;
-}> = ({ promotion, index, total, onToggleStatus, onUpdatePromotion, onMove, onDelete }) => {
+}> = ({ promotion, index, total, onToggleStatus, onToggleDisplayMode, onUpdatePromotion, onMove, onDelete }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [name, setName] = useState<string>(promotion.name);
     const [rules, setRules] = useState<PromotionRule[]>(promotion.rules);
@@ -135,7 +137,7 @@ const PromotionEditor: React.FC<{
                         )}
                         <p className="text-sm text-gray-500">Type: {promotion.type}</p>
                     </div>
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-4 flex-wrap">
                          <div className="flex items-center">
                             <span className={`mr-3 font-semibold text-sm ${promotion.isActive ? 'text-green-600' : 'text-red-600'}`}>
                                 {promotion.isActive ? 'Active' : 'Inactive'}
@@ -144,6 +146,25 @@ const PromotionEditor: React.FC<{
                                 <input type="checkbox" checked={promotion.isActive} onChange={() => onToggleStatus(promotion.id)} id={`promo-toggle-${promotion.id}`} className="sr-only peer" />
                                 <div className="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
                             </label>
+                        </div>
+                        {/* Banner display mode toggle: Scrolling (default) <-> Static */}
+                        <div className="inline-flex items-center rounded-full border border-gray-300 bg-white p-0.5 text-xs font-bold shadow-sm" role="group" aria-label="Banner display mode">
+                            <button
+                                type="button"
+                                onClick={() => { if ((promotion.displayMode || 'scroll') !== 'scroll') onToggleDisplayMode(promotion.id); }}
+                                className={`px-3 py-1 rounded-full transition-colors ${ (promotion.displayMode || 'scroll') === 'scroll' ? 'bg-betese-green text-white' : 'text-gray-600 hover:text-gray-900' }`}
+                                title="Banner text moves across the screen"
+                            >
+                                Scrolling
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => { if ((promotion.displayMode || 'scroll') !== 'static') onToggleDisplayMode(promotion.id); }}
+                                className={`px-3 py-1 rounded-full transition-colors ${ promotion.displayMode === 'static' ? 'bg-betese-dark text-white' : 'text-gray-600 hover:text-gray-900' }`}
+                                title="Banner stays still in the centre (only applies when this is the only active promotion)"
+                            >
+                                Static
+                            </button>
                         </div>
                         {!isEditing ? (
                             <div className="flex gap-2">
@@ -273,7 +294,7 @@ const NewPromotionForm: React.FC<{ onCreate: (name: string, type: 'first-deposit
 }
 
 
-export const PromotionManagementPanel: React.FC<PromotionManagementPanelProps> = ({ promotions, onToggleStatus, onUpdatePromotion, onMovePromotion, onCreatePromotion, onDeletePromotion }) => {
+export const PromotionManagementPanel: React.FC<PromotionManagementPanelProps> = ({ promotions, onToggleStatus, onToggleDisplayMode, onUpdatePromotion, onMovePromotion, onCreatePromotion, onDeletePromotion }) => {
     const [notice, setNotice] = useState<string>('');
     const [simulatedDeposit, setSimulatedDeposit] = useState<number | ''>('');
 
@@ -321,9 +342,10 @@ export const PromotionManagementPanel: React.FC<PromotionManagementPanelProps> =
             <div className="mb-4 rounded-lg border-l-4 border-yellow-400 bg-yellow-50 p-3 text-sm text-gray-800">
                 <p className="font-bold text-yellow-800 mb-1">How the customer scrolling banner works</p>
                 <ul className="list-disc list-inside space-y-1 text-xs">
-                    <li>The <strong>name</strong> you give a promotion is the text that appears in the yellow scrolling banner at the top of the customer area.</li>
+                    <li>The <strong>name</strong> you give a promotion is the text that appears in the yellow banner at the top of the customer area.</li>
                     <li>Only promotions marked <strong>Active</strong> are shown to customers.</li>
-                    <li>With <strong>2 or more</strong> active promotions the banner scrolls automatically; with only one it stays still and centered.</li>
+                    <li>Use the <strong>Scrolling / Static</strong> button on each promotion to choose how it appears. <strong>Scrolling</strong> (the default) is best for long messages because the text moves across the screen.</li>
+                    <li>If you have 2 or more active promotions the banner always scrolls so every message gets airtime.</li>
                     <li>Deposit bonus rules are optional &mdash; leave them empty if you only want to display an announcement.</li>
                 </ul>
             </div>
@@ -376,12 +398,13 @@ export const PromotionManagementPanel: React.FC<PromotionManagementPanelProps> =
             )}
             <div className="space-y-4">
                 {promotions.map((promo, index) => (
-                    <PromotionEditor 
+                    <PromotionEditor
                         key={promo.id}
                         index={index}
                         total={promotions.length}
                         promotion={promo}
                         onToggleStatus={onToggleStatus}
+                        onToggleDisplayMode={onToggleDisplayMode}
                         onUpdatePromotion={onUpdatePromotion}
                         onMove={onMovePromotion}
                         onDelete={onDeletePromotion}

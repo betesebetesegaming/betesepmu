@@ -37,6 +37,7 @@ interface SupervisorDashboardProps {
     onDeleteProgramImage: (id: string) => void;
     promotions: Promotion[];
     onTogglePromotionStatus: (promoId: string) => void;
+    onTogglePromotionDisplayMode: (promoId: string) => void;
     onUpdatePromotion: (promoId: string, newName: string, newRules: PromotionRule[]) => void;
     onMovePromotion: (id: string, direction: 'up' | 'down') => void;
     onCreatePromotion: (name: string, type: 'first-deposit' | 'weekly' | 'special') => void;
@@ -87,9 +88,10 @@ export const SupervisorDashboard: React.FC<SupervisorDashboardProps> = (props) =
         programImages = [], 
         onAddProgramImage, 
         onDeleteProgramImage, 
-        promotions = [], 
-        onTogglePromotionStatus, 
-        onUpdatePromotion, 
+        promotions = [],
+        onTogglePromotionStatus,
+        onTogglePromotionDisplayMode,
+        onUpdatePromotion,
         onAdminResetPassword, 
         effectiveTime, 
         currentUser, 
@@ -183,9 +185,10 @@ export const SupervisorDashboard: React.FC<SupervisorDashboardProps> = (props) =
                             onUpload={onAddProgramImage}
                             onDelete={onDeleteProgramImage}
                         />
-                        <PromotionManagementPanel 
+                        <PromotionManagementPanel
                             promotions={promotions}
                             onToggleStatus={onTogglePromotionStatus}
+                            onToggleDisplayMode={onTogglePromotionDisplayMode}
                             onUpdatePromotion={onUpdatePromotion}
                             onMovePromotion={onMovePromotion}
                             onCreatePromotion={onCreatePromotion}
