@@ -38,14 +38,16 @@ export const AfriMoneyPaymentTab: React.FC<Props> = ({ customers, onDeposit }) =
       const externalRef = generateRef();
       const cleanPhone = phone.replace(/^\+220/, '').replace(/\D/g, '');
 
-      const res = await fetch('/api/afrimoney-payment', {
+      const res = await fetch('/api/modempay-checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          provider: 'afrimoney',
           customerPhone: cleanPhone,
           amount: numAmount,
           externalRef,
-          customerName: selectedCustomer.name
+          customerName: selectedCustomer.name,
+          customerId: selectedCustomer.id,
         })
       });
 
@@ -80,10 +82,10 @@ export const AfriMoneyPaymentTab: React.FC<Props> = ({ customers, onDeposit }) =
       <div className="bg-orange-50 border-2 border-orange-200 rounded-xl p-4">
         <div className="flex items-center gap-2 mb-2">
           <AfriMoneyLogo height={24} />
-          <h4 className="text-lg font-black text-orange-900">AfriMoney Direct Payment</h4>
+          <h4 className="text-lg font-black text-orange-900">AfriMoney Payment</h4>
         </div>
         <p className="text-sm text-orange-700 mb-4">
-          Customer will receive a prompt on their phone to confirm payment with their PIN.
+          Powered by ModemPay. Customer will receive a prompt on their phone to confirm payment with their AfriMoney PIN.
         </p>
 
         {message && (

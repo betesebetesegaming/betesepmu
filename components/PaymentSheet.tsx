@@ -26,7 +26,7 @@ const methodMeta: Record<Method, { logo: string; label: string; sub: string; tin
     tint: 'text-purple-800',
     border: 'border-purple-400',
     bg: 'bg-purple-50',
-    powered: false,
+    powered: true,
   },
   Wave: {
     logo: '/payment-logos/wave.png',
@@ -101,26 +101,7 @@ export const PaymentSheet: React.FC<PaymentSheetProps> = ({
     setMessage(null);
   };
 
-  const handleAfriMoneyPay = async (numAmount: number, cleanPhone: string, externalRef: string) => {
-    const res = await fetch('/api/afrimoney-payment', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        customerPhone: cleanPhone,
-        amount: numAmount,
-        externalRef,
-        customerName: user.name,
-      }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.ok) {
-      throw new Error(data.error || 'AfriMoney payment failed');
-    }
-    onDepositRequest(numAmount, 'AfriMoney', cleanPhone);
-    return { transactionId: data.transactionId || externalRef };
-  };
-
-  const handleModemPay = async (provider: 'wave' | 'aps', numAmount: number, cleanPhone: string, externalRef: string) => {
+  const handleModemPay = async (provider: 'wave' | 'aps' | 'afrimoney', numAmount: number, cleanPhone: string, externalRef: string) => {
     const res = await fetch('/api/modempay-checkout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -139,7 +120,8 @@ export const PaymentSheet: React.FC<PaymentSheetProps> = ({
       throw new Error(data.error || 'Could not start checkout');
     }
     window.open(data.checkoutUrl, '_blank', 'noopener,noreferrer');
-    onDepositRequest(numAmount, provider === 'wave' ? 'Wave' : 'APS', cleanPhone);
+    const methodLabel: Method = provider === 'wave' ? 'Wave' : provider === 'aps' ? 'APS' : 'AfriMoney';
+    onDepositRequest(numAmount, methodLabel, cleanPhone);
     return { transactionId: externalRef };
   };
 
@@ -163,19 +145,12 @@ export const PaymentSheet: React.FC<PaymentSheetProps> = ({
     const cleanPhone = normalizedPhone.replace(/^\+220/, '').replace(/\D/g, '');
 
     try {
-      if (method === 'AfriMoney') {
-        await handleAfriMoneyPay(numAmount, cleanPhone, externalRef);
-        setMessage({
-          ok: true,
-          text: `Payment of ${numAmount.toFixed(0)} GMD sent. Check your phone for the AfriMoney PIN prompt.`,
-        });
-      } else {
-        await handleModemPay(method === 'Wave' ? 'wave' : 'aps', numAmount, cleanPhone, normalizedPhone);
-        setMessage({
-          ok: true,
-          text: `${method} checkout opened in a new tab. Finish payment there, then return to Betese.`,
-        });
-      }
+      const providerKey: 'wave' | 'aps' | 'afrimoney' = method === 'Wave' ? 'wave' : method === 'APS' ? 'aps' : 'afrimoney';
+      await handleModemPay(providerKey, numAmount, cleanPhone, normalizedPhone);
+      setMessage({
+        ok: true,
+        text: `${method} checkout opened in a new tab. Finish payment there, then return to Betese.`,
+      });
       setStage('confirm');
     } catch (err: any) {
       setMessage({ ok: false, text: err?.message || 'Payment failed. Please try again.' });
@@ -246,7 +221,7 @@ export const PaymentSheet: React.FC<PaymentSheetProps> = ({
         <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4 space-y-3">
           {stage === 'choose' && (
             <div className="space-y-3">
-              <p className="text-sm text-gray-600">Pick how you want to pay. Africell AfriMoney sends a PIN prompt to your phone. Wave and APS open a secure checkout.</p>
+              <p className="text-sm text-gray-600">Pick how you want to pay. All payments open a secure ModemPay checkout — finish payment there and return to Betese.</p>
               {(Object.keys(methodMeta) as Method[]).map((m) => {
                 const meta = methodMeta[m];
                 return (

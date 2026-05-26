@@ -137,8 +137,7 @@ All server functionality runs as Next.js Route Handlers under `app/api/*`:
 - `app/api/support-ai/route.ts` — AI diagnosis endpoint for the Support panel
 - `app/api/program-media-upload/route.ts` — program media upload fallback
 - `app/api/program-media-insert/route.ts` — program media insert fallback
-- `app/api/afrimoney-payment/route.ts` — AfriMoney direct API
-- `app/api/modempay-checkout/route.ts` — Wave / APS hosted checkout
+- `app/api/modempay-checkout/route.ts` — Wave / APS / AfriMoney hosted checkout (via ModemPay)
 - `app/api/authenticate-user/route.ts` — server-side auth fallback
 - `app/api/print-receipt/route.ts` — Thermer Browser-Print response endpoint
 
@@ -146,8 +145,7 @@ Required Vercel environment variables:
 
 - `OPENAI_API_KEY` (required for AI diagnosis in Support panel)
 - `OPENAI_MODEL` (optional, default: `gpt-4o-mini`)
-- `AFRIMONEY_*` (see `.env.local.example`)
-- `MODEMPAY_SECRET_KEY` / `MODEMPAY_PUBLIC_KEY` (for Wave/APS checkout)
+- `MODEMPAY_SECRET_KEY` / `MODEMPAY_PUBLIC_KEY` (for Wave / APS / AfriMoney checkout)
 - Firebase service-account env (`FIREBASE_*`) for server-side reads
 
 Optional frontend override:

@@ -15,14 +15,17 @@ interface CheckoutBody {
 }
 
 /**
- * Creates a ModemPay hosted-checkout session for Wave or APS Wallet.
+ * Creates a ModemPay hosted-checkout session for Wave, APS Wallet, or
+ * AfriMoney.
  *
- * Front end calls this with { provider: 'wave' | 'aps', amount, customerId,
- * customerPhone, externalRef, returnUrl }. Server uses MODEMPAY_SECRET_KEY
- * (never exposed to the browser) to create the session and returns
- * { checkoutUrl } which the front end opens in a new window. AfriMoney is
- * intentionally NOT handled here; it uses the direct AfriMoney API in
- * /api/afrimoney-payment.
+ * Front end calls this with { provider: 'wave' | 'aps' | 'afrimoney',
+ * amount, customerId, customerPhone, externalRef, returnUrl }. Server uses
+ * MODEMPAY_SECRET_KEY (never exposed to the browser) to create the session
+ * and returns { checkoutUrl } which the front end opens in a new window.
+ *
+ * AfriMoney used to call Africell's direct MERCHPAY API; that integration
+ * has been removed and AfriMoney now goes through ModemPay's checkout like
+ * Wave and APS.
  */
 export async function POST(request: Request) {
   let body: CheckoutBody;
@@ -44,8 +47,8 @@ export async function POST(request: Request) {
   } = body;
 
   const normalizedProvider = String(provider || '').toLowerCase();
-  if (!['wave', 'aps'].includes(normalizedProvider)) {
-    return NextResponse.json({ error: 'provider must be "wave" or "aps"' }, { status: 400 });
+  if (!['wave', 'aps', 'afrimoney'].includes(normalizedProvider)) {
+    return NextResponse.json({ error: 'provider must be "wave", "aps", or "afrimoney"' }, { status: 400 });
   }
   if (!amount || Number(amount) <= 0) {
     return NextResponse.json({ error: 'amount must be a positive number' }, { status: 400 });
