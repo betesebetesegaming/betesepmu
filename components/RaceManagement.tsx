@@ -33,7 +33,6 @@ const RaceForm: React.FC<{
     onCancel: () => void;
     effectiveTime: Date;
 }> = ({ editingRace, onSave, onCancel, effectiveTime }) => {
-    const [raceCode, setRaceCode] = useState('');
     const [name, setName] = useState('');
     const [venue, setVenue] = useState('');
     const [horseCount, setHorseCount] = useState(16);
@@ -47,7 +46,6 @@ const RaceForm: React.FC<{
     // FIX: Removed effectiveTime from dependencies to prevent form reset on every clock tick
     useEffect(() => {
         if (editingRace) {
-            setRaceCode(editingRace.raceCode || '');
             setName(editingRace.name);
             setVenue(editingRace.venue || '');
             setHorseCount(editingRace.horseCount);
@@ -58,7 +56,6 @@ const RaceForm: React.FC<{
             setJackpot(editingRace.jackpot || '');
         } else {
             // Reset to default values for a new race
-            setRaceCode('');
             setName('');
             setVenue('');
             setHorseCount(16);
@@ -97,7 +94,7 @@ const RaceForm: React.FC<{
         
         setIsSaving(true);
         onSave({
-            raceCode: raceCode.trim() || undefined,
+            raceCode: editingRace?.raceCode,
             name,
             venue: venue.trim() || undefined,
             horseCount,
@@ -123,10 +120,6 @@ const RaceForm: React.FC<{
                  {editingRace ? `Editing Race: ${editingRace.name}` : 'Setup New Race'}
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Race Code</label>
-                    <input type="text" placeholder="e.g., R1 / MAIN" value={raceCode} onChange={e => setRaceCode(e.target.value.toUpperCase())} className="p-2 border rounded w-full" />
-                </div>
                 <div className="lg:col-span-4">
                     <label className="block text-sm font-medium text-gray-700 mb-1">Race Name</label>
                     <input type="text" placeholder="e.g., Main Race, R1" value={name} onChange={e => setName(e.target.value)} className="p-2 border rounded w-full" required />
