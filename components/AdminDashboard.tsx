@@ -23,7 +23,7 @@ import { AutomaticRaffleDrawerPanel } from './AutomaticRaffleDrawerPanel';
 import { VendorMonitorPanel } from './VendorMonitorPanel';
 
 type FilterRole = Role | 'All';
-type AdminView = 'DASHBOARD' | 'ANALYTICS' | 'PROGRAM' | 'USERS' | 'EOD' | 'RACES' | 'REPORTS' | 'TICKETS' | 'PRINTING' | 'TICKET_PAYOUT' | 'INTEGRATIONS' | 'SUPPORT' | 'MANUAL_BETS' | 'RAFFLE_DRAW' | 'TICKET_INFORMATION' | 'VENDOR_MONITOR';
+type AdminView = 'DASHBOARD' | 'ANALYTICS' | 'PROGRAM' | 'USERS' | 'EOD' | 'RACES' | 'REPORTS' | 'TICKETS' | 'PRINTING' | 'TICKET_PAYOUT' | 'INTEGRATIONS' | 'SUPPORT' | 'MANUAL_BETS' | 'RAFFLE_DRAW' | 'TICKET_INFORMATION' | 'VENDOR_MONITOR' | 'BANNER';
 
 export const TicketToolsView: React.FC<{
     allTickets: Ticket[];
@@ -102,7 +102,7 @@ const BackButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
   </button>
 );
 
-type AdminIconKind = 'analytics' | 'manual' | 'raffle' | 'program' | 'users' | 'races' | 'tools' | 'reports' | 'integrations' | 'support' | 'printing' | 'pmu' | 'monitor';
+type AdminIconKind = 'analytics' | 'manual' | 'raffle' | 'program' | 'users' | 'races' | 'tools' | 'reports' | 'integrations' | 'support' | 'printing' | 'pmu' | 'monitor' | 'banner';
 
 const AdminMenuGraphic: React.FC<{ kind: AdminIconKind }> = ({ kind }) => {
     const photoMap: Record<AdminIconKind, { src: string; alt: string }> = {
@@ -119,6 +119,7 @@ const AdminMenuGraphic: React.FC<{ kind: AdminIconKind }> = ({ kind }) => {
         printing: { src: 'https://images.unsplash.com/photo-1515879218367-8466d910aaa4?w=140&h=140&fit=crop&q=80', alt: 'printing' },
         pmu: { src: 'https://images.unsplash.com/photo-1489515217757-5fd1be406fef?w=140&h=140&fit=crop&q=80', alt: 'pari mutuel' },
         monitor: { src: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=140&h=140&fit=crop&q=80', alt: 'vendor monitor' },
+        banner: { src: 'https://images.unsplash.com/photo-1557804506-669a67965ba0?w=140&h=140&fit=crop&q=80', alt: 'announcement banner' },
     };
 
     return (
@@ -139,6 +140,7 @@ const AdminMenu: React.FC<{ setView: (view: AdminView) => void; onFreshStart: ()
         { view: 'ANALYTICS', label: 'Analytics Dashboard', iconKind: 'analytics' as AdminIconKind, color: 'from-green-500 to-green-700' },
         { view: 'RAFFLE_DRAW', label: 'Automatic Raffle Draw', iconKind: 'raffle' as AdminIconKind, color: 'from-amber-500 to-orange-700' },
         { view: 'PROGRAM', label: 'Program & Ads', iconKind: 'program' as AdminIconKind, color: 'from-blue-500 to-blue-700' },
+        { view: 'BANNER', label: 'Scrolling Banner & Promotions', iconKind: 'banner' as AdminIconKind, color: 'from-pink-500 to-rose-700' },
         { view: 'USERS', label: 'Approve Online Payment', iconKind: 'users' as AdminIconKind, color: 'from-purple-500 to-purple-700' },
         { view: 'RACES', label: 'Race Management', iconKind: 'races' as AdminIconKind, color: 'from-orange-500 to-orange-700' },
         { view: 'TICKET_PAYOUT', label: 'Office Payouts', iconKind: 'tools' as AdminIconKind, color: 'from-cyan-500 to-blue-500' },
@@ -275,7 +277,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
     const renderCurrentView = () => {
         switch (view) {
             case 'VENDOR_MONITOR': return <VendorMonitorPanel allTickets={allTickets} depositLogs={depositLogs} users={users} onCancelTicket={onCancelTicket} onToggleLock={onToggleLock} />;
-            case 'ANALYTICS': return <div className="space-y-6"><AnalyticsDashboard tickets={allTickets} races={races} /><PromotionManagementPanel promotions={promotions} onToggleStatus={onTogglePromotionStatus} onUpdatePromotion={onUpdatePromotion} onMovePromotion={onMovePromotion} onCreatePromotion={onCreatePromotion} onDeletePromotion={onDeletePromotion} /></div>;
+            case 'ANALYTICS': return <div className="space-y-6"><AnalyticsDashboard tickets={allTickets} races={races} /></div>;
+            case 'BANNER': return <div className="space-y-6"><PromotionManagementPanel promotions={promotions} onToggleStatus={onTogglePromotionStatus} onUpdatePromotion={onUpdatePromotion} onMovePromotion={onMovePromotion} onCreatePromotion={onCreatePromotion} onDeletePromotion={onDeletePromotion} /></div>;
             case 'RAFFLE_DRAW': return <AutomaticRaffleDrawerPanel users={users} tickets={allTickets} effectiveTime={effectiveTime} />;
             case 'PROGRAM': return <div className="space-y-6"><ProgramManagementPanel programImages={programImages} onUpload={onAddProgramImage} onDelete={onDeleteProgramImage} /><CombinationSearch allTickets={allTickets} races={races} onCancelTicket={onCancelTicket} effectiveTime={effectiveTime} /></div>;
             case 'USERS': return <div className="flex flex-col md:flex-row gap-6"><RoleFilter selectedRole={selectedRole} onSelectRole={setSelectedRole} /><div className="flex-1 space-y-6"><UserAccountManagement users={selectedRole === 'All' ? users : users.filter(u => u.role === selectedRole)} onToggleLock={onToggleLock} onAddUser={onAddUser} onAdminResetPassword={onAdminResetPassword} creatableRoles={['Admin', 'Supervisor', 'Vendor', 'Customer']} /><CustomerDepositPanel customers={users.filter(u => u.role === 'Customer')} onDeposit={onDeposit} onAdminAdjustBalance={props.onAdminAdjustBalance} depositLogs={depositLogs} depositRequests={depositRequests} onApproveDepositRequest={props.onApproveDepositRequest} onRejectDepositRequest={props.onRejectDepositRequest} currentUserRole={currentUser.role} currentUserName={currentUser.name} /></div></div>;

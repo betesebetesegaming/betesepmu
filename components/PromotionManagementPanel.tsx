@@ -317,8 +317,17 @@ export const PromotionManagementPanel: React.FC<PromotionManagementPanelProps> =
 
     return (
         <div className="bg-white p-6 rounded-lg shadow-lg">
-            <h2 className="text-xl font-bold text-betese-dark mb-4">Bonus Promotions Management</h2>
-            <p className="text-sm text-gray-600 mb-4">Manage your promotions here. Click <strong>Edit</strong> to add deposit bonus rules (e.g., Deposit 100 &rarr; Get 10 Bonus).</p>
+            <h2 className="text-xl font-bold text-betese-dark mb-2">Scrolling Banner & Bonus Promotions</h2>
+            <div className="mb-4 rounded-lg border-l-4 border-yellow-400 bg-yellow-50 p-3 text-sm text-gray-800">
+                <p className="font-bold text-yellow-800 mb-1">How the customer scrolling banner works</p>
+                <ul className="list-disc list-inside space-y-1 text-xs">
+                    <li>The <strong>name</strong> you give a promotion is the text that appears in the yellow scrolling banner at the top of the customer area.</li>
+                    <li>Only promotions marked <strong>Active</strong> are shown to customers.</li>
+                    <li>With <strong>2 or more</strong> active promotions the banner scrolls automatically; with only one it stays still and centered.</li>
+                    <li>Deposit bonus rules are optional &mdash; leave them empty if you only want to display an announcement.</li>
+                </ul>
+            </div>
+            <p className="text-sm text-gray-600 mb-4">Click <strong>Edit</strong> on a promotion to change its name (the scrolling text) and optionally add deposit bonus rules (e.g., Deposit 100 &rarr; Get 10 Bonus).</p>
             <div className="mb-6 rounded-xl border border-blue-200 bg-blue-50 p-4">
                 <div className="flex flex-col lg:flex-row lg:items-end gap-4">
                     <div className="flex-1">
