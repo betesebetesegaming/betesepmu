@@ -21,8 +21,10 @@ function initAdmin(): App {
 
   const projectId = process.env.FIREBASE_PROJECT_ID
     ?? process.env.GCLOUD_PROJECT
-    ?? process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
-    ?? 'betesepmu-4ffc7';
+    ?? process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+  if (!projectId) {
+    throw new Error('Missing FIREBASE_PROJECT_ID / GCLOUD_PROJECT / NEXT_PUBLIC_FIREBASE_PROJECT_ID for Admin SDK.');
+  }
   const databaseURL = process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL
     ?? `https://${projectId}-default-rtdb.firebaseio.com`;
   const storageBucket = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET

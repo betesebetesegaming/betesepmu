@@ -84,8 +84,10 @@ let cachedProjectKey = '';
 function getModel(): GenerativeModel {
   const project = process.env.GCLOUD_PROJECT
     || process.env.GOOGLE_CLOUD_PROJECT
-    || process.env.FIREBASE_PROJECT_ID
-    || 'betesepmu-4ffc7';
+    || process.env.FIREBASE_PROJECT_ID;
+  if (!project) {
+    throw new Error('Missing GCLOUD_PROJECT for Vertex AI support handler.');
+  }
   const location = process.env.VERTEX_AI_LOCATION || 'us-central1';
   const modelName = process.env.VERTEX_AI_MODEL || 'gemini-2.0-flash-001';
   const cacheKey = `${project}|${location}|${modelName}`;

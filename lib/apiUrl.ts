@@ -4,16 +4,10 @@
  *
  *   https://<region>-<project-id>.cloudfunctions.net/<exportName>
  *
- * Gen 2 URLs on cloudfunctions.net match the camelCase export name in
- * `functions/src/index.ts` (e.g. `modempayCheckout`, not `modempaycheckout`).
- *
- * Set NEXT_PUBLIC_API_BASE_URL in Vercel (and in `.env.local` for `next dev`)
- * to the functions root (no trailing `/api`). Emulator example:
- *
- *   http://localhost:5001/<project-id>/us-central1
+ * Set NEXT_PUBLIC_API_BASE_URL in Vercel (and in `.env.local` for `next dev`).
  */
 
-const DEFAULT_BASE = 'https://us-central1-betesepmu-4ffc7.cloudfunctions.net';
+import { getApiBaseUrl } from './env/publicConfig';
 
 /** Legacy kebab-case route → Cloud Function export name. */
 const ROUTE_TO_FUNCTION: Record<string, string> = {
@@ -37,15 +31,6 @@ const ROUTE_TO_FUNCTION: Record<string, string> = {
   '/authenticate-user': 'authenticateUser',
 };
 
-function getBase(): string {
-  const fromEnv =
-    (typeof process !== 'undefined' && process.env && process.env.NEXT_PUBLIC_API_BASE_URL) || '';
-  let base = (fromEnv || DEFAULT_BASE).trim();
-  // Strip legacy `/api` suffix from older configs.
-  base = base.replace(/\/api\/?$/, '');
-  return base.replace(/\/+$/, '');
-}
-
 /**
  * Compose an absolute backend URL. Accepts either a leading slash or not, and
  * tolerates the legacy `/api/` prefix the front-end used when the API routes
@@ -56,14 +41,16 @@ export function apiUrl(path: string): string {
   if (!p.startsWith('/')) p = `/${p}`;
   if (p.startsWith('/api/')) p = p.slice(4);
 
+  const base = getApiBaseUrl();
+
   const txMatch = p.match(/^\/modempay-transactions\/(.+)$/);
   if (txMatch) {
-    return `${getBase()}/modempayTransactions/${encodeURIComponent(txMatch[1])}`;
+    return `${base}/modempayTransactions/${encodeURIComponent(txMatch[1])}`;
   }
 
   const fn = ROUTE_TO_FUNCTION[p];
   if (!fn) {
     throw new Error(`Unknown API route: ${p}`);
   }
-  return `${getBase()}/${fn}`;
+  return `${base}/${fn}`;
 }

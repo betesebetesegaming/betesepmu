@@ -2,55 +2,69 @@ import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, getDocs, setDoc, updateDoc, doc, query, where } from 'firebase/firestore';
 import { randomUUID } from 'crypto';
 
+function requireEnv(name) {
+  const value = String(process.env[name] || '').trim();
+  if (!value) {
+    throw new Error(`Missing ${name}. Run with: node --env-file=.env.local scripts/seed-admin.js`);
+  }
+  return value;
+}
+
 const firebaseConfig = {
-  apiKey: "AIzaSyAY9EHkmtuv1l3hRwIP_u1T5PIhlN_zoCs",
-  authDomain: "betesepmu-32905.firebaseapp.com",
-  databaseURL: "https://betesepmu-32905-default-rtdb.firebaseio.com",
-  projectId: "betesepmu-32905",
-  storageBucket: "betesepmu-32905.firebasestorage.app",
-  messagingSenderId: "123234050813",
-  appId: "1:123234050813:web:3bc7ca01166dd345d2d494",
-  measurementId: "G-1QWPLJ3QQB"
+  apiKey: requireEnv('NEXT_PUBLIC_FIREBASE_API_KEY'),
+  authDomain: requireEnv('NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN'),
+  databaseURL: requireEnv('NEXT_PUBLIC_FIREBASE_DATABASE_URL'),
+  projectId: requireEnv('NEXT_PUBLIC_FIREBASE_PROJECT_ID'),
+  storageBucket: requireEnv('NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET'),
+  messagingSenderId: requireEnv('NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID'),
+  appId: requireEnv('NEXT_PUBLIC_FIREBASE_APP_ID'),
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || undefined,
 };
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 async function seedAdmin() {
-  console.log('⏳ Seeding admin account into Firestore...');
-  
+  console.log(`⏳ Seeding admin account into Firestore project: ${firebaseConfig.projectId}...`);
+
   const adminId = randomUUID();
   const adminUser = {
     id: adminId,
     name: 'admin',
     role: 'Admin',
-    password: 'password', // Storing in plain text as per current system config
+    password: 'password',
     isLocked: false,
     phone: '',
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
   };
 
   try {
     const usersRef = collection(db, 'users');
     const q = query(usersRef, where('name', '==', 'admin'));
     const snapshot = await getDocs(q);
-    
+
     if (!snapshot.empty) {
       console.log('⚠️ An admin user with the username "admin" already exists.');
       const docId = snapshot.docs[0].id;
       await updateDoc(doc(db, 'users', docId), {
         password: 'password',
         role: 'Admin',
-        isLocked: false
+        is_locked: false,
       });
       console.log('✅ Updated existing admin account credentials to username: admin / password: password');
       process.exit(0);
     }
 
-    await setDoc(doc(db, 'users', adminId), adminUser);
-    
+    await setDoc(doc(db, 'users', adminId), {
+      ...adminUser,
+      is_locked: false,
+      wallet_balance: 0,
+      bonus_balance: 0,
+    });
+
     console.log('🎉 Admin account successfully created!');
     console.log('----------------------------------------------------');
+    console.log(`Project: ${firebaseConfig.projectId}`);
     console.log(`Username: ${adminUser.name}`);
     console.log(`Password: ${adminUser.password}`);
     console.log(`Role: ${adminUser.role}`);

@@ -9,6 +9,7 @@ import { BookingCodeModal } from './components/BookingCodeModal';
 import { WithdrawalCodeModal } from './components/WithdrawalCodeModal';
 import { SEVEN_DAYS_IN_MS, BETTING_CUTOFF_MS, calculateTicketWinnings, validateTicketForPlacement, validateTicketAgainstRaceState, normalizeGambiaPhone } from './utils';
 import { apiUrl } from './lib/apiUrl';
+import { getFirebaseProjectId } from './lib/env/publicConfig';
 import { LanguageProvider } from './LanguageContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { deferWork } from './perf';
@@ -32,8 +33,15 @@ import {
 } from './firebaseClient';
 
 const LAZY_CHUNK_RETRY_KEY = 'betese_lazy_chunk_retry';
-const ACTIVE_USER_ID_KEY = 'betese_active_user_id';
-const ACTIVE_USER_CACHE_KEY = 'betese_active_user_cache';
+const FIREBASE_PROJECT_ID = getFirebaseProjectId();
+const ACTIVE_USER_ID_KEY = `betese_active_user_id_${FIREBASE_PROJECT_ID}`;
+const ACTIVE_USER_CACHE_KEY = `betese_active_user_cache_${FIREBASE_PROJECT_ID}`;
+
+// Drop legacy unscoped keys from older builds / wrong Firebase projects.
+try {
+    localStorage.removeItem('betese_active_user_id');
+    localStorage.removeItem('betese_active_user_cache');
+} catch {}
 
 const normalizeCachedUser = (value: any): User | null => {
     if (!value || typeof value !== 'object') return null;
