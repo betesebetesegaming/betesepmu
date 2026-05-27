@@ -1,5 +1,9 @@
 {
   "rules": {
+    "payments": {
+      ".read": true,
+      ".write": true
+    },
     ".read": true,
     ".write": true
   }

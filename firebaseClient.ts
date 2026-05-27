@@ -29,6 +29,19 @@ import { getStorage } from 'firebase/storage';
 import { db, firebaseApp } from './lib/firebase/client';
 import { apiUrl } from './lib/apiUrl';
 import {
+    depositToRtdb,
+    withdrawalToRtdb,
+    rtdbWriteDeposit,
+    rtdbPatchDeposit,
+    rtdbWriteWithdrawal,
+    rtdbPatchWithdrawal,
+    rtdbFetchDeposits,
+    rtdbFetchWithdrawals,
+    subscribeDeposits,
+    subscribeWithdrawals,
+    subscribeDepositById,
+} from './lib/payments/rtdbClient';
+import {
     Ticket,
     User,
     Race,
@@ -880,6 +893,8 @@ export const dbApplyCustomerBalanceAdjustment = async (
 
 export const dbFetchDepositRequests = async (): Promise<any[]> => {
     try {
+        const rtdbRows = await rtdbFetchDeposits(200);
+        if (rtdbRows.length > 0) return rtdbRows;
         const snap = await getDocs(
             query(collection(db, 'deposit_requests'), orderBy('timestamp', 'desc'), fsLimit(200))
         );
@@ -888,6 +903,8 @@ export const dbFetchDepositRequests = async (): Promise<any[]> => {
         return [];
     }
 };
+
+export { subscribeDeposits, subscribeWithdrawals, subscribeDepositById };
 
 export const dbFetchDepositLogs = async (): Promise<DepositLog[]> => {
     try {
@@ -934,6 +951,21 @@ export const dbInsertDepositLog = async (log: DepositLog): Promise<void> => {
 };
 
 export const dbDepositRequest = async (request: any) => {
+    const row = depositToRtdb({
+        id: request.id,
+        customerId: request.customerId,
+        customerName: request.customerName,
+        amount: request.amount,
+        method: request.method,
+        transactionId: request.transactionId,
+        status: request.status,
+        timestamp: request.timestamp,
+        providerReference: request.providerReference,
+        verificationStatus: request.verificationStatus,
+        verificationSource: request.verificationSource,
+        verificationMessage: request.verificationMessage,
+    });
+    await rtdbWriteDeposit(row);
     await setDoc(doc(db, 'deposit_requests', request.id), {
         id: request.id,
         amount: Number(Number(request.amount).toFixed(2)),
@@ -956,11 +988,13 @@ export const dbApproveDepositRequest = async (
     adminName: string,
     time: Date
 ) => {
-    return runTransaction(db, async (tx) => {
+    const snap = await getDoc(doc(db, 'deposit_requests', requestId));
+    const customerId = snap.exists() ? String((snap.data() as { customer_id?: string }).customer_id || '') : undefined;
+    await runTransaction(db, async (tx) => {
         const reqRef = doc(db, 'deposit_requests', requestId);
-        const snap = await tx.get(reqRef);
-        if (!snap.exists()) throw new Error('Deposit request not found');
-        const reqData = snap.data() as any;
+        const reqSnap = await tx.get(reqRef);
+        if (!reqSnap.exists()) throw new Error('Deposit request not found');
+        const reqData = reqSnap.data() as any;
         if (reqData.status !== 'Pending') throw new Error(`Deposit already ${reqData.status}`);
 
         const userRef = doc(db, 'users', reqData.customer_id);
@@ -976,6 +1010,12 @@ export const dbApproveDepositRequest = async (
             processed_by_name: adminName,
             processed_at: time.toISOString(),
         });
+    });
+    await rtdbPatchDeposit(requestId, customerId, {
+        status: 'Approved',
+        processed_by: adminId,
+        processed_by_name: adminName,
+        processed_at: time.toISOString(),
     });
 };
 
@@ -1010,25 +1050,37 @@ export const dbMarkDepositRequestApproved = async (
     adminName: string,
     time: Date
 ) => {
-    await updateDoc(doc(db, 'deposit_requests', requestId), {
+    const patch = {
         status: 'Approved',
         processed_by: adminId,
         processed_by_name: adminName,
         processed_at: time.toISOString(),
-    });
+        verification_status: 'Verified',
+    };
+    const snap = await getDoc(doc(db, 'deposit_requests', requestId));
+    const customerId = snap.exists() ? String((snap.data() as { customer_id?: string }).customer_id || '') : undefined;
+    await rtdbPatchDeposit(requestId, customerId, patch);
+    await updateDoc(doc(db, 'deposit_requests', requestId), patch);
 };
 
 export const dbRejectDepositRequest = async (requestId: string, adminId: string, adminName: string, time: Date) => {
-    await updateDoc(doc(db, 'deposit_requests', requestId), {
+    const patch = {
         status: 'Rejected',
         processed_by: adminId,
         processed_by_name: adminName,
         processed_at: time.toISOString(),
-    });
+        verification_status: 'VerificationFailed',
+    };
+    const snap = await getDoc(doc(db, 'deposit_requests', requestId));
+    const customerId = snap.exists() ? String((snap.data() as { customer_id?: string }).customer_id || '') : undefined;
+    await rtdbPatchDeposit(requestId, customerId, patch);
+    await updateDoc(doc(db, 'deposit_requests', requestId), patch);
 };
 
 export const dbFetchWithdrawalRequests = async (): Promise<any[]> => {
     try {
+        const rtdbRows = await rtdbFetchWithdrawals(200);
+        if (rtdbRows.length > 0) return rtdbRows;
         const snap = await getDocs(
             query(collection(db, 'withdrawal_requests'), orderBy('requested_at', 'desc'), fsLimit(200))
         );
@@ -1039,6 +1091,18 @@ export const dbFetchWithdrawalRequests = async (): Promise<any[]> => {
 };
 
 export const dbCreateWithdrawalRequest = async (request: any) => {
+    const row = withdrawalToRtdb({
+        id: request.id,
+        customerId: request.customerId,
+        customerName: request.customerName,
+        amount: request.amount,
+        status: request.status,
+        code: request.code,
+        requestedAt: request.requestedAt,
+        payoutMethod: request.payoutMethod,
+        recipientPhone: request.recipientPhone,
+    });
+    await rtdbWriteWithdrawal(row);
     await setDoc(doc(db, 'withdrawal_requests', request.id), {
         id: request.id,
         user_id: request.customerId,
@@ -1054,6 +1118,9 @@ export const dbCreateWithdrawalRequest = async (request: any) => {
 };
 
 export const dbCancelWithdrawal = async (requestId: string) => {
+    const snap = await getDoc(doc(db, 'withdrawal_requests', requestId));
+    const userId = snap.exists() ? String((snap.data() as { user_id?: string }).user_id || '') : undefined;
+    await rtdbPatchWithdrawal(requestId, userId, { status: 'Canceled' });
     await updateDoc(doc(db, 'withdrawal_requests', requestId), { status: 'Canceled' });
 };
 

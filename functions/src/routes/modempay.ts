@@ -14,6 +14,13 @@ import {
   type ModemPayPayoutNetwork,
 } from '../modempay';
 import { adminDb } from '../admin';
+import {
+  patchDepositOnRtdb,
+  syncCheckoutToRtdb,
+  syncDepositToRtdb,
+  patchWithdrawalOnRtdb,
+  type RtdbDepositRecord,
+} from '../paymentsRtdb';
 
 const MERCHANT_NAME = process.env.MODEMPAY_MERCHANT_NAME || 'Betese PMU';
 
@@ -85,6 +92,7 @@ export async function checkoutHandler(req: Request, res: Response): Promise<void
     }
 
     // Persist a pending checkout marker so the webhook can reconcile it later.
+    const createdAt = new Date().toISOString();
     await adminDb.collection('modempay_checkouts').doc(body.externalRef).set({
       external_ref: body.externalRef,
       session_id: result.sessionId,
@@ -94,8 +102,38 @@ export async function checkoutHandler(req: Request, res: Response): Promise<void
       customer_phone: body.customerPhone || null,
       customer_name: body.customerName || null,
       status: 'pending',
-      created_at: new Date().toISOString(),
+      created_at: createdAt,
     }, { merge: true }).catch(err => logger.warn('Checkout marker write failed', err));
+
+    await syncCheckoutToRtdb({
+      external_ref: body.externalRef,
+      session_id: result.sessionId || null,
+      method: provider,
+      amount,
+      customer_id: body.customerId || null,
+      customer_phone: body.customerPhone || null,
+      customer_name: body.customerName || null,
+      status: 'pending',
+      created_at: createdAt,
+    }).catch(err => logger.warn('RTDB checkout sync failed', err));
+
+    if (body.customerId && body.externalRef) {
+      const pendingDeposit: RtdbDepositRecord = {
+        id: body.externalRef,
+        customer_id: body.customerId,
+        customer_name: body.customerName || null,
+        amount,
+        method: mapModemPayMethodLabel(provider),
+        transaction_id: body.customerPhone || null,
+        status: 'Pending',
+        timestamp: createdAt,
+        provider_reference: body.externalRef,
+        verification_status: 'PendingProviderConfirmation',
+        verification_source: 'webhook',
+        verification_message: 'Waiting for ModemPay to confirm payment before your wallet is credited.',
+      };
+      await syncDepositToRtdb(pendingDeposit).catch(err => logger.warn('RTDB deposit sync failed', err));
+    }
 
     res.json({
       ok: true,
@@ -256,6 +294,14 @@ export async function payoutHandler(req: Request, res: Response): Promise<void> 
       res.status(400).json({ error: 'Could not hold wallet balance for withdrawal' });
       return;
     }
+
+    await patchWithdrawalOnRtdb(requestId, customerId, {
+      status: 'Processing',
+      payout_method: payoutLabel,
+      recipient_phone: cleanPhone,
+      processed_by: processedById,
+      processed_by_name: processedByName,
+    }).catch(err => logger.warn('RTDB withdrawal processing sync failed', err));
 
     const result = await createTransfer({
       amount,
@@ -508,6 +554,8 @@ async function processModemPayEvent(event: ModemPayEvent): Promise<void> {
 
 async function markDepositCompleted(externalRef: string, payload: Record<string, unknown>) {
   const payloadAmount = Number(payload.amount ?? payload.paid_amount ?? payload.total_amount ?? 0);
+  let customerId: string | undefined;
+  const completedAt = new Date().toISOString();
 
   await adminDb.runTransaction(async (tx) => {
     const checkoutRef = adminDb.collection('modempay_checkouts').doc(externalRef);
@@ -534,7 +582,6 @@ async function markDepositCompleted(externalRef: string, payload: Record<string,
       return;
     }
 
-    const completedAt = new Date().toISOString();
     const providerTxnId = payload.id || payload.transaction_id || null;
     const methodLabel = mapModemPayMethodLabel(checkout.method || payload.payment_method);
 
@@ -579,6 +626,7 @@ async function markDepositCompleted(externalRef: string, payload: Record<string,
     }, { merge: true });
 
     if (checkout.customer_id) {
+      customerId = checkout.customer_id;
       const userRef = adminDb.collection('users').doc(checkout.customer_id);
       const userSnap = await tx.get(userRef);
       if (userSnap.exists) {
@@ -597,6 +645,24 @@ async function markDepositCompleted(externalRef: string, payload: Record<string,
       }
     }
   });
+
+  await patchDepositOnRtdb(externalRef, customerId, {
+    status: 'Approved',
+    processed_by: 'MODEMPAY_WEBHOOK',
+    processed_by_name: 'ModemPay',
+    processed_at: completedAt,
+    verification_status: 'Verified',
+    verification_source: 'webhook',
+    verification_message: 'Payment confirmed by ModemPay.',
+    verified_at: completedAt,
+  }).catch(err => logger.warn('RTDB deposit approve sync failed', err));
+
+  await syncCheckoutToRtdb({
+    external_ref: externalRef,
+    status: 'completed',
+    completed_at: completedAt,
+    customer_id: customerId || null,
+  }).catch(err => logger.warn('RTDB checkout complete sync failed', err));
 }
 
 function isBeteseExternalRef(value: unknown): value is string {
@@ -678,6 +744,11 @@ async function markDepositFailed(externalRef: string, reason: string, payload: R
     failed_at: failedAt,
   }, { merge: true }).catch(err => logger.warn('Failed to mark deposit failed', err));
 
+  const depositSnap = await adminDb.collection('deposit_requests').doc(externalRef).get();
+  const customerId = depositSnap.exists
+    ? String((depositSnap.data() as { customer_id?: string }).customer_id || '')
+    : undefined;
+
   await adminDb.collection('deposit_requests').doc(externalRef).set({
     status: 'Rejected',
     processed_by: 'MODEMPAY_WEBHOOK',
@@ -688,11 +759,32 @@ async function markDepositFailed(externalRef: string, reason: string, payload: R
     verification_message: reason,
     verified_at: failedAt,
   }, { merge: true }).catch(err => logger.warn('Failed to mark deposit request failed', err));
+
+  await patchDepositOnRtdb(externalRef, customerId, {
+    status: 'Rejected',
+    processed_by: 'MODEMPAY_WEBHOOK',
+    processed_by_name: 'ModemPay',
+    processed_at: failedAt,
+    verification_status: 'VerificationFailed',
+    verification_source: 'webhook',
+    verification_message: reason,
+    verified_at: failedAt,
+  }).catch(err => logger.warn('RTDB deposit reject sync failed', err));
+
+  await syncCheckoutToRtdb({
+    external_ref: externalRef,
+    status: 'failed',
+    failed_at: failedAt,
+    failure_reason: reason,
+    customer_id: customerId || null,
+  }).catch(err => logger.warn('RTDB checkout fail sync failed', err));
 }
 
 async function markWithdrawalSettled(externalRef: string, payload: Record<string, unknown>) {
   const completedAt = new Date().toISOString();
   const ref = adminDb.collection('withdrawal_requests').doc(externalRef);
+  const snap = await ref.get();
+  const userId = snap.exists ? String((snap.data() as { user_id?: string }).user_id || '') : undefined;
   await ref.set({
     status: 'Completed',
     provider_transfer_id: payload.id || null,
@@ -700,9 +792,15 @@ async function markWithdrawalSettled(externalRef: string, payload: Record<string
     completed_at: completedAt,
     raw_payload: payload,
   }, { merge: true }).catch(err => logger.warn('Failed to settle withdrawal', err));
+
+  await patchWithdrawalOnRtdb(externalRef, userId, {
+    status: 'Completed',
+    completed_at: completedAt,
+  }).catch(err => logger.warn('RTDB withdrawal complete sync failed', err));
 }
 
 async function refundWithdrawalHold(requestId: string, customerId: string, amount: number, reason: string) {
+  const failedAt = new Date().toISOString();
   await adminDb.runTransaction(async (tx) => {
     const userRef = adminDb.collection('users').doc(customerId);
     const userSnap = await tx.get(userRef);
@@ -715,9 +813,15 @@ async function refundWithdrawalHold(requestId: string, customerId: string, amoun
     tx.update(adminDb.collection('withdrawal_requests').doc(requestId), {
       status: 'Failed',
       failure_reason: reason,
-      failed_at: new Date().toISOString(),
+      failed_at: failedAt,
     });
   }).catch(err => logger.warn('Failed to refund withdrawal hold', { requestId, err }));
+
+  await patchWithdrawalOnRtdb(requestId, customerId, {
+    status: 'Failed',
+    failure_reason: reason,
+    failed_at: failedAt,
+  }).catch(err => logger.warn('RTDB withdrawal fail sync failed', err));
 }
 
 async function markWithdrawalFailed(externalRef: string, reason: string, payload: Record<string, unknown>) {
@@ -743,6 +847,13 @@ async function markWithdrawalFailed(externalRef: string, reason: string, payload
     failed_at: new Date().toISOString(),
     raw_payload: payload,
   }, { merge: true }).catch(err => logger.warn('Failed to mark withdrawal failed', err));
+
+  const userId = String(data.user_id || '');
+  await patchWithdrawalOnRtdb(externalRef, userId, {
+    status: 'Failed',
+    failure_reason: reason,
+    failed_at: new Date().toISOString(),
+  }).catch(err => logger.warn('RTDB withdrawal fail sync failed', err));
 }
 
 /**

@@ -31,7 +31,14 @@ import {
     dbToggleUserLock, dbAdminResetPassword, dbRecalculateAllTicketsSafely,
     dbApplyCustomerDeposit, dbApplyCustomerBalanceAdjustment, dbFreshStart, dbFetchUserBalance,
     dbMigrateLegacyBookedTicketsToActive, dbFetchDepositLogs, dbInsertDepositLog,
+    subscribeDeposits, subscribeWithdrawals,
 } from './firebaseClient';
+import {
+    PaymentResultModal,
+    buildDepositResult,
+    buildWithdrawalResult,
+    type PaymentResultPayload,
+} from './components/PaymentResultModal';
 
 const LAZY_CHUNK_RETRY_KEY = 'betese_lazy_chunk_retry';
 
@@ -233,6 +240,9 @@ const AppContent: React.FC = () => {
   const [withdrawalRequests, setWithdrawalRequests] = useState<WithdrawalRequest[]>([]);
   const [depositLogs, setDepositLogs] = useState<DepositLog[]>([]);
   const [depositRequests, setDepositRequests] = useState<DepositRequest[]>([]);
+  const [paymentResult, setPaymentResult] = useState<PaymentResultPayload | null>(null);
+  const depositStatusRef = useRef<Map<string, string>>(new Map());
+  const withdrawalStatusRef = useRef<Map<string, string>>(new Map());
   const [manualBetOrders, setManualBetOrders] = useState<ManualBetOrder[]>([]);
   const [programImages, setProgramImages] = useState<ProgramImage[]>([]);
     const [promotions, setPromotions] = useState<Promotion[]>([]);
@@ -495,43 +505,77 @@ const AppContent: React.FC = () => {
           const updatedRaces = await dbFetchRaces(); setRaces(updatedRaces);
       }).subscribe();
 
-      const depositFilter = currentUser.role === 'Customer' ? `customer_id=eq.${currentUser.id}` : undefined;
-      const depositSub = realtimeDb.channel('public:deposit_requests').on('postgres_changes', { event: '*', schema: 'public', table: 'deposit_requests', filter: depositFilter }, async () => {
-          const updated = await refreshDepositRequests();
-          setDepositRequests(updated);
-      }).subscribe();
-
-      const withdrawalFilter = currentUser.role === 'Customer' ? `user_id=eq.${currentUser.id}` : undefined;
-      const withdrawalSub = realtimeDb.channel('public:withdrawal_requests').on('postgres_changes', { event: '*', schema: 'public', table: 'withdrawal_requests', filter: withdrawalFilter }, async () => {
-          const updated = await refreshWithdrawalRequests();
-          setWithdrawalRequests(updated);
-      }).subscribe();
-
       return () => {
           realtimeDb?.removeChannel(userSub);
           realtimeDb?.removeChannel(ticketSub);
           realtimeDb?.removeChannel(raceSub);
-          realtimeDb?.removeChannel(depositSub);
-          realtimeDb?.removeChannel(withdrawalSub);
       };
   }, [currentUser?.id]);
+
+  // RTDB payment listeners — instant deposit/withdrawal updates + success/failure popups.
+  useEffect(() => {
+      if (!currentUser) return;
+      depositStatusRef.current.clear();
+      withdrawalStatusRef.current.clear();
+      let firstDepositSnapshot = true;
+      let firstWithdrawalSnapshot = true;
+
+      const customerScope = currentUser.role === 'Customer' ? currentUser.id : undefined;
+
+      const unsubDeposits = subscribeDeposits(customerScope, (rows) => {
+          const mapped = (rows || []).map((r) => mapDepositRequestRow(r as Record<string, unknown>));
+          for (const dep of mapped) {
+              const prev = depositStatusRef.current.get(dep.id);
+              if (!firstDepositSnapshot && prev && prev !== dep.status) {
+                  if (dep.status === 'Approved') {
+                      setPaymentResult(buildDepositResult('Approved', dep.amount, dep.method, dep.id));
+                      if (currentUser.role === 'Customer' && dep.customerId === currentUser.id) {
+                          void dbFetchUserBalance(currentUser.id).then((bal) => {
+                              setCurrentUser((u) => u ? { ...u, walletBalance: bal.walletBalance, bonusBalance: bal.bonusBalance } : u);
+                          });
+                      }
+                  } else if (dep.status === 'Rejected' && prev === 'Pending') {
+                      setPaymentResult(buildDepositResult('Rejected', dep.amount, dep.method, dep.id));
+                  }
+              }
+              depositStatusRef.current.set(dep.id, dep.status);
+          }
+          firstDepositSnapshot = false;
+          setDepositRequests(mapped);
+      });
+
+      const unsubWithdrawals = subscribeWithdrawals(customerScope, (rows) => {
+          const mapped = (rows || []).map((r) => mapWithdrawalRequestRow(r as Record<string, unknown>));
+          for (const req of mapped) {
+              const prev = withdrawalStatusRef.current.get(req.id);
+              if (!firstWithdrawalSnapshot && prev && prev !== req.status) {
+                  if ((req.status === 'Completed' || req.status === 'Failed') && (prev === 'Pending' || prev === 'Processing')) {
+                      const popup = buildWithdrawalResult(req.status, req.amount, req.payoutMethod, req.id);
+                      if (popup) setPaymentResult(popup);
+                  }
+              }
+              withdrawalStatusRef.current.set(req.id, req.status);
+          }
+          firstWithdrawalSnapshot = false;
+          setWithdrawalRequests(mapped);
+      });
+
+      return () => {
+          unsubDeposits();
+          unsubWithdrawals();
+      };
+  }, [currentUser?.id, currentUser?.role]);
 
   useEffect(() => {
       if (!realtimeDb || !currentUser) return;
       const interval = window.setInterval(async () => {
           try {
-              const [deposits, withdrawals] = await Promise.all([
-                  refreshDepositRequests(),
-                  refreshWithdrawalRequests(),
-              ]);
+              const deposits = await refreshDepositRequests();
               await reconcilePendingModemPayDeposits(deposits);
-              const refreshedDeposits = await refreshDepositRequests();
-              setDepositRequests(refreshedDeposits);
-              setWithdrawalRequests(withdrawals);
           } catch {
               // ignore background refresh errors
           }
-      }, 60000);
+      }, 45000);
       return () => window.clearInterval(interval);
   }, [currentUser?.id]);
 
@@ -2371,6 +2415,7 @@ const AppContent: React.FC = () => {
                     {paidTicketModal && <TicketModal ticket={paidTicketModal} onClose={() => setPaidTicketModal(null)} showPrintButton={true} races={races} />}
                     {ticketToReprint && <TicketModal ticket={ticketToReprint} onClose={() => setTicketToReprint(null)} showPrintButton={true} races={races} />}
                     <ChatPanel isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} currentUser={currentUser} users={users} threads={threads} messages={messages} onSendMessage={handleSendMessage} onMarkAsRead={handleMarkThreadAsRead} />
+                    <PaymentResultModal result={paymentResult} onClose={() => setPaymentResult(null)} />
             </Suspense>
     </ErrorBoundary>
   );

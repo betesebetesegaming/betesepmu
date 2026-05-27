@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { User } from '../types';
 import { normalizeGambiaPhone } from '../utils';
 import { apiUrl } from '../lib/apiUrl';
+import { subscribeDepositById } from '../firebaseClient';
 
 type Method = 'AfriMoney' | 'Wave' | 'APS' | 'QMoney' | 'Card';
 
@@ -81,6 +82,8 @@ export const PaymentSheet: React.FC<PaymentSheetProps> = ({
   const [phone, setPhone] = useState<string>(user.phone || '');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const [trackingRef, setTrackingRef] = useState<string | null>(null);
+  const [liveStatus, setLiveStatus] = useState<'Pending' | 'Approved' | 'Rejected' | null>(null);
 
   const dragStartY = useRef<number | null>(null);
   const [dragY, setDragY] = useState(0);
@@ -93,12 +96,29 @@ export const PaymentSheet: React.FC<PaymentSheetProps> = ({
     setPhone(user.phone || '');
     setBusy(false);
     setMessage(null);
+    setTrackingRef(null);
+    setLiveStatus(null);
     setDragY(0);
     document.body.style.overflow = 'hidden';
     return () => {
       document.body.style.overflow = '';
     };
   }, [isOpen, initialAmount, user.phone]);
+
+  useEffect(() => {
+    if (!trackingRef || stage !== 'confirm') return;
+    setLiveStatus('Pending');
+    const unsub = subscribeDepositById(trackingRef, (record) => {
+      if (!record) return;
+      const status = String(record.status || 'Pending');
+      if (status === 'Approved' || status === 'Rejected') {
+        setLiveStatus(status as 'Approved' | 'Rejected');
+      } else {
+        setLiveStatus('Pending');
+      }
+    });
+    return () => unsub();
+  }, [trackingRef, stage]);
 
   const handleTouchStart = (e: React.TouchEvent) => {
     dragStartY.current = e.touches[0].clientY;
@@ -182,9 +202,11 @@ export const PaymentSheet: React.FC<PaymentSheetProps> = ({
         : method === 'Card' ? 'card'
         : 'afrimoney';
       await handleModemPay(providerKey, numAmount, cleanPhone, externalRef);
+      setTrackingRef(externalRef);
+      setLiveStatus('Pending');
       setMessage({
         ok: true,
-        text: `${method} checkout opened in a new tab. Finish payment there, then return to Betese.`,
+        text: `${method} checkout opened. Approve the prompt on your phone — status updates here instantly.`,
       });
       setStage('confirm');
     } catch (err: any) {
@@ -365,17 +387,52 @@ export const PaymentSheet: React.FC<PaymentSheetProps> = ({
 
           {stage === 'confirm' && (
             <div className="space-y-4">
-              <div className="rounded-2xl border-2 border-green-300 bg-green-50 p-4">
-                <p className="text-sm font-black text-green-800">{message?.text || 'Payment started.'}</p>
-                <p className="mt-2 text-xs text-gray-600">
-                  Your wallet will be credited as soon as the payment provider confirms the transfer. You can leave this screen.
-                </p>
+              <div className={`rounded-2xl border-2 p-4 ${
+                liveStatus === 'Approved' ? 'border-green-400 bg-green-50'
+                : liveStatus === 'Rejected' ? 'border-red-300 bg-red-50'
+                : 'border-amber-300 bg-amber-50'
+              }`}>
+                <div className="flex items-center gap-3">
+                  {liveStatus === 'Pending' && (
+                    <div className="w-10 h-10 rounded-full border-4 border-amber-500 border-t-transparent animate-spin flex-shrink-0" />
+                  )}
+                  {liveStatus === 'Approved' && (
+                    <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0">
+                      <svg viewBox="0 0 24 24" className="w-6 h-6 text-white" fill="none" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                  )}
+                  {liveStatus === 'Rejected' && (
+                    <div className="w-10 h-10 rounded-full bg-red-500 flex items-center justify-center flex-shrink-0 text-white font-black">✕</div>
+                  )}
+                  <div>
+                    <p className={`text-sm font-black ${
+                      liveStatus === 'Approved' ? 'text-green-800'
+                      : liveStatus === 'Rejected' ? 'text-red-800'
+                      : 'text-amber-800'
+                    }`}>
+                      {liveStatus === 'Approved' ? 'Payment confirmed!'
+                      : liveStatus === 'Rejected' ? 'Payment failed'
+                      : 'Waiting for payment…'}
+                    </p>
+                    <p className="mt-1 text-xs text-gray-600">{message?.text}</p>
+                  </div>
+                </div>
+                {liveStatus === 'Pending' && (
+                  <p className="mt-3 text-xs font-bold text-amber-700 animate-pulse">
+                    Live via Firebase — no refresh needed. Complete payment on your phone.
+                  </p>
+                )}
+                {liveStatus === 'Approved' && (
+                  <p className="mt-3 text-xs text-green-700 font-bold">Wallet credited. You can close this screen.</p>
+                )}
               </div>
               <button
                 onClick={onClose}
                 className="w-full py-4 bg-betese-green text-white font-black rounded-2xl shadow-xl active:scale-95 transition-all text-lg uppercase tracking-widest"
               >
-                Done
+                {liveStatus === 'Approved' ? 'Done' : liveStatus === 'Rejected' ? 'Close' : 'Continue in background'}
               </button>
             </div>
           )}
