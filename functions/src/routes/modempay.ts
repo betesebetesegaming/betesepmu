@@ -716,10 +716,19 @@ async function markDepositCompleted(externalRef: string, payload: Record<string,
   const txnReference = payload.transaction_reference || null;
 
   await adminDb.runTransaction(async (tx) => {
+    // -----------------------------------------------------------------
+    // ALL READS FIRST. Firestore transactions require every read to
+    // happen before any write — interleaving them throws "Firestore
+    // transactions require all reads to be executed before all writes"
+    // which rolls back the deposit_request update and the wallet credit
+    // even though the RTDB patch (outside the transaction) succeeds.
+    // -----------------------------------------------------------------
     const checkoutRef = adminDb.collection('modempay_checkouts').doc(externalRef);
-    const checkoutSnap = await tx.get(checkoutRef);
     const depositReqRef = adminDb.collection('deposit_requests').doc(externalRef);
-    const depositReqSnap = await tx.get(depositReqRef);
+    const [checkoutSnap, depositReqSnap] = await Promise.all([
+      tx.get(checkoutRef),
+      tx.get(depositReqRef),
+    ]);
 
     const checkout = checkoutSnap.exists
       ? checkoutSnap.data() as {
@@ -758,11 +767,24 @@ async function markDepositCompleted(externalRef: string, payload: Record<string,
       return;
     }
 
+    customerId = String(checkout?.customer_id || depositReq?.customer_id || '') || undefined;
+
+    // Read the user (if we know who) — still in the read-only phase.
+    const userRef = customerId ? adminDb.collection('users').doc(customerId) : null;
+    const userSnap = userRef ? await tx.get(userRef) : null;
+    const userData = userSnap?.exists ? userSnap.data() as {
+      wallet_balance?: number;
+      total_deposited_amount?: number;
+      first_deposit_at?: string | null;
+    } : null;
+
     const methodLabel = mapModemPayMethodLabel(
       checkout?.method || depositReq?.method || payload.payment_method,
     );
-    customerId = String(checkout?.customer_id || depositReq?.customer_id || '') || undefined;
 
+    // -----------------------------------------------------------------
+    // WRITES ONLY FROM HERE.
+    // -----------------------------------------------------------------
     if (checkoutSnap.exists) {
       tx.update(checkoutRef, {
         status: 'completed',
@@ -778,6 +800,28 @@ async function markDepositCompleted(externalRef: string, payload: Record<string,
     if (depositReqSnap.exists) {
       tx.update(depositReqRef, {
         status: 'Approved',
+        processed_by: 'MODEMPAY_WEBHOOK',
+        processed_by_name: 'ModemPay',
+        processed_at: completedAt,
+        verification_status: 'Verified',
+        verification_source: 'webhook',
+        verification_message: 'Payment confirmed by ModemPay.',
+        verified_at: completedAt,
+      });
+    } else {
+      // Webhook fired before the front-end ever wrote the deposit_request
+      // doc (or the write got lost). Create it now so dashboards/back-office
+      // see the approved deposit and the front-end subscription wakes up.
+      tx.set(depositReqRef, {
+        id: externalRef,
+        amount: creditAmount,
+        method: methodLabel,
+        transaction_id: providerTxnId,
+        customer_id: customerId || null,
+        customer_name: checkout?.customer_name || null,
+        status: 'Approved',
+        timestamp: completedAt,
+        provider_reference: externalRef,
         processed_by: 'MODEMPAY_WEBHOOK',
         processed_by_name: 'ModemPay',
         processed_at: completedAt,
@@ -805,23 +849,16 @@ async function markDepositCompleted(externalRef: string, payload: Record<string,
       transaction_id: providerTxnId,
     }, { merge: true });
 
-    if (customerId) {
-      const userRef = adminDb.collection('users').doc(customerId);
-      const userSnap = await tx.get(userRef);
-      if (userSnap.exists) {
-        const userData = userSnap.data() as {
-          wallet_balance?: number;
-          total_deposited_amount?: number;
-          first_deposit_at?: string | null;
-        };
-        const currentWallet = Number(userData.wallet_balance || 0);
-        const currentDeposited = Number(userData.total_deposited_amount || 0);
-        tx.update(userRef, {
-          wallet_balance: Number((currentWallet + creditAmount).toFixed(2)),
-          total_deposited_amount: Number((currentDeposited + creditAmount).toFixed(2)),
-          ...(userData.first_deposit_at ? {} : { first_deposit_at: completedAt }),
-        });
-      }
+    if (userRef && userData) {
+      const currentWallet = Number(userData.wallet_balance || 0);
+      const currentDeposited = Number(userData.total_deposited_amount || 0);
+      tx.update(userRef, {
+        wallet_balance: Number((currentWallet + creditAmount).toFixed(2)),
+        total_deposited_amount: Number((currentDeposited + creditAmount).toFixed(2)),
+        ...(userData.first_deposit_at ? {} : { first_deposit_at: completedAt }),
+      });
+    } else if (customerId) {
+      logger.warn('markDepositCompleted: customer not found, wallet not credited', { externalRef, customerId });
     }
   });
 
