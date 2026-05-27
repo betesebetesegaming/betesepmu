@@ -57,7 +57,7 @@ interface CustomerDashboardProps {
   promotions: Promotion[];
   onChangePassword: (userId: string, currentPassword: string, newPassword: string) => { success: boolean; message: string };
   effectiveTime: Date;
-  onDepositRequest: (amount: number, method: 'Wave' | 'AfriMoney', phone: string) => void;
+  onDepositRequest: (amount: number, method: 'Wave' | 'AfriMoney' | 'APS' | 'QMoney' | 'Card', phone: string, externalRef?: string) => void;
   depositRequests: DepositRequest[];
   onCancelWithdrawal?: (requestId: string) => void;
   isBettingInProgress?: boolean;

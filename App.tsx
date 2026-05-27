@@ -1183,7 +1183,12 @@ const AppContent: React.FC = () => {
         return { success: true, bonusApplied };
   };
 
-    const handleCreateDepositRequest = async (amount: number, method: 'Wave' | 'AfriMoney' | 'APS', phone: string) => {
+    const handleCreateDepositRequest = async (
+        amount: number,
+        method: 'Wave' | 'AfriMoney' | 'APS' | 'QMoney' | 'Card',
+        phone: string,
+        externalRef?: string,
+    ) => {
     if (!currentUser) return;
         const normalizedPhone = normalizeGambiaPhone(phone || '');
         if (!normalizedPhone) {
@@ -1191,19 +1196,22 @@ const AppContent: React.FC = () => {
                 return;
         }
     const normalizedAmount = Number(amount.toFixed(2));
+    const requestId = externalRef || Math.floor(10000000 + Math.random() * 90000000).toString();
     const newRequest: DepositRequest = {
-        id: Math.floor(10000000 + Math.random() * 90000000).toString(),
+        id: requestId,
         customerId: currentUser.id,
-        customerName: currentUser.name, // Added missing property
+        customerName: currentUser.name,
         amount: normalizedAmount,
         method,
         transactionId: normalizedPhone,
         status: 'Pending',
         timestamp: effectiveTime,
-        providerReference: method === 'Wave' ? `WAVE-${effectiveTime.getTime()}-${Math.floor(Math.random() * 1000)}` : undefined,
-        verificationStatus: method === 'Wave' ? 'PendingProviderConfirmation' : 'NotStarted',
-        verificationSource: method === 'Wave' ? 'client-fallback' : 'manual-review',
-        verificationMessage: method === 'Wave' ? 'Waiting for backend webhook/status verification.' : undefined,
+        providerReference: externalRef,
+        verificationStatus: externalRef ? 'PendingProviderConfirmation' : 'NotStarted',
+        verificationSource: externalRef ? 'webhook' : 'manual-review',
+        verificationMessage: externalRef
+            ? 'Waiting for ModemPay to confirm payment before your wallet is credited.'
+            : undefined,
     };
 
     try {
@@ -1211,29 +1219,6 @@ const AppContent: React.FC = () => {
             await dbDepositRequest(newRequest);
         }
         setDepositRequests(prev => [newRequest, ...(prev || []).filter(req => req.id !== newRequest.id)]);
-
-        if (method === 'Wave') {
-            // Wave payments are auto-credited immediately.
-            // Backoffice receives a notification to verify on the Wave merchant portal.
-            await handleDeposit(currentUser.id, normalizedAmount, 'Wave', normalizedPhone, { id: 'SYSTEM', name: 'Wave Auto-Credit' });
-            if (realtimeDb) {
-                await dbMarkDepositRequestApproved(newRequest.id, 'SYSTEM', 'Wave Auto-Credit', effectiveTime);
-            }
-            setDepositRequests(prev => (prev || []).map(req => req.id === newRequest.id
-                ? {
-                    ...req,
-                    status: 'Approved',
-                    processedBy: 'SYSTEM',
-                    processedByName: 'Wave Auto-Credit',
-                    processedAt: effectiveTime,
-                    verificationStatus: 'PendingProviderConfirmation',
-                    verificationSource: 'client-fallback',
-                    verificationMessage: 'Auto-credited. Backoffice must verify on Wave merchant portal.',
-                  }
-                : req
-            ));
-        }
-        // AfriMoney stays Pending for manual backoffice approval.
     } catch (e: any) {
         alert(`Payment Error: ${e.message}`);
         console.error("Deposit Error:", e);
@@ -1243,7 +1228,11 @@ const AppContent: React.FC = () => {
   const handleApproveDepositRequest = async (requestId: string) => {
       const request = (depositRequests || []).find(r => r.id === requestId);
       if (!request || request.status !== 'Pending' || !currentUser) return;
-      
+
+      if (request.providerReference?.startsWith('BETESE-') || request.verificationSource === 'webhook') {
+          alert('This online payment is credited automatically when ModemPay confirms it. No manual approval is needed.');
+          return;
+      }
       try {
           const result = await handleDeposit(request.customerId, request.amount, request.method, request.transactionId);
           if (!result.success) {

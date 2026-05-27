@@ -940,8 +940,13 @@ export const dbDepositRequest = async (request: any) => {
         method: request.method,
         transaction_id: request.transactionId,
         customer_id: request.customerId,
+        customer_name: request.customerName || null,
         status: request.status,
         timestamp: request.timestamp.toISOString(),
+        provider_reference: request.providerReference || null,
+        verification_status: request.verificationStatus || null,
+        verification_source: request.verificationSource || null,
+        verification_message: request.verificationMessage || null,
     });
 };
 

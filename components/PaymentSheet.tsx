@@ -13,8 +13,8 @@ interface PaymentSheetProps {
   user: User;
   /** Optional prefilled amount (e.g. shortfall when funding a bet) */
   initialAmount?: number;
-  /** Records the deposit request in the database after the user confirms payment */
-  onDepositRequest: (amount: number, method: Method, transactionId: string) => void;
+  /** Records a pending deposit — wallet is credited only after ModemPay webhook confirmation. */
+  onDepositRequest: (amount: number, method: Method, phone: string, externalRef: string) => void;
 }
 
 const generateRef = () => `BETESE-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
@@ -151,7 +151,7 @@ export const PaymentSheet: React.FC<PaymentSheetProps> = ({
       qmoney: 'QMoney',
       card: 'Card',
     };
-    onDepositRequest(numAmount, labelByProvider[provider], cleanPhone);
+    onDepositRequest(numAmount, labelByProvider[provider], cleanPhone, externalRef);
     return { transactionId: externalRef };
   };
 
@@ -181,7 +181,7 @@ export const PaymentSheet: React.FC<PaymentSheetProps> = ({
         : method === 'QMoney' ? 'qmoney'
         : method === 'Card' ? 'card'
         : 'afrimoney';
-      await handleModemPay(providerKey, numAmount, cleanPhone, normalizedPhone);
+      await handleModemPay(providerKey, numAmount, cleanPhone, externalRef);
       setMessage({
         ok: true,
         text: `${method} checkout opened in a new tab. Finish payment there, then return to Betese.`,

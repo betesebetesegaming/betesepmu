@@ -329,14 +329,15 @@ async function processModemPayEvent(event: ModemPayEvent): Promise<void> {
     received_at: new Date().toISOString(),
   }).catch(err => logger.warn('Failed to log modempay event', err));
 
-  const externalRef = (payload.external_reference as string | undefined)
-    || (payload.transaction_reference as string | undefined)
-    || ((payload.metadata as Record<string, unknown> | undefined)?.external_reference as string | undefined);
+  const externalRef = extractExternalRef(payload);
 
   switch (eventType) {
-    case 'charge.succeeded': {
+    case 'charge.succeeded':
+    case 'payment_intent.successful':
+    case 'payment_intent.succeeded':
+    case 'payment.succeeded': {
       if (!externalRef) {
-        logger.warn('charge.succeeded missing externalRef', payload);
+        logger.warn(`${eventType} missing externalRef`, payload);
         return;
       }
       await markDepositCompleted(externalRef, payload);
@@ -344,7 +345,11 @@ async function processModemPayEvent(event: ModemPayEvent): Promise<void> {
     }
 
     case 'charge.cancelled':
-    case 'charge.expired': {
+    case 'charge.expired':
+    case 'payment_intent.cancelled':
+    case 'payment_intent.expired':
+    case 'payment_intent.failed':
+    case 'payment.failed': {
       if (externalRef) await markDepositFailed(externalRef, eventType, payload);
       return;
     }
@@ -379,6 +384,8 @@ async function processModemPayEvent(event: ModemPayEvent): Promise<void> {
 }
 
 async function markDepositCompleted(externalRef: string, payload: Record<string, unknown>) {
+  const payloadAmount = Number(payload.amount ?? payload.paid_amount ?? payload.total_amount ?? 0);
+
   await adminDb.runTransaction(async (tx) => {
     const checkoutRef = adminDb.collection('modempay_checkouts').doc(externalRef);
     const checkoutSnap = await tx.get(checkoutRef);
@@ -390,51 +397,136 @@ async function markDepositCompleted(externalRef: string, payload: Record<string,
       status?: string;
       amount?: number;
       customer_id?: string | null;
+      customer_name?: string | null;
+      customer_phone?: string | null;
       method?: string;
     };
     if (checkout.status === 'completed') return; // idempotent
 
+    const creditAmount = Number(
+      (payloadAmount > 0 ? payloadAmount : checkout.amount) || 0,
+    );
+    if (creditAmount <= 0) {
+      logger.warn('markDepositCompleted: no credit amount', { externalRef, payload });
+      return;
+    }
+
+    const completedAt = new Date().toISOString();
+    const providerTxnId = payload.id || payload.transaction_id || null;
+    const methodLabel = mapModemPayMethodLabel(checkout.method || payload.payment_method);
+
     tx.update(checkoutRef, {
       status: 'completed',
-      provider_transaction_id: payload.id || null,
-      completed_at: new Date().toISOString(),
+      credited_amount: creditAmount,
+      provider_transaction_id: providerTxnId,
+      completed_at: completedAt,
       raw_payload: payload,
     });
 
-    // Mirror into deposit_logs for the cashier dashboards.
-    const depositRef = adminDb.collection('deposit_logs').doc(externalRef);
-    tx.set(depositRef, {
+    const depositReqRef = adminDb.collection('deposit_requests').doc(externalRef);
+    const depositReqSnap = await tx.get(depositReqRef);
+    if (depositReqSnap.exists) {
+      tx.update(depositReqRef, {
+        status: 'Approved',
+        processed_by: 'MODEMPAY_WEBHOOK',
+        processed_by_name: 'ModemPay',
+        processed_at: completedAt,
+        verification_status: 'Verified',
+        verification_source: 'webhook',
+        verification_message: 'Payment confirmed by ModemPay.',
+        verified_at: completedAt,
+      });
+    }
+
+    const depositLogRef = adminDb.collection('deposit_logs').doc(externalRef);
+    tx.set(depositLogRef, {
       id: externalRef,
       external_ref: externalRef,
       customer_id: checkout.customer_id || null,
-      amount: checkout.amount || Number(payload.amount) || 0,
-      method: checkout.method || (payload.payment_method as string | undefined) || 'unknown',
+      customer_name: checkout.customer_name || null,
+      customer_phone: checkout.customer_phone || null,
+      amount: creditAmount,
+      method: methodLabel,
       status: 'completed',
-      provider_transaction_id: payload.id || null,
-      created_at: new Date().toISOString(),
+      provider_transaction_id: providerTxnId,
+      timestamp: completedAt,
+      processed_by_id: 'MODEMPAY_WEBHOOK',
+      processed_by_name: 'ModemPay',
+      transaction_id: providerTxnId,
     }, { merge: true });
 
-    // Credit wallet if we know the customer.
     if (checkout.customer_id) {
       const userRef = adminDb.collection('users').doc(checkout.customer_id);
       const userSnap = await tx.get(userRef);
       if (userSnap.exists) {
-        const currentBalance = Number((userSnap.data() as { balance?: number }).balance || 0);
-        const delta = Number(checkout.amount || payload.amount || 0);
-        tx.update(userRef, { balance: currentBalance + delta });
+        const userData = userSnap.data() as {
+          wallet_balance?: number;
+          total_deposited_amount?: number;
+          first_deposit_at?: string | null;
+        };
+        const currentWallet = Number(userData.wallet_balance || 0);
+        const currentDeposited = Number(userData.total_deposited_amount || 0);
+        tx.update(userRef, {
+          wallet_balance: Number((currentWallet + creditAmount).toFixed(2)),
+          total_deposited_amount: Number((currentDeposited + creditAmount).toFixed(2)),
+          ...(userData.first_deposit_at ? {} : { first_deposit_at: completedAt }),
+        });
       }
     }
   });
 }
 
+function extractExternalRef(payload: Record<string, unknown>): string | undefined {
+  const metadata = payload.metadata as Record<string, unknown> | undefined;
+  const nested = payload.data as Record<string, unknown> | undefined;
+  const nestedMeta = nested?.metadata as Record<string, unknown> | undefined;
+  const candidates = [
+    payload.external_reference,
+    payload.externalReference,
+    payload.transaction_reference,
+    metadata?.external_reference,
+    metadata?.externalReference,
+    nested?.external_reference,
+    nestedMeta?.external_reference,
+  ];
+  for (const value of candidates) {
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return undefined;
+}
+
+function mapModemPayMethodLabel(method: unknown): string {
+  const value = String(method || '').toLowerCase();
+  switch (value) {
+    case 'wave': return 'Wave';
+    case 'aps': return 'APS';
+    case 'afrimoney': return 'AfriMoney';
+    case 'qmoney': return 'QMoney';
+    case 'card': return 'Card';
+    default: return value || 'unknown';
+  }
+}
+
 async function markDepositFailed(externalRef: string, reason: string, payload: Record<string, unknown>) {
+  const failedAt = new Date().toISOString();
   const checkoutRef = adminDb.collection('modempay_checkouts').doc(externalRef);
   await checkoutRef.set({
     status: 'failed',
     failure_reason: reason,
     raw_payload: payload,
-    failed_at: new Date().toISOString(),
+    failed_at: failedAt,
   }, { merge: true }).catch(err => logger.warn('Failed to mark deposit failed', err));
+
+  await adminDb.collection('deposit_requests').doc(externalRef).set({
+    status: 'Rejected',
+    processed_by: 'MODEMPAY_WEBHOOK',
+    processed_by_name: 'ModemPay',
+    processed_at: failedAt,
+    verification_status: 'VerificationFailed',
+    verification_source: 'webhook',
+    verification_message: reason,
+    verified_at: failedAt,
+  }, { merge: true }).catch(err => logger.warn('Failed to mark deposit request failed', err));
 }
 
 async function markWithdrawalSettled(externalRef: string, payload: Record<string, unknown>) {

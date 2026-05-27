@@ -10,7 +10,7 @@ interface WalletPanelProps {
     onWithdrawalRequest: (amount: number) => Promise<WithdrawalRequest | null>;
   withdrawalRequests: WithdrawalRequest[];
   onWalletFlash: () => void;
-  onDepositRequest: (amount: number, method: 'Wave' | 'AfriMoney' | 'APS', transactionId: string) => void;
+  onDepositRequest: (amount: number, method: 'Wave' | 'AfriMoney' | 'APS' | 'QMoney' | 'Card', transactionId: string, externalRef?: string) => void;
   depositRequests: DepositRequest[];
     tickets: Ticket[];
   onCancelWithdrawal?: (requestId: string) => void; // New Prop

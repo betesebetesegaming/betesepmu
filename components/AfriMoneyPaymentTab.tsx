@@ -54,20 +54,16 @@ export const AfriMoneyPaymentTab: React.FC<Props> = ({ customers, onDeposit }) =
 
       const data = await res.json().catch(() => ({}));
 
-      if (res.ok && data.ok) {
-        const result = await onDeposit(selectedCustomer.id, numAmount, 'AfriMoney', externalRef);
-        if (result.success) {
-          setMessage({
-            ok: true,
-            text: `✅ Payment of ${numAmount.toFixed(2)} GMD successful! Wallet credited.${result.bonusApplied ? ` Bonus: ${result.bonusApplied.toFixed(2)} GMD` : ''}`
-          });
-          setAmount('');
-          setPhone('');
-          setSelectedCustomer(null);
-          setSearchTerm('');
-        } else {
-          setMessage({ ok: false, text: 'Payment sent but wallet credit failed. Contact admin.' });
-        }
+      if (res.ok && data.ok && data.checkoutUrl) {
+        window.open(data.checkoutUrl, '_blank', 'noopener,noreferrer');
+        setMessage({
+          ok: true,
+          text: `AfriMoney checkout opened for ${selectedCustomer.name}. Wallet will be credited after ModemPay confirms payment (${externalRef}).`,
+        });
+        setPhone('');
+        setAmount('');
+        setSelectedCustomer(null);
+        setSearchTerm('');
       } else {
         setMessage({ ok: false, text: data.error || 'AfriMoney payment failed. Please try again.' });
       }
