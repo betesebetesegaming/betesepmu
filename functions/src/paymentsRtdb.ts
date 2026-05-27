@@ -100,12 +100,20 @@ export async function patchDepositOnRtdb(
   customerId: string | undefined,
   patch: Partial<RtdbDepositRecord>,
 ): Promise<void> {
-  const updates: Record<string, Partial<RtdbDepositRecord>> = {
-    [`payments/deposits/${id}`]: patch,
-  };
-  if (customerId) {
-    updates[`payments/byCustomer/${customerId}/deposits/${id}`] = patch;
+  // CRITICAL: write each field as its own multi-path entry. RTDB's update()
+  // treats a slash-containing key as a full-write at that path, so passing
+  // `{ 'payments/deposits/abc': { status: ... } }` would REPLACE the entire
+  // record, wiping amount/customer_id/method/timestamp. Per-field keys
+  // preserve every other field on the node.
+  const updates: Record<string, unknown> = {};
+  for (const [field, value] of Object.entries(patch)) {
+    if (value === undefined) continue;
+    updates[`payments/deposits/${id}/${field}`] = value;
+    if (customerId) {
+      updates[`payments/byCustomer/${customerId}/deposits/${id}/${field}`] = value;
+    }
   }
+  if (Object.keys(updates).length === 0) return;
   await rtdbRef().update(updates);
 }
 
@@ -124,12 +132,16 @@ export async function patchWithdrawalOnRtdb(
   userId: string | undefined,
   patch: Partial<RtdbWithdrawalRecord>,
 ): Promise<void> {
-  const updates: Record<string, Partial<RtdbWithdrawalRecord>> = {
-    [`payments/withdrawals/${id}`]: patch,
-  };
-  if (userId) {
-    updates[`payments/byCustomer/${userId}/withdrawals/${id}`] = patch;
+  // Per-field paths — see patchDepositOnRtdb for the why.
+  const updates: Record<string, unknown> = {};
+  for (const [field, value] of Object.entries(patch)) {
+    if (value === undefined) continue;
+    updates[`payments/withdrawals/${id}/${field}`] = value;
+    if (userId) {
+      updates[`payments/byCustomer/${userId}/withdrawals/${id}/${field}`] = value;
+    }
   }
+  if (Object.keys(updates).length === 0) return;
   await rtdbRef().update(updates);
 }
 

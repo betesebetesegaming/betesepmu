@@ -19,6 +19,7 @@ import {
   syncCheckoutToRtdb,
   syncDepositToRtdb,
   patchWithdrawalOnRtdb,
+  syncWithdrawalToRtdb,
   linkPaymentIntentIndex,
   linkPaymentLinkIndex,
   resolveExternalRefByPaymentIntent,
@@ -862,16 +863,48 @@ async function markDepositCompleted(externalRef: string, payload: Record<string,
     }
   });
 
-  await patchDepositOnRtdb(externalRef, customerId, {
-    status: 'Approved',
-    processed_by: 'MODEMPAY_WEBHOOK',
-    processed_by_name: 'ModemPay',
-    processed_at: completedAt,
-    verification_status: 'Verified',
-    verification_source: 'webhook',
-    verification_message: 'Payment confirmed by ModemPay.',
-    verified_at: completedAt,
-  }).catch(err => logger.warn('RTDB deposit approve sync failed', err));
+  // Healing pass: re-read the (now-Approved) deposit_request from Firestore
+  // and write the FULL record to RTDB. This both (a) keeps RTDB in sync going
+  // forward and (b) repairs any deposit whose RTDB node was previously wiped
+  // by the legacy patch-overwrites-node bug. Idempotent.
+  try {
+    const freshSnap = await adminDb.collection('deposit_requests').doc(externalRef).get();
+    if (freshSnap.exists) {
+      const fresh = freshSnap.data() as Record<string, unknown>;
+      await syncDepositToRtdb({
+        id: externalRef,
+        customer_id: String(fresh.customer_id || customerId || ''),
+        customer_name: (fresh.customer_name as string) || null,
+        amount: Number(fresh.amount || 0),
+        method: String(fresh.method || 'Wave'),
+        transaction_id: (fresh.transaction_id as string) || null,
+        status: String(fresh.status || 'Approved'),
+        timestamp: String(fresh.timestamp || completedAt),
+        provider_reference: (fresh.provider_reference as string) || externalRef,
+        processed_by: (fresh.processed_by as string) || 'MODEMPAY_WEBHOOK',
+        processed_by_name: (fresh.processed_by_name as string) || 'ModemPay',
+        processed_at: (fresh.processed_at as string) || completedAt,
+        verification_status: (fresh.verification_status as string) || 'Verified',
+        verification_source: (fresh.verification_source as string) || 'webhook',
+        verification_message: (fresh.verification_message as string) || 'Payment confirmed by ModemPay.',
+        verified_at: (fresh.verified_at as string) || completedAt,
+      });
+    } else {
+      // Fallback to a patch if for some reason the doc isn't there.
+      await patchDepositOnRtdb(externalRef, customerId, {
+        status: 'Approved',
+        processed_by: 'MODEMPAY_WEBHOOK',
+        processed_by_name: 'ModemPay',
+        processed_at: completedAt,
+        verification_status: 'Verified',
+        verification_source: 'webhook',
+        verification_message: 'Payment confirmed by ModemPay.',
+        verified_at: completedAt,
+      });
+    }
+  } catch (err) {
+    logger.warn('RTDB deposit approve sync failed', err);
+  }
 
   await syncCheckoutToRtdb({
     external_ref: externalRef,
@@ -1075,10 +1108,37 @@ async function markWithdrawalSettled(externalRef: string, payload: Record<string
     raw_payload: payload,
   }, { merge: true }).catch(err => logger.warn('Failed to settle withdrawal', err));
 
-  await patchWithdrawalOnRtdb(externalRef, userId, {
-    status: 'Completed',
-    completed_at: completedAt,
-  }).catch(err => logger.warn('RTDB withdrawal complete sync failed', err));
+  // Heal RTDB by writing the FULL withdrawal record from the now-updated
+  // Firestore doc. Repairs old withdrawals whose RTDB node was wiped by the
+  // legacy patch-overwrites-node bug, and keeps RTDB in sync going forward.
+  try {
+    const freshSnap = await ref.get();
+    if (freshSnap.exists) {
+      const fresh = freshSnap.data() as Record<string, unknown>;
+      await syncWithdrawalToRtdb({
+        id: externalRef,
+        user_id: String(fresh.user_id || userId || ''),
+        user_name: (fresh.user_name as string) || null,
+        amount: Number(fresh.amount || 0),
+        status: String(fresh.status || 'Completed'),
+        code: (fresh.code as string) || null,
+        requested_at: String(fresh.requested_at || completedAt),
+        payout_method: (fresh.payout_method as string) || null,
+        recipient_phone: (fresh.recipient_phone as string) || null,
+        external_ref: externalRef,
+        processed_by: (fresh.processed_by as string) || null,
+        processed_by_name: (fresh.processed_by_name as string) || null,
+        completed_at: completedAt,
+      });
+    } else {
+      await patchWithdrawalOnRtdb(externalRef, userId, {
+        status: 'Completed',
+        completed_at: completedAt,
+      });
+    }
+  } catch (err) {
+    logger.warn('RTDB withdrawal complete sync failed', err);
+  }
 }
 
 async function refundWithdrawalHold(requestId: string, customerId: string, amount: number, reason: string) {
