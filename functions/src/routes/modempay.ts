@@ -6,6 +6,7 @@ import {
   createRefund,
   retrieveBalances,
   retrieveTransaction,
+  retrievePaymentIntent,
   verifyWebhookSignature,
   isModemPayMethod,
   isModemPayPayoutNetwork,
@@ -766,27 +767,60 @@ export async function reconcileDepositHandler(req: Request, res: Response): Prom
       status?: string;
       failure_reason?: string;
       raw_payload?: Record<string, unknown>;
+      session_id?: string | null;
+      amount?: number;
+      method?: string;
     };
     const depositSnap = await adminDb.collection('deposit_requests').doc(externalRef).get();
     const depositStatus = String(depositSnap.data()?.status || 'Pending');
 
-    if (checkout.status === 'completed') {
+    let checkoutStatus = String(checkout.status || 'pending').toLowerCase();
+    let providerPayload = checkout.raw_payload || {};
+
+    // If webhook hasn't updated Firestore yet, ask ModemPay directly.
+    if (checkoutStatus === 'pending' && checkout.session_id) {
+      const intentResult = await retrievePaymentIntent(checkout.session_id);
+      const intent = (intentResult.data as { data?: Record<string, unknown> }).data
+        || (intentResult.data as Record<string, unknown>);
+      const intentStatus = String(intent.status || intent.payment_status || '').toLowerCase();
+      providerPayload = intent;
+
+      if (['completed', 'succeeded', 'successful', 'paid'].includes(intentStatus)) {
+        checkoutStatus = 'completed';
+        await adminDb.collection('modempay_checkouts').doc(externalRef).set({
+          status: 'completed',
+          provider_status: intentStatus,
+          raw_payload: intent,
+          updated_at: new Date().toISOString(),
+        }, { merge: true });
+      } else if (['failed', 'cancelled', 'canceled', 'expired'].includes(intentStatus)) {
+        checkoutStatus = 'failed';
+        await adminDb.collection('modempay_checkouts').doc(externalRef).set({
+          status: 'failed',
+          failure_reason: intentStatus,
+          raw_payload: intent,
+          failed_at: new Date().toISOString(),
+        }, { merge: true });
+      }
+    }
+
+    if (checkoutStatus === 'completed') {
       if (!depositSnap.exists || depositStatus === 'Pending') {
-        await markDepositCompleted(externalRef, checkout.raw_payload || {});
+        await markDepositCompleted(externalRef, providerPayload);
       }
       res.json({ ok: true, status: 'Approved' });
       return;
     }
 
-    if (checkout.status === 'failed') {
+    if (checkoutStatus === 'failed') {
       if (!depositSnap.exists || depositStatus === 'Pending') {
-        await markDepositFailed(externalRef, checkout.failure_reason || 'failed', checkout.raw_payload || {});
+        await markDepositFailed(externalRef, checkout.failure_reason || 'failed', providerPayload);
       }
       res.json({ ok: true, status: 'Rejected' });
       return;
     }
 
-    res.json({ ok: true, status: depositStatus, checkoutStatus: checkout.status || 'pending' });
+    res.json({ ok: true, status: depositStatus, checkoutStatus });
   } catch (err) {
     logger.error('Reconcile deposit error', err);
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });

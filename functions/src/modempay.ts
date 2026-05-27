@@ -90,6 +90,10 @@ export interface CreateCheckoutInput {
 }
 
 export async function createCheckoutSession(input: CreateCheckoutInput) {
+  const accountNumber = String(input.customer?.phone || '')
+    .replace(/\D/g, '')
+    .replace(/^220/, '');
+
   const dataPayload: Record<string, unknown> = {
     amount: input.amount,
     currency: input.currency || 'GMD',
@@ -105,6 +109,12 @@ export async function createCheckoutSession(input: CreateCheckoutInput) {
       ...(input.metadata || {}),
     },
   };
+
+  // Mobile-money deposits require network + account_number on ModemPay /v1/payments.
+  if (input.method !== 'card') {
+    dataPayload.network = input.method;
+    if (accountNumber) dataPayload.account_number = accountNumber;
+  }
 
   if (input.customer?.name) dataPayload.customer_name = input.customer.name;
   if (input.customer?.email) dataPayload.customer_email = input.customer.email;
@@ -253,6 +263,11 @@ export function retrieveBalances() {
 
 export function retrieveTransaction(id: string) {
   return modemFetch({ method: 'GET', path: `/v1/transactions/${encodeURIComponent(id)}` });
+}
+
+/** Fetch a payment intent status from ModemPay (used to reconcile stuck Pending deposits). */
+export function retrievePaymentIntent(id: string) {
+  return modemFetch({ method: 'GET', path: `/v1/payments/${encodeURIComponent(id)}` });
 }
 
 // -----------------------------------------------------------------------------

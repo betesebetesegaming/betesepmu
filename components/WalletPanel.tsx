@@ -35,10 +35,10 @@ const getStatusChipStyle = (status: string) => {
 }
 
 const getVerificationBadge = (request: DepositRequest) => {
-    if (request.method !== 'Wave') return null;
     if (request.verificationStatus === 'PendingProviderConfirmation') {
-        return <span className="inline-flex mt-1 items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-amber-700">Wave Pending Verification</span>;
+        return <span className="inline-flex mt-1 items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-amber-700">{request.method} — waiting for payment</span>;
     }
+    if (request.method !== 'Wave') return null;
     if (request.verificationStatus === 'Verified' && (request.processedBy === 'SYSTEM' || request.processedByName === 'Wave Direct Deposit')) {
         return <span className="inline-flex mt-1 items-center rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-blue-700">Wave Direct - Instant Credit</span>;
     }
