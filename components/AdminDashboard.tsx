@@ -1,6 +1,13 @@
 
 import React, { useState, useMemo } from 'react';
-import { Ticket, Race, User, Role, RaceResult, DepositLog, Promotion, PromotionRule, DepositRequest, PaymentIntegrationConfig, ProgramImage, ManualBetOrder, BetSelection } from '../types';
+import { Ticket, Race, User, Role, RaceResult, DepositLog, Promotion, PromotionRule, DepositRequest, PaymentIntegrationConfig, ProgramImage, ManualBetOrder, BetSelection, WithdrawalRequest } from '../types';
+import {
+    DepositCapsPanel,
+    UserControlPanel,
+    PaymentControlPanel,
+    BookingCodesPanel,
+    WithdrawalCodesPanel,
+} from './AdminAdvancedPanels';
 import { RaceManagement } from './RaceManagement';
 import { UserAccountManagement, RoleFilter } from './VendorManagement';
 import { TicketDetailsTable } from './TicketDetailsTable';
@@ -23,7 +30,7 @@ import { AutomaticRaffleDrawerPanel } from './AutomaticRaffleDrawerPanel';
 import { VendorMonitorPanel } from './VendorMonitorPanel';
 
 type FilterRole = Role | 'All';
-type AdminView = 'DASHBOARD' | 'ANALYTICS' | 'PROGRAM' | 'USERS' | 'EOD' | 'RACES' | 'REPORTS' | 'TICKETS' | 'PRINTING' | 'TICKET_PAYOUT' | 'INTEGRATIONS' | 'SUPPORT' | 'MANUAL_BETS' | 'RAFFLE_DRAW' | 'TICKET_INFORMATION' | 'VENDOR_MONITOR' | 'BANNER';
+type AdminView = 'DASHBOARD' | 'ANALYTICS' | 'PROGRAM' | 'USERS' | 'EOD' | 'RACES' | 'REPORTS' | 'TICKETS' | 'PRINTING' | 'TICKET_PAYOUT' | 'INTEGRATIONS' | 'SUPPORT' | 'MANUAL_BETS' | 'RAFFLE_DRAW' | 'TICKET_INFORMATION' | 'VENDOR_MONITOR' | 'BANNER' | 'DEPOSIT_CAPS' | 'USER_CONTROL' | 'PAYMENT_CONTROL' | 'BOOKING_CODES' | 'WITHDRAWAL_CODES';
 
 export const TicketToolsView: React.FC<{
     allTickets: Ticket[];
@@ -94,6 +101,8 @@ interface AdminDashboardProps {
     onCancelManualBet: (orderId: string) => void;
     onRecalculateAllTickets: () => Promise<void>;
     onFreshStart: () => Promise<void>;
+    withdrawalRequests?: WithdrawalRequest[];
+    onRefreshWithdrawals?: () => void;
 }
 
 const BackButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
@@ -103,7 +112,7 @@ const BackButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
   </button>
 );
 
-type AdminIconKind = 'analytics' | 'manual' | 'raffle' | 'program' | 'users' | 'races' | 'tools' | 'reports' | 'integrations' | 'support' | 'printing' | 'pmu' | 'monitor' | 'banner';
+type AdminIconKind = 'analytics' | 'manual' | 'raffle' | 'program' | 'users' | 'races' | 'tools' | 'reports' | 'integrations' | 'support' | 'printing' | 'pmu' | 'monitor' | 'banner' | 'caps' | 'control' | 'payments' | 'booking' | 'withdrawal';
 
 const AdminMenuGraphic: React.FC<{ kind: AdminIconKind }> = ({ kind }) => {
     const photoMap: Record<AdminIconKind, { src: string; alt: string }> = {
@@ -121,6 +130,11 @@ const AdminMenuGraphic: React.FC<{ kind: AdminIconKind }> = ({ kind }) => {
         pmu: { src: 'https://images.unsplash.com/photo-1489515217757-5fd1be406fef?w=140&h=140&fit=crop&q=80', alt: 'pari mutuel' },
         monitor: { src: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=140&h=140&fit=crop&q=80', alt: 'vendor monitor' },
         banner: { src: 'https://images.unsplash.com/photo-1557804506-669a67965ba0?w=140&h=140&fit=crop&q=80', alt: 'announcement banner' },
+        caps: { src: 'https://images.unsplash.com/photo-1554224155-1696413565d3?w=140&h=140&fit=crop&q=80', alt: 'limits' },
+        control: { src: 'https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=140&h=140&fit=crop&q=80', alt: 'user control' },
+        payments: { src: 'https://images.unsplash.com/photo-1556742044-3c52d6e88c62?w=140&h=140&fit=crop&q=80', alt: 'payments' },
+        booking: { src: 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=140&h=140&fit=crop&q=80', alt: 'booking' },
+        withdrawal: { src: 'https://images.unsplash.com/photo-1592494804071-faea15d93a8a?w=140&h=140&fit=crop&q=80', alt: 'withdrawal' },
     };
 
     return (
@@ -139,6 +153,11 @@ const AdminMenu: React.FC<{ setView: (view: AdminView) => void; onFreshStart: ()
         { view: 'VENDOR_MONITOR', label: 'Vendor Monitor', iconKind: 'monitor' as AdminIconKind, color: 'from-gray-800 to-gray-900' },
         { view: 'TICKET_INFORMATION', label: 'Terminal Log / Ticket Information', iconKind: 'reports' as AdminIconKind, color: 'from-lime-600 to-green-700' },
         { view: 'ANALYTICS', label: 'Analytics Dashboard', iconKind: 'analytics' as AdminIconKind, color: 'from-green-500 to-green-700' },
+        { view: 'USER_CONTROL', label: 'User Control Center', iconKind: 'control' as AdminIconKind, color: 'from-indigo-600 to-purple-700' },
+        { view: 'DEPOSIT_CAPS', label: 'Deposit & Withdrawal Caps', iconKind: 'caps' as AdminIconKind, color: 'from-emerald-500 to-teal-700' },
+        { view: 'PAYMENT_CONTROL', label: 'Payment Provider Control', iconKind: 'payments' as AdminIconKind, color: 'from-amber-500 to-orange-700' },
+        { view: 'BOOKING_CODES', label: 'Booking Codes Running', iconKind: 'booking' as AdminIconKind, color: 'from-blue-500 to-cyan-700' },
+        { view: 'WITHDRAWAL_CODES', label: 'Withdrawal Codes (Cash from Cashier)', iconKind: 'withdrawal' as AdminIconKind, color: 'from-rose-500 to-red-700' },
         { view: 'RAFFLE_DRAW', label: 'Automatic Raffle Draw', iconKind: 'raffle' as AdminIconKind, color: 'from-amber-500 to-orange-700' },
         { view: 'PROGRAM', label: 'Program & Ads', iconKind: 'program' as AdminIconKind, color: 'from-blue-500 to-blue-700' },
         { view: 'BANNER', label: 'Scrolling Banner & Promotions', iconKind: 'banner' as AdminIconKind, color: 'from-pink-500 to-rose-700' },
@@ -146,8 +165,8 @@ const AdminMenu: React.FC<{ setView: (view: AdminView) => void; onFreshStart: ()
         { view: 'RACES', label: 'Race Management', iconKind: 'races' as AdminIconKind, color: 'from-orange-500 to-orange-700' },
         { view: 'TICKET_PAYOUT', label: 'Office Payouts', iconKind: 'tools' as AdminIconKind, color: 'from-cyan-500 to-blue-500' },
         { view: 'REPORTS', label: 'Payout Reports', iconKind: 'reports' as AdminIconKind, color: 'from-yellow-500 to-yellow-600' },
-        { view: 'INTEGRATIONS', label: 'Payment API', iconKind: 'integrations' as AdminIconKind, color: 'from-yellow-600 to-orange-600' },
-        { view: 'SUPPORT', label: 'Support & Snapshot', iconKind: 'support' as AdminIconKind, color: 'from-red-600 to-red-800' },
+        { view: 'INTEGRATIONS', label: 'Payment API Setup', iconKind: 'integrations' as AdminIconKind, color: 'from-yellow-600 to-orange-600' },
+        { view: 'SUPPORT', label: 'AI Support & Snapshot', iconKind: 'support' as AdminIconKind, color: 'from-red-600 to-red-800' },
         { view: 'PRINTING', label: 'Test Print', iconKind: 'printing' as AdminIconKind, color: 'from-slate-500 to-slate-700' },
     ];
 
@@ -346,6 +365,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
                     </div>
                 );
             case 'INTEGRATIONS': return <IntegrationSettingsPanel configs={paymentConfigs} onSave={onSavePaymentConfig} />;
+            case 'DEPOSIT_CAPS': return <DepositCapsPanel currentUserName={currentUser.name} />;
+            case 'USER_CONTROL': return <UserControlPanel users={users} onToggleLock={onToggleLock} onAdminResetPassword={onAdminResetPassword} onAdminAdjustBalance={props.onAdminAdjustBalance} />;
+            case 'PAYMENT_CONTROL': return <PaymentControlPanel configs={paymentConfigs} onSave={onSavePaymentConfig} depositLogs={depositLogs} />;
+            case 'BOOKING_CODES': return <BookingCodesPanel allTickets={allTickets} races={races} onCancelTicket={onCancelTicket} onReprintTicket={onReprintTicket} effectiveTime={effectiveTime} />;
+            case 'WITHDRAWAL_CODES': return <WithdrawalCodesPanel withdrawalRequests={props.withdrawalRequests || []} currentUserId={currentUser.id} currentUserName={currentUser.name} effectiveTime={effectiveTime} onRefresh={props.onRefreshWithdrawals} />;
             case 'SUPPORT': return <SupportPanel onRecalculateAllTickets={props.onRecalculateAllTickets} />;
             case 'PRINTING': return <TestPrintPanel />;
             case 'DASHBOARD':

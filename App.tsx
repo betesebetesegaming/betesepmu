@@ -1836,6 +1836,25 @@ const AppContent: React.FC = () => {
         }
     }
 
+    // Supervisor / Vendor: enforce unique username (case-insensitive) so the
+    // login-by-name flow works deterministically and we don't overwrite an
+    // existing account when the Firestore doc id collides on uppercase name.
+    if (resolvedRole === 'Supervisor' || resolvedRole === 'Vendor') {
+        if (!currentUser || currentUser.role !== 'Admin') {
+            alert(`Only Admin can create ${resolvedRole} accounts.`);
+            return null;
+        }
+        const latestUsers = realtimeDb
+            ? await dbFetchUsers().catch(() => users)
+            : users;
+        const lower = trimmedName.toLowerCase();
+        const duplicate = (latestUsers || []).some(u => String(u.name || '').trim().toLowerCase() === lower);
+        if (duplicate) {
+            alert(`A user with the username "${trimmedName}" already exists. Pick a different one.`);
+            return null;
+        }
+    }
+
     const normalizedPhone = resolvedRole === 'Customer' ? normalizeGambiaPhone(resolvedPhone || '') : undefined;
     if (resolvedRole === 'Customer' && !normalizedPhone) {
         alert('Customer phone must be valid: Gambia local 7 digits or +220XXXXXXX; Senegal must be +221XXXXXXXXX only.');
@@ -2336,6 +2355,8 @@ const AppContent: React.FC = () => {
                     onCancelManualBet={handleCancelManualBet}
                     onRecalculateAllTickets={handleRecalculateAllTickets}
                     onFreshStart={handleFreshStart}
+                    withdrawalRequests={withdrawalRequests}
+                    onRefreshWithdrawals={() => loadLiveSystemData(currentUser || undefined)}
                 />
             ) : (
                 <SupervisorDashboard

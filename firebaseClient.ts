@@ -701,11 +701,13 @@ export const dbFindUser = async (usernameOrPhone: string): Promise<User | null> 
         const raw = String(usernameOrPhone || '').trim();
         if (!raw) return null;
         const normalizedPhone = normalizeGambiaPhone(raw);
+        const nameLower = raw.toLowerCase();
 
         // Firestore has no OR query — do multiple `where` queries and merge.
         const queries: Promise<any>[] = [
             getDoc(doc(db, 'users', raw)),
             getDocs(query(collection(db, 'users'), where('name', '==', raw), fsLimit(1))),
+            getDocs(query(collection(db, 'users'), where('name_lower', '==', nameLower), fsLimit(1))),
             getDocs(query(collection(db, 'users'), where('phone', '==', raw), fsLimit(1))),
         ];
         if (normalizedPhone) {
@@ -800,10 +802,24 @@ export const dbAddUser = async (user: User) => {
         );
         if (!existing.empty) throw new Error('Phone number already exists. Duplicate customer accounts are blocked.');
     }
+
+    const trimmedName = String(user.name || '').trim();
+    const nameLower = trimmedName.toLowerCase();
+    if (user.role === 'Supervisor' || user.role === 'Vendor') {
+        const [byName, byNameLower] = await Promise.all([
+            getDocs(query(collection(db, 'users'), where('name', '==', trimmedName), fsLimit(1))),
+            getDocs(query(collection(db, 'users'), where('name_lower', '==', nameLower), fsLimit(1))),
+        ]);
+        if (!byName.empty || !byNameLower.empty) {
+            throw new Error(`Username "${trimmedName}" is already taken. Choose a different one.`);
+        }
+    }
+
     const id = user.role === 'Customer' ? (normalizedCustomerPhone || user.id) : user.id;
     await setDoc(doc(db, 'users', id), {
         id,
-        name: user.name,
+        name: trimmedName,
+        name_lower: nameLower,
         role: user.role,
         phone: normalizedCustomerPhone,
         password: user.password || null,
@@ -1603,4 +1619,77 @@ export const dbFreshStart = async () => {
         batch.update(d.ref, { wallet_balance: 0, bonus_balance: 0, total_deposited_amount: 0, first_deposit_at: null })
     );
     await batch.commit();
+};
+
+// ============================================================================
+// SYSTEM SETTINGS (deposit caps, withdrawal caps, feature flags)
+// ============================================================================
+
+export interface DepositCapsConfig {
+    perTransactionMin: number;
+    perTransactionMax: number;
+    dailyLimitPerCustomer: number;
+    weeklyLimitPerCustomer: number;
+    monthlyLimitPerCustomer: number;
+    /** Cap any single withdrawal request (cashier or online). */
+    perWithdrawalMax: number;
+    /** Cap total withdrawals per customer per day. */
+    dailyWithdrawalLimitPerCustomer: number;
+    /** Hard freeze: when true, all new deposits are rejected. */
+    depositsFrozen: boolean;
+    /** Hard freeze: when true, all new withdrawals are rejected. */
+    withdrawalsFrozen: boolean;
+    updatedAt?: string;
+    updatedByName?: string;
+}
+
+export const DEPOSIT_CAPS_DEFAULTS: DepositCapsConfig = {
+    perTransactionMin: 10,
+    perTransactionMax: 50000,
+    dailyLimitPerCustomer: 100000,
+    weeklyLimitPerCustomer: 500000,
+    monthlyLimitPerCustomer: 1500000,
+    perWithdrawalMax: 50000,
+    dailyWithdrawalLimitPerCustomer: 100000,
+    depositsFrozen: false,
+    withdrawalsFrozen: false,
+};
+
+export const dbFetchDepositCaps = async (): Promise<DepositCapsConfig> => {
+    try {
+        const snap = await getDoc(doc(db, 'system_settings', 'deposit_caps'));
+        if (!snap.exists()) return { ...DEPOSIT_CAPS_DEFAULTS };
+        const data = snap.data() as any;
+        return {
+            perTransactionMin: Number(data.per_transaction_min ?? DEPOSIT_CAPS_DEFAULTS.perTransactionMin),
+            perTransactionMax: Number(data.per_transaction_max ?? DEPOSIT_CAPS_DEFAULTS.perTransactionMax),
+            dailyLimitPerCustomer: Number(data.daily_limit_per_customer ?? DEPOSIT_CAPS_DEFAULTS.dailyLimitPerCustomer),
+            weeklyLimitPerCustomer: Number(data.weekly_limit_per_customer ?? DEPOSIT_CAPS_DEFAULTS.weeklyLimitPerCustomer),
+            monthlyLimitPerCustomer: Number(data.monthly_limit_per_customer ?? DEPOSIT_CAPS_DEFAULTS.monthlyLimitPerCustomer),
+            perWithdrawalMax: Number(data.per_withdrawal_max ?? DEPOSIT_CAPS_DEFAULTS.perWithdrawalMax),
+            dailyWithdrawalLimitPerCustomer: Number(data.daily_withdrawal_limit_per_customer ?? DEPOSIT_CAPS_DEFAULTS.dailyWithdrawalLimitPerCustomer),
+            depositsFrozen: !!data.deposits_frozen,
+            withdrawalsFrozen: !!data.withdrawals_frozen,
+            updatedAt: data.updated_at || undefined,
+            updatedByName: data.updated_by_name || undefined,
+        };
+    } catch {
+        return { ...DEPOSIT_CAPS_DEFAULTS };
+    }
+};
+
+export const dbSaveDepositCaps = async (config: DepositCapsConfig, updatedByName: string): Promise<void> => {
+    await setDoc(doc(db, 'system_settings', 'deposit_caps'), {
+        per_transaction_min: Number(config.perTransactionMin) || 0,
+        per_transaction_max: Number(config.perTransactionMax) || 0,
+        daily_limit_per_customer: Number(config.dailyLimitPerCustomer) || 0,
+        weekly_limit_per_customer: Number(config.weeklyLimitPerCustomer) || 0,
+        monthly_limit_per_customer: Number(config.monthlyLimitPerCustomer) || 0,
+        per_withdrawal_max: Number(config.perWithdrawalMax) || 0,
+        daily_withdrawal_limit_per_customer: Number(config.dailyWithdrawalLimitPerCustomer) || 0,
+        deposits_frozen: !!config.depositsFrozen,
+        withdrawals_frozen: !!config.withdrawalsFrozen,
+        updated_at: new Date().toISOString(),
+        updated_by_name: updatedByName,
+    });
 };

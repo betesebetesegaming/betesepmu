@@ -1,6 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, getDocs, setDoc, updateDoc, doc, query, where } from 'firebase/firestore';
-import { randomUUID } from 'crypto';
+import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
 
 function requireEnv(name) {
   const value = String(process.env[name] || '').trim();
@@ -24,56 +23,57 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
+const ADMIN_DOC_ID = 'admin';
+const ADMIN_NAME = 'admin';
+const ADMIN_PASSWORD = 'password';
+
 async function seedAdmin() {
   console.log(`⏳ Seeding admin account into Firestore project: ${firebaseConfig.projectId}...`);
 
-  const adminId = randomUUID();
-  const adminUser = {
-    id: adminId,
-    name: 'admin',
+  const adminRef = doc(db, 'users', ADMIN_DOC_ID);
+  const adminSnap = await getDoc(adminRef);
+
+  const baseRecord = {
+    id: ADMIN_DOC_ID,
+    name: ADMIN_NAME,
+    name_lower: ADMIN_NAME.toLowerCase(),
     role: 'Admin',
-    password: 'password',
-    isLocked: false,
+    password: ADMIN_PASSWORD,
+    is_locked: false,
     phone: '',
-    createdAt: new Date().toISOString(),
+    correction_pin: '0000',
+    wallet_balance: 0,
+    bonus_balance: 0,
+    total_deposited_amount: 0,
+    created_at: new Date().toISOString(),
   };
 
   try {
-    const usersRef = collection(db, 'users');
-    const q = query(usersRef, where('name', '==', 'admin'));
-    const snapshot = await getDocs(q);
-
-    if (!snapshot.empty) {
-      console.log('⚠️ An admin user with the username "admin" already exists.');
-      const docId = snapshot.docs[0].id;
-      await updateDoc(doc(db, 'users', docId), {
-        password: 'password',
-        role: 'Admin',
-        is_locked: false,
+    if (adminSnap.exists()) {
+      console.log('⚠️  Admin user already exists — resetting credentials.');
+      await setDoc(adminRef, {
+        ...adminSnap.data(),
+        ...baseRecord,
       });
-      console.log('✅ Updated existing admin account credentials to username: admin / password: password');
-      process.exit(0);
+      console.log('✅ Admin reset to id: admin / password: password');
+    } else {
+      await setDoc(adminRef, baseRecord);
+      console.log('🎉 Admin account created.');
     }
 
-    await setDoc(doc(db, 'users', adminId), {
-      ...adminUser,
-      is_locked: false,
-      wallet_balance: 0,
-      bonus_balance: 0,
-    });
-
-    console.log('🎉 Admin account successfully created!');
     console.log('----------------------------------------------------');
-    console.log(`Project: ${firebaseConfig.projectId}`);
-    console.log(`Username: ${adminUser.name}`);
-    console.log(`Password: ${adminUser.password}`);
-    console.log(`Role: ${adminUser.role}`);
+    console.log(`Project:  ${firebaseConfig.projectId}`);
+    console.log(`ID:       ${ADMIN_DOC_ID}`);
+    console.log(`Username: ${ADMIN_NAME}`);
+    console.log(`Password: ${ADMIN_PASSWORD}`);
+    console.log(`Role:     Admin`);
     console.log('----------------------------------------------------');
+    console.log('Login tip: type "admin" in the mobile number field, then password = password.');
     process.exit(0);
   } catch (error) {
     console.error('❌ Failed to seed admin account:', error.message);
-    if (error.message.includes('Missing or insufficient permissions')) {
-      console.error('⚠️ Note: You need to temporarily allow open writes in your Firestore security rules, or use the Admin SDK.');
+    if (String(error.message || '').includes('Missing or insufficient permissions')) {
+      console.error('⚠️  Temporarily relax Firestore rules for users/, or use the Admin SDK.');
     }
     process.exit(1);
   }

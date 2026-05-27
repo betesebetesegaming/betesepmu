@@ -69,8 +69,20 @@ export const UserAccountManagement: React.FC<UserAccountManagementProps> = ({ us
         setError('');
         if (!onAddUser) return;
 
-        if (!newUserName || !newUserPassword) {
+        const trimmedUsername = newUserName.trim();
+        if (!trimmedUsername || !newUserPassword) {
             setError('Username and password are required.');
+            return;
+        }
+        if ((newUserRole === 'Supervisor' || newUserRole === 'Vendor') && !/^[a-zA-Z0-9_-]+$/.test(trimmedUsername)) {
+            setError('Supervisor and Vendor usernames may only use letters, numbers, underscore, and hyphen.');
+            return;
+        }
+        const duplicateUsername = users.some(
+            (u) => (u.name || '').trim().toLowerCase() === trimmedUsername.toLowerCase(),
+        );
+        if (duplicateUsername) {
+            setError(`Username "${trimmedUsername}" is already taken. Pick a different one.`);
             return;
         }
         if (newUserPassword.length < 6) {
@@ -96,7 +108,7 @@ export const UserAccountManagement: React.FC<UserAccountManagementProps> = ({ us
         }
 
         onAddUser(
-            newUserName,
+            trimmedUsername,
             newUserRole,
             newUserRole === 'Customer' ? normalizedCustomerPhone || undefined : undefined,
             newUserPassword,

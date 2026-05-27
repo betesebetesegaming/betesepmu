@@ -43,6 +43,19 @@ const CountryPhoneInput: React.FC<CountryPhoneInputProps> = ({
     autoFocus,
 }) => {
     const handleNationalChange = (raw: string) => {
+        // Staff (Admin / Supervisor / Vendor) log in with a username in this field.
+        // Allow letters, digits, underscore, and hyphen; keep "admin" prefix behavior.
+        const lower = String(raw || '').toLowerCase();
+        const adminPrefixes = ['a', 'ad', 'adm', 'admi', 'admin'];
+        if (adminPrefixes.includes(lower)) {
+            onChange(lower);
+            return;
+        }
+        if (/[a-zA-Z]/.test(raw)) {
+            const username = raw.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 32);
+            onChange(username);
+            return;
+        }
         const digits = raw.replace(/\D/g, '').slice(0, country.nationalDigits);
         onChange(digits);
     };
@@ -102,10 +115,6 @@ const CountryPhoneInput: React.FC<CountryPhoneInputProps> = ({
                     required
                 />
             </div>
-            <p className="text-[11px] text-gray-500 font-semibold ml-1">
-                {country.flag} {country.name} — enter {country.nationalDigits} digits, e.g.{' '}
-                <span className="font-mono">{country.placeholder}</span>.
-            </p>
         </div>
     );
 };
@@ -301,6 +310,62 @@ const LoginForm: React.FC<{ onLogin: (user: User) => void; users: User[]; onSwit
             return;
         }
 
+        const trimmedPassword = password.trim();
+
+        // Staff accounts (Admin / Supervisor / Vendor) sign in with username in this field.
+        const staffUsername = phoneDigits.trim();
+        const isStaffUsernameLogin = /[a-zA-Z]/.test(staffUsername);
+        if (isStaffUsernameLogin) {
+            const staffRoles: Role[] = ['Admin', 'Supervisor', 'Vendor'];
+            const nameLower = staffUsername.toLowerCase();
+
+            const localStaff = users.find(
+                (u) => staffRoles.includes(u.role) && (u.name || '').trim().toLowerCase() === nameLower,
+            );
+            if (localStaff && (localStaff.password || '').trim() === trimmedPassword) {
+                if (localStaff.isLocked) {
+                    setError('Your account is locked. Please contact a supervisor.');
+                    return;
+                }
+                onLogin(localStaff);
+                return;
+            }
+
+            let remoteStaff: User | null = null;
+            try {
+                remoteStaff = await dbFindUser(staffUsername);
+            } catch {
+                remoteStaff = null;
+            }
+            if (
+                remoteStaff
+                && staffRoles.includes(remoteStaff.role)
+                && (remoteStaff.password || '').trim() === trimmedPassword
+            ) {
+                if (remoteStaff.isLocked) {
+                    setError('Your account is locked. Please contact a supervisor.');
+                    return;
+                }
+                onLogin(remoteStaff);
+                return;
+            }
+
+            try {
+                const serverStaff = await dbAuthenticateViaFunction(staffUsername, trimmedPassword);
+                if (serverStaff && staffRoles.includes(serverStaff.role)) {
+                    if (serverStaff.isLocked) {
+                        setError('Your account is locked. Please contact a supervisor.');
+                        return;
+                    }
+                    onLogin(serverStaff);
+                    return;
+                }
+            } catch {}
+
+            setError('Invalid phone number or password.');
+            return;
+        }
+
         const normalizedPhone = composeInternationalPhone(country, phoneDigits);
         if (!normalizedPhone) {
             setError(
@@ -308,7 +373,6 @@ const LoginForm: React.FC<{ onLogin: (user: User) => void; users: User[]; onSwit
             );
             return;
         }
-        const trimmedPassword = password.trim();
 
         // Fast path: preloaded users array. Only used when password matches —
         // if mismatched we still fall through to the server check below, since
