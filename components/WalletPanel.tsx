@@ -28,7 +28,7 @@ const getStatusChipStyle = (status: string) => {
         case 'Approved':
         case 'Completed': return 'bg-green-200 text-green-800';
         case 'Failed': return 'bg-red-200 text-red-800';
-        case 'Rejected':
+        case 'Rejected': return 'bg-red-200 text-red-800';
         case 'Canceled': return 'bg-gray-200 text-gray-700';
         default: return '';
     }

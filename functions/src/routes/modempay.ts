@@ -451,33 +451,34 @@ async function processModemPayEvent(event: ModemPayEvent): Promise<void> {
     received_at: new Date().toISOString(),
   }).catch(err => logger.warn('Failed to log modempay event', err));
 
-  const externalRef = extractExternalRef(payload);
+  const depositRef = await resolveDepositExternalRef(payload);
+  const transferRef = extractTransferExternalRef(payload) || depositRef;
 
   switch (eventType) {
     case 'charge.succeeded':
     case 'payment_intent.successful':
     case 'payment_intent.succeeded':
     case 'payment.succeeded': {
-      if (!externalRef) {
-        logger.warn(`${eventType} missing externalRef`, payload);
+      if (!depositRef) {
+        logger.warn(`${eventType} missing deposit externalRef`, payload);
         return;
       }
-      await markDepositCompleted(externalRef, payload);
+      await markDepositCompleted(depositRef, payload);
       return;
     }
 
     case 'charge.cancelled':
     case 'charge.expired':
+    case 'charge.failed':
     case 'payment_intent.cancelled':
     case 'payment_intent.expired':
     case 'payment_intent.failed':
     case 'payment.failed': {
-      if (externalRef) await markDepositFailed(externalRef, eventType, payload);
+      if (depositRef) await markDepositFailed(depositRef, eventType, payload);
       return;
     }
 
     case 'transfer.succeeded': {
-      const transferRef = externalRef || extractExternalRef(payload);
       if (transferRef) await markWithdrawalSettled(transferRef, payload);
       return;
     }
@@ -486,7 +487,6 @@ async function processModemPayEvent(event: ModemPayEvent): Promise<void> {
     case 'transfer.reversed':
     case 'transfer.cancelled':
     case 'transfer.flagged': {
-      const transferRef = externalRef || extractExternalRef(payload);
       if (transferRef) await markWithdrawalFailed(transferRef, eventType, payload);
       return;
     }
@@ -495,8 +495,6 @@ async function processModemPayEvent(event: ModemPayEvent): Promise<void> {
     case 'customer.updated':
     case 'customer.deleted':
     case 'payment_intent.created':
-    case 'payment_intent.cancelled':
-    case 'payment_intent.expired':
     case 'charge.created':
     case 'charge.updated':
       // Informational — already audited above.
@@ -600,22 +598,60 @@ async function markDepositCompleted(externalRef: string, payload: Record<string,
   });
 }
 
+function isBeteseExternalRef(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().startsWith('BETESE-');
+}
+
 function extractExternalRef(payload: Record<string, unknown>): string | undefined {
   const metadata = payload.metadata as Record<string, unknown> | undefined;
   const nested = payload.data as Record<string, unknown> | undefined;
   const nestedMeta = nested?.metadata as Record<string, unknown> | undefined;
   const candidates = [
-    payload.external_reference,
-    payload.externalReference,
-    payload.transaction_reference,
     metadata?.external_reference,
     metadata?.externalReference,
+    payload.external_reference,
+    payload.externalReference,
     nested?.external_reference,
     nestedMeta?.external_reference,
   ];
   for (const value of candidates) {
-    if (typeof value === 'string' && value.trim()) return value.trim();
+    if (isBeteseExternalRef(value)) return value.trim();
   }
+  return undefined;
+}
+
+function extractTransferExternalRef(payload: Record<string, unknown>): string | undefined {
+  const direct = extractExternalRef(payload);
+  if (direct) return direct;
+  const metadata = payload.metadata as Record<string, unknown> | undefined;
+  const withdrawalId = metadata?.withdrawal_request_id;
+  if (isBeteseExternalRef(withdrawalId)) return withdrawalId.trim();
+  return undefined;
+}
+
+/** Map ModemPay webhook payloads back to our BETESE-* deposit / checkout id. */
+async function resolveDepositExternalRef(payload: Record<string, unknown>): Promise<string | undefined> {
+  const direct = extractExternalRef(payload);
+  if (direct) return direct;
+
+  const intentId = payload.payment_intent_id || payload.payment_intentId;
+  if (typeof intentId === 'string' && intentId.trim()) {
+    const bySession = await adminDb.collection('modempay_checkouts')
+      .where('session_id', '==', intentId.trim())
+      .limit(1)
+      .get();
+    if (!bySession.empty) return bySession.docs[0].id;
+  }
+
+  const providerTxnId = payload.id || payload.transaction_id;
+  if (typeof providerTxnId === 'string' && providerTxnId.trim()) {
+    const byProvider = await adminDb.collection('modempay_checkouts')
+      .where('provider_transaction_id', '==', providerTxnId.trim())
+      .limit(1)
+      .get();
+    if (!byProvider.empty) return byProvider.docs[0].id;
+  }
+
   return undefined;
 }
 
@@ -706,4 +742,53 @@ async function markWithdrawalFailed(externalRef: string, reason: string, payload
     failed_at: new Date().toISOString(),
     raw_payload: payload,
   }, { merge: true }).catch(err => logger.warn('Failed to mark withdrawal failed', err));
+}
+
+/**
+ * POST /api/modempay-reconcile-deposit
+ * Sync a stuck Pending deposit_request from its modempay_checkouts marker.
+ */
+export async function reconcileDepositHandler(req: Request, res: Response): Promise<void> {
+  const externalRef = String(req.body?.externalRef || req.query?.externalRef || '').trim();
+  if (!externalRef) {
+    res.status(400).json({ error: 'externalRef is required' });
+    return;
+  }
+
+  try {
+    const checkoutSnap = await adminDb.collection('modempay_checkouts').doc(externalRef).get();
+    if (!checkoutSnap.exists) {
+      res.status(404).json({ error: 'Checkout not found for externalRef' });
+      return;
+    }
+
+    const checkout = checkoutSnap.data() as {
+      status?: string;
+      failure_reason?: string;
+      raw_payload?: Record<string, unknown>;
+    };
+    const depositSnap = await adminDb.collection('deposit_requests').doc(externalRef).get();
+    const depositStatus = String(depositSnap.data()?.status || 'Pending');
+
+    if (checkout.status === 'completed') {
+      if (!depositSnap.exists || depositStatus === 'Pending') {
+        await markDepositCompleted(externalRef, checkout.raw_payload || {});
+      }
+      res.json({ ok: true, status: 'Approved' });
+      return;
+    }
+
+    if (checkout.status === 'failed') {
+      if (!depositSnap.exists || depositStatus === 'Pending') {
+        await markDepositFailed(externalRef, checkout.failure_reason || 'failed', checkout.raw_payload || {});
+      }
+      res.json({ ok: true, status: 'Rejected' });
+      return;
+    }
+
+    res.json({ ok: true, status: depositStatus, checkoutStatus: checkout.status || 'pending' });
+  } catch (err) {
+    logger.error('Reconcile deposit error', err);
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
 }

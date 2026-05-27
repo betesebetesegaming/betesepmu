@@ -15,6 +15,7 @@ import {
   balancesHandler,
   transactionHandler,
   webhookHandler,
+  reconcileDepositHandler,
 } from './routes/modempay';
 import { printReceiptHandler } from './routes/receipt';
 import {
@@ -52,6 +53,7 @@ export const modempayTransactions = createHttpFunctionAtPath('/:id', transaction
 
 // ModemPay webhook — raw body required for HMAC signature verification
 export const modempayWebhook = createHttpFunction(webhookHandler, { rawBody: true });
+export const modempayReconcileDeposit = createHttpFunction(reconcileDepositHandler);
 
 // Sunmi / Thermer receipt
 export const printReceipt = createHttpFunction(printReceiptHandler, { method: 'GET' });

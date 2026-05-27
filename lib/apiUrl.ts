@@ -23,6 +23,7 @@ const ROUTE_TO_FUNCTION: Record<string, string> = {
   '/modempay-refund': 'modempayRefund',
   '/modempay-balances': 'modempayBalances',
   '/modempay-webhook': 'modempayWebhook',
+  '/modempay-reconcile-deposit': 'modempayReconcileDeposit',
   '/print-receipt': 'printReceipt',
   '/program-media-upload': 'programMediaUpload',
   '/program-media-insert': 'programMediaInsert',

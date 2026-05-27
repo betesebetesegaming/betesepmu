@@ -10,6 +10,7 @@ import { WithdrawalCodeModal } from './components/WithdrawalCodeModal';
 import { SEVEN_DAYS_IN_MS, BETTING_CUTOFF_MS, calculateTicketWinnings, validateTicketForPlacement, validateTicketAgainstRaceState, normalizeGambiaPhone } from './utils';
 import { apiUrl } from './lib/apiUrl';
 import { getFirebaseProjectId } from './lib/env/publicConfig';
+import { mapDepositRequestRow, mapWithdrawalRequestRow } from './lib/mapFinancialRecords';
 import { LanguageProvider } from './LanguageContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { deferWork } from './perf';
@@ -138,57 +139,32 @@ const LoadingPane: React.FC = () => (
     <div className="rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-600">Loading...</div>
 );
 
-const buildDepositVerificationDefaults = (request: Pick<DepositRequest, 'method' | 'status' | 'processedBy' | 'processedByName'> & Partial<DepositRequest>) => {
-    if (request.method !== 'Wave') {
-        return {
-            verificationStatus: request.verificationStatus || 'NotStarted' as const,
-            verificationSource: request.verificationSource,
-            verificationMessage: request.verificationMessage,
-            providerReference: request.providerReference,
-            verifiedAt: request.verifiedAt,
-        };
-    }
+const refreshDepositRequests = async (): Promise<DepositRequest[]> => {
+    const rows = await dbFetchDepositRequests();
+    return (rows || []).map((r) => mapDepositRequestRow(r as Record<string, unknown>));
+};
 
-    if (request.verificationStatus) {
-        return {
-            verificationStatus: request.verificationStatus,
-            verificationSource: request.verificationSource,
-            verificationMessage: request.verificationMessage,
-            providerReference: request.providerReference,
-            verifiedAt: request.verifiedAt,
-        };
-    }
+const refreshWithdrawalRequests = async (): Promise<WithdrawalRequest[]> => {
+    const rows = await dbFetchWithdrawalRequests();
+    return (rows || []).map((r) => mapWithdrawalRequestRow(r as Record<string, unknown>));
+};
 
-    if (request.status === 'Approved') {
-        const isClientFallback = request.processedBy === 'SYSTEM' || request.processedByName === 'Wave Direct Deposit';
-        return {
-            verificationStatus: 'Verified' as const,
-            verificationSource: isClientFallback ? 'client-fallback' as const : 'manual-review' as const,
-            verificationMessage: isClientFallback
-                ? 'Credited through temporary client fallback. Replace with webhook confirmation for production.'
-                : 'Approved after manual review.',
-            providerReference: request.providerReference,
-            verifiedAt: request.verifiedAt,
-        };
+const reconcilePendingModemPayDeposits = async (requests: DepositRequest[]) => {
+    const pending = (requests || []).filter(
+        (r) => r.status === 'Pending' && (r.providerReference?.startsWith('BETESE-') || r.id.startsWith('BETESE-')),
+    );
+    for (const req of pending.slice(0, 15)) {
+        const externalRef = req.providerReference || req.id;
+        try {
+            await fetch(apiUrl('/modempay-reconcile-deposit'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ externalRef }),
+            });
+        } catch {
+            // Non-fatal — realtime refresh will pick up webhook updates.
+        }
     }
-
-    if (request.status === 'Rejected') {
-        return {
-            verificationStatus: 'VerificationFailed' as const,
-            verificationSource: request.verificationSource || 'manual-review' as const,
-            verificationMessage: request.verificationMessage || 'Deposit request rejected before provider confirmation.',
-            providerReference: request.providerReference,
-            verifiedAt: request.verifiedAt,
-        };
-    }
-
-    return {
-        verificationStatus: 'PendingProviderConfirmation' as const,
-        verificationSource: request.verificationSource,
-        verificationMessage: request.verificationMessage || 'Waiting for Wave webhook/status verification.',
-        providerReference: request.providerReference,
-        verifiedAt: request.verifiedAt,
-    };
 };
 
 const getTicketFunding = (ticket: Pick<Ticket, 'selections' | 'totalCost'>) => {
@@ -380,59 +356,18 @@ const AppContent: React.FC = () => {
           // Map snake_case to camelCase for requests with robust safety
           // and normalize status/method to prevent UI/report mismatches.
           if (depositsResult.status === 'fulfilled') {
-              setDepositRequests((depositsResult.value || []).map((r: any) => {
-              const rawMethod = String(r.method || '').trim().toLowerCase();
-              const normalizedMethod: 'Wave' | 'AfriMoney' = rawMethod === 'afrimoney' ? 'AfriMoney' : 'Wave';
-
-              const rawStatus = String(r.status || '').trim().toLowerCase();
-              const normalizedStatus: 'Pending' | 'Approved' | 'Rejected' =
-                  rawStatus === 'approved' ? 'Approved' : rawStatus === 'rejected' ? 'Rejected' : 'Pending';
-
-              return {
-              id: r.id, 
-              customerId: r.customer_id, 
-              customerName: r.customer_name || 'Quick Deposit', // Added missing required property
-              amount: Number(r.amount) || 0, 
-              method: normalizedMethod,
-              transactionId: r.transaction_id, 
-              status: normalizedStatus,
-              timestamp: r.timestamp ? new Date(r.timestamp) : new Date(),
-              processedBy: r.processed_by, 
-              processedByName: r.processed_by_name, 
-              processedAt: r.processed_at ? new Date(r.processed_at) : undefined,
-              ...buildDepositVerificationDefaults({
-                  method: normalizedMethod,
-                  status: normalizedStatus,
-                  processedBy: r.processed_by,
-                  processedByName: r.processed_by_name,
-                  providerReference: r.provider_reference,
-                  verificationStatus: (r.verification_status as DepositRequest['verificationStatus']) || undefined,
-                  verificationSource: (r.verification_source as DepositRequest['verificationSource']) || undefined,
-                  verificationMessage: r.verification_message,
-                  verifiedAt: r.verified_at ? new Date(r.verified_at) : undefined,
-              })
-          }}));
+              const mappedDeposits = (depositsResult.value || []).map((r) => mapDepositRequestRow(r as Record<string, unknown>));
+              setDepositRequests(mappedDeposits);
+              void reconcilePendingModemPayDeposits(mappedDeposits).then(async () => {
+                  const refreshed = await refreshDepositRequests();
+                  setDepositRequests(refreshed);
+              });
           }
 
           if (depositLogsResult.status === 'fulfilled') setDepositLogs(depositLogsResult.value || []);
 
           if (withdrawalsResult.status === 'fulfilled') {
-              setWithdrawalRequests((withdrawalsResult.value || []).map((r: any) => ({
-              id: r.id, 
-              customerId: r.user_id,
-              customerName: r.user_name || 'Client',
-              amount: Number(r.amount) || 0, 
-              status: r.status === 'settled' ? 'Completed' : r.status === 'failed' ? 'Failed' : r.status,
-              code: r.code, 
-              requestedAt: r.requested_at ? new Date(r.requested_at) : new Date(),
-              completedAt: r.completed_at ? new Date(r.completed_at) : undefined,
-              processedBy: r.processed_by,
-              processedByName: r.processed_by_name,
-              payoutMethod: r.payout_method || undefined,
-              recipientPhone: r.recipient_phone || undefined,
-              providerTransferId: r.provider_transfer_id || undefined,
-              failureReason: r.failure_reason || undefined,
-          })));
+              setWithdrawalRequests((withdrawalsResult.value || []).map((r) => mapWithdrawalRequestRow(r as Record<string, unknown>)));
           }
 
           if (manualBetsResult.status === 'fulfilled') setManualBetOrders(manualBetsResult.value || []);
@@ -559,7 +494,45 @@ const AppContent: React.FC = () => {
       const raceSub = realtimeDb.channel('public:races').on('postgres_changes', { event: '*', schema: 'public', table: 'races' }, async () => {
           const updatedRaces = await dbFetchRaces(); setRaces(updatedRaces);
       }).subscribe();
-      return () => { realtimeDb?.removeChannel(userSub); realtimeDb?.removeChannel(ticketSub); realtimeDb?.removeChannel(raceSub); };
+
+      const depositFilter = currentUser.role === 'Customer' ? `customer_id=eq.${currentUser.id}` : undefined;
+      const depositSub = realtimeDb.channel('public:deposit_requests').on('postgres_changes', { event: '*', schema: 'public', table: 'deposit_requests', filter: depositFilter }, async () => {
+          const updated = await refreshDepositRequests();
+          setDepositRequests(updated);
+      }).subscribe();
+
+      const withdrawalFilter = currentUser.role === 'Customer' ? `user_id=eq.${currentUser.id}` : undefined;
+      const withdrawalSub = realtimeDb.channel('public:withdrawal_requests').on('postgres_changes', { event: '*', schema: 'public', table: 'withdrawal_requests', filter: withdrawalFilter }, async () => {
+          const updated = await refreshWithdrawalRequests();
+          setWithdrawalRequests(updated);
+      }).subscribe();
+
+      return () => {
+          realtimeDb?.removeChannel(userSub);
+          realtimeDb?.removeChannel(ticketSub);
+          realtimeDb?.removeChannel(raceSub);
+          realtimeDb?.removeChannel(depositSub);
+          realtimeDb?.removeChannel(withdrawalSub);
+      };
+  }, [currentUser?.id]);
+
+  useEffect(() => {
+      if (!realtimeDb || !currentUser) return;
+      const interval = window.setInterval(async () => {
+          try {
+              const [deposits, withdrawals] = await Promise.all([
+                  refreshDepositRequests(),
+                  refreshWithdrawalRequests(),
+              ]);
+              await reconcilePendingModemPayDeposits(deposits);
+              const refreshedDeposits = await refreshDepositRequests();
+              setDepositRequests(refreshedDeposits);
+              setWithdrawalRequests(withdrawals);
+          } catch {
+              // ignore background refresh errors
+          }
+      }, 60000);
+      return () => window.clearInterval(interval);
   }, [currentUser?.id]);
 
   useEffect(() => {
