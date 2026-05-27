@@ -130,12 +130,16 @@ firebase deploy --only functions
 
 ```bash
 gcloud projects add-iam-policy-binding betesepmu-4ffc7 \
-  --member="serviceAccount:betesepmu-4ffc7@appspot.gserviceaccount.com" \
+  --member="serviceAccount:564957052051-compute@developer.gserviceaccount.com" \
   --role="roles/aiplatform.user"
 ```
 
-Or use the GCP Console → IAM → grant `roles/aiplatform.user` to the default
-App Engine service account.
+> If App Engine is enabled on your project, use
+> `betesepmu-4ffc7@appspot.gserviceaccount.com` instead. Cloud Functions Gen 2
+> defaults to the Compute Engine service account when App Engine is not set up.
+
+Or use the GCP Console → IAM → grant `roles/aiplatform.user` to
+`564957052051-compute@developer.gserviceaccount.com`.
 
 ## Firebase Functions endpoints
 
