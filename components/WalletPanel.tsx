@@ -1,10 +1,11 @@
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { User, WithdrawalRequest, DepositRequest, Ticket } from '../types';
 import { useLanguage } from '../LanguageContext';
 import { WithdrawalCodeModal } from './WithdrawalCodeModal';
 import { PaymentSheet } from './PaymentSheet';
 import { Smartphone, Hash, Phone, Banknote, ArrowDownToLine, Loader2, AlertCircle } from 'lucide-react';
+import { apiUrl } from '../lib/apiUrl';
 
 const WAVE_LOGO = '/payment-logos/wave.png';
 const AFRIMONEY_LOGO = '/payment-logos/afrimoney.png';
@@ -72,6 +73,41 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
         const timer = window.setTimeout(() => setLatestWithdrawalRequest(null), 8000);
         return () => window.clearTimeout(timer);
     }, [latestWithdrawalRequest]);
+
+    // Self-heal stuck deposits. If a deposit went through ModemPay (has a
+    // BETESE-* providerReference) but is still Pending more than 60s after
+    // creation, ask the backend to reconcile it: that path queries ModemPay
+    // directly and replays any stored webhook events. Throttle per-ref so we
+    // don't hammer the endpoint if RTDB doesn't update for a while.
+    const reconciledRefs = useRef<Map<string, number>>(new Map());
+    useEffect(() => {
+        const myDeposits = (depositRequests || []).filter(req =>
+            req.customerId === user.id &&
+            req.status === 'Pending' &&
+            typeof req.providerReference === 'string' &&
+            req.providerReference.startsWith('BETESE-')
+        );
+        if (myDeposits.length === 0) return;
+
+        const sweep = () => {
+            const now = Date.now();
+            for (const req of myDeposits) {
+                const ageMs = now - req.timestamp.getTime();
+                if (ageMs < 60_000) continue;
+                const lastTried = reconciledRefs.current.get(req.id) || 0;
+                if (now - lastTried < 20_000) continue;
+                reconciledRefs.current.set(req.id, now);
+                fetch(apiUrl('/modempay-reconcile-deposit'), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ externalRef: req.id }),
+                }).catch(() => { /* ignored — RTDB subscription delivers the update */ });
+            }
+        };
+        sweep();
+        const timer = window.setInterval(sweep, 30_000);
+        return () => window.clearInterval(timer);
+    }, [depositRequests, user.id]);
 
     const actualBalance = Number(user.walletBalance || 0);
     const bonusBalance = Number(user.bonusBalance || 0);
