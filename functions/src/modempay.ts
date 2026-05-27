@@ -90,51 +90,52 @@ export interface CreateCheckoutInput {
 }
 
 export async function createCheckoutSession(input: CreateCheckoutInput) {
-  const payload = {
+  const dataPayload: Record<string, unknown> = {
     amount: input.amount,
     currency: input.currency || 'GMD',
-    payment_method: input.method,
-    external_reference: input.externalRef,
-    description: input.description,
-    customer: input.customer
-      ? {
-          id: input.customer.id,
-          name: input.customer.name,
-          email: input.customer.email,
-          phone: input.customer.phone,
-        }
-      : undefined,
-    success_url: input.successUrl,
+    from_sdk: false,
+    return_url: input.successUrl,
     cancel_url: input.cancelUrl || input.successUrl,
+    title: input.description || 'Wallet top-up',
+    description: input.description,
     metadata: {
       source: 'betese-pmu',
       method: input.method,
+      external_reference: input.externalRef,
       ...(input.metadata || {}),
     },
   };
 
+  if (input.customer?.name) dataPayload.customer_name = input.customer.name;
+  if (input.customer?.email) dataPayload.customer_email = input.customer.email;
+  if (input.customer?.phone) dataPayload.customer_phone = input.customer.phone;
+
   const { ok, status, data } = await modemFetch({
     method: 'POST',
-    path: '/v1/checkout/sessions',
-    body: payload,
+    path: '/v1/payments',
+    body: { data: dataPayload },
   });
 
-  const d = data as Record<string, unknown> & { data?: Record<string, unknown> };
+  const envelope = data as {
+    status?: boolean;
+    message?: string;
+    data?: Record<string, unknown>;
+  };
+  const inner = envelope.data || (data as Record<string, unknown>);
   const checkoutUrl =
-    (d.checkout_url as string | undefined) ||
-    (d.url as string | undefined) ||
-    (d.payment_url as string | undefined) ||
-    (d.session_url as string | undefined) ||
-    (d.data?.checkout_url as string | undefined) ||
-    (d.data?.url as string | undefined);
+    (inner.payment_link as string | undefined) ||
+    (inner.checkout_url as string | undefined) ||
+    (inner.url as string | undefined) ||
+    (inner.payment_url as string | undefined);
 
   const sessionId =
-    (d.id as string | undefined) ||
-    (d.session_id as string | undefined) ||
-    (d.data?.id as string | undefined) ||
+    (inner.payment_intent_id as string | undefined) ||
+    (inner.id as string | undefined) ||
     null;
 
-  return { ok, status, checkoutUrl, sessionId, raw: data };
+  const apiOk = ok && envelope.status !== false && !!checkoutUrl;
+
+  return { ok: apiOk, status, checkoutUrl, sessionId, raw: data };
 }
 
 // -----------------------------------------------------------------------------

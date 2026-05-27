@@ -73,8 +73,9 @@ export async function checkoutHandler(req: Request, res: Response): Promise<void
 
     if (!result.ok || !result.checkoutUrl) {
       logger.warn('ModemPay checkout creation failed', { status: result.status, raw: result.raw });
-      res.status(result.status || 502).json({
+      res.status(502).json({
         error: 'ModemPay checkout creation failed',
+        upstreamStatus: result.status,
         details: result.raw,
       });
       return;
