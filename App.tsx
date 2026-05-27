@@ -28,7 +28,6 @@ import {
     dbToggleUserLock, dbAdminResetPassword, dbRecalculateAllTicketsSafely,
     dbApplyCustomerDeposit, dbApplyCustomerBalanceAdjustment, dbFreshStart, dbFetchUserBalance,
     dbMigrateLegacyBookedTicketsToActive, dbFetchDepositLogs, dbInsertDepositLog,
-    dbGenerateAndSendOTP
 } from './firebaseClient';
 
 const LAZY_CHUNK_RETRY_KEY = 'betese_lazy_chunk_retry';
@@ -1617,16 +1616,6 @@ const AppContent: React.FC = () => {
                   throw new Error('Unable to generate a unique withdrawal code. Please try again.');
               }
 
-              const normalizedPhone = normalizeGambiaPhone(currentUser.phone || '');
-              if (normalizedPhone) {
-                  const otpResult = await dbGenerateAndSendOTP(normalizedPhone, savedRequest.code);
-                  if (!otpResult.success) {
-                      alert(`Withdrawal created. Share this code with the vendor via WhatsApp: ${savedRequest.code}`);
-                  }
-              } else {
-                  alert('Withdrawal created. Add a valid phone number on your customer profile to receive OTP by SMS automatically.');
-              }
-
               // Update local state immediately so customer sees code without needing refresh.
               setWithdrawalRequests(prev => [savedRequest!, ...(prev || [])]);
               return savedRequest;
@@ -1645,7 +1634,7 @@ const AppContent: React.FC = () => {
       }
   };
 
-    const addUser = async (name: string, role: Role, phone?: string, password?: string, correctionPin?: string, otpCode?: string) => {
+    const addUser = async (name: string, role: Role, phone?: string, password?: string, correctionPin?: string) => {
     // Backward compatibility: some stale mobile bundles may call onSignUp(name, phone, password)
     // instead of onSignUp(name, 'Customer', phone, password).
     let resolvedRole: Role = role;
@@ -1702,10 +1691,6 @@ const AppContent: React.FC = () => {
         alert('Customer phone must be valid: Gambia local 7 digits or +220XXXXXXX; Senegal must be +221XXXXXXXXX only.');
         return null;
     }
-
-    // Customer self-signup: phone is verified in LoginScreen via Firebase Phone Auth
-    // before onSignUp is called (no server-side OTP check needed here).
-    void otpCode;
 
     if (resolvedRole === 'Customer' && normalizedPhone) {
         const duplicate = (users || []).find(u =>

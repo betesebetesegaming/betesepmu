@@ -2,7 +2,6 @@ import type { Request, Response } from 'express';
 import { setGlobalOptions } from 'firebase-functions/v2/options';
 
 import { createHttpFunction, createHttpFunctionAtPath } from './http';
-import { sendOtpHandler, verifyOtpHandler } from './routes/otp';
 import {
   checkoutHandler,
   wavePaymentHandler,
@@ -31,10 +30,6 @@ setGlobalOptions({
 
 // Each export is a separate Cloud Function with its own public URL:
 //   https://us-central1-betesepmu-4ffc7.cloudfunctions.net/<exportName>
-
-// OTP
-export const sendOtp = createHttpFunction(sendOtpHandler);
-export const verifyOtp = createHttpFunction(verifyOtpHandler);
 
 // ModemPay checkout (unified + per-method aliases)
 export const modempayCheckout = createHttpFunction(checkoutHandler);

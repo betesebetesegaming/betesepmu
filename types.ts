@@ -253,21 +253,6 @@ export interface ManualBetOrder {
   status: 'Pending' | 'Completed' | 'Canceled';
 }
 
-export interface OTPConfig {
-  id?: string;
-  isEnabled: boolean;
-  provider: 'builtin' | 'twilio' | 'aws_sns' | 'custom' | 'africell'; // builtin = local testing
-  apiKey: string;
-  apiSecret: string;
-  phoneFromNumber?: string;
-  codeLength: number; // 4-6 digits
-  expiryMinutes: number;
-  maxRetries: number;
-  message: string; // SMS template, e.g. "Your BETESE verification code is: {{code}}"
-  createdAt?: Date;
-  updatedAt?: Date;
-}
-
 export interface PaymentIntegrationConfig {
     provider: 'Wave' | 'AfriMoney' | 'APS';
     isEnabled: boolean;

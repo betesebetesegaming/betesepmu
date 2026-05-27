@@ -51,7 +51,7 @@ export const ProcessWithdrawalPanel: React.FC<ProcessWithdrawalPanelProps> = ({ 
     const pendingRequests = (withdrawalRequests || []).filter(r => r.status === 'Pending');
     const upperSearch = search.toUpperCase();
 
-    // First priority: exact withdrawal code (secure OTP flow)
+    // First priority: exact withdrawal code
     let request = pendingRequests.find(r => r.code.toUpperCase() === upperSearch);
 
     // Fallback: customer ID or phone number (for quick finding by staff)
@@ -80,7 +80,7 @@ export const ProcessWithdrawalPanel: React.FC<ProcessWithdrawalPanelProps> = ({ 
             setCustomer(reqCustomer);
             setStep('confirm');
             if (request.code.toUpperCase() !== upperSearch) {
-              setMessage(`Found pending request for ${reqCustomer.name}. Confirm OTP code from customer before payout.`);
+              setMessage(`Found pending request for ${reqCustomer.name}. Confirm withdrawal code from customer before payout.`);
               setIsSuccess(true);
             }
         } else {
@@ -99,12 +99,12 @@ export const ProcessWithdrawalPanel: React.FC<ProcessWithdrawalPanelProps> = ({ 
     const normalizedOtp = customerOtpCode.trim().toUpperCase();
     const expectedOtp = foundRequest.code.trim().toUpperCase();
     if (!normalizedOtp) {
-      setMessage('Enter customer OTP/code confirmation before payout.');
+      setMessage('Enter customer withdrawal code confirmation before payout.');
       setIsSuccess(false);
       return;
     }
     if (normalizedOtp !== expectedOtp) {
-      setMessage('OTP mismatch. Ask customer for the exact withdrawal code from SMS/WhatsApp.');
+      setMessage('Code mismatch. Ask customer for the exact withdrawal code from WhatsApp.');
       setIsSuccess(false);
       return;
     }
@@ -140,7 +140,7 @@ export const ProcessWithdrawalPanel: React.FC<ProcessWithdrawalPanelProps> = ({ 
                 <p><strong>Customer:</strong> {customer.name}</p>
                 <p><strong>Amount to Withdraw:</strong> <span className="font-bold text-2xl text-red-600">{foundRequest.amount.toFixed(2)} GMD</span></p>
                 <p><strong>Current Balance:</strong> {(customer.walletBalance ?? 0).toFixed(2)} GMD</p>
-              <p className="text-sm text-yellow-900"><strong>Security OTP:</strong> Ask customer to read the code received by SMS/WhatsApp. Do not proceed without matching OTP.</p>
+              <p className="text-sm text-yellow-900"><strong>Security check:</strong> Ask the customer to read their withdrawal code (shared via WhatsApp). Do not proceed without a matching code.</p>
              </div>
              <div className="mt-4 p-4 rounded-lg border border-blue-200 bg-blue-50 space-y-3">
               <p className="text-sm font-bold text-blue-900">Payout Method</p>
@@ -173,7 +173,7 @@ export const ProcessWithdrawalPanel: React.FC<ProcessWithdrawalPanelProps> = ({ 
                 </div>
               )}
               <div>
-                <label className="block text-xs font-bold uppercase tracking-widest text-blue-800 mb-1">Customer OTP confirmation</label>
+                <label className="block text-xs font-bold uppercase tracking-widest text-blue-800 mb-1">Customer withdrawal code</label>
                 <input
                   type="text"
                   value={customerOtpCode}
@@ -217,7 +217,7 @@ export const ProcessWithdrawalPanel: React.FC<ProcessWithdrawalPanelProps> = ({ 
     <div className="bg-white p-6 rounded-lg shadow-lg">
       <h3 className="text-xl font-bold text-betese-dark mb-4">Process Withdrawal</h3>
       <div className="space-y-4">
-        <p className="text-sm text-gray-600">Find by withdrawal code, customer ID, or phone. Before payout, confirm the OTP code shared by customer (vendor counter, chat, or WhatsApp).</p>
+        <p className="text-sm text-gray-600">Find by withdrawal code, customer ID, or phone. Before payout, confirm the code the customer shares via WhatsApp.</p>
         <div className="flex gap-2">
             <input
                 type="text"

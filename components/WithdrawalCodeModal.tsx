@@ -14,7 +14,7 @@ export const WithdrawalCodeModal: React.FC<WithdrawalCodeModalProps> = ({ reques
   };
 
   const handleShareOnWhatsApp = () => {
-    const text = `Betese Withdrawal OTP\nCode: ${request.code}\nAmount: ${request.amount.toFixed(2)} GMD\n\nI confirm this code for my winning payout.`;
+    const text = `Betese Withdrawal\nCode: ${request.code}\nAmount: ${request.amount.toFixed(2)} GMD\n\nI confirm this code for my winning payout.`;
     window.open(`https://wa.me/${supportNumber}?text=${encodeURIComponent(text)}`, '_blank');
   };
 
@@ -31,7 +31,7 @@ export const WithdrawalCodeModal: React.FC<WithdrawalCodeModalProps> = ({ reques
           </div>
         </div>
         <h2 className="text-2xl font-bold text-betese-dark">Withdrawal Requested</h2>
-        <p className="text-gray-600 mt-2">Use this as your OTP. Share it only when you are ready to receive payout.</p>
+        <p className="text-gray-600 mt-2">Share this withdrawal code with the vendor only when you are ready to receive payout.</p>
         
         <div className="my-6 p-4 bg-green-50 rounded-lg border-2 border-green-200">
             <p className="text-lg font-medium text-gray-700">Your Withdrawal Code</p>
@@ -52,7 +52,7 @@ export const WithdrawalCodeModal: React.FC<WithdrawalCodeModalProps> = ({ reques
           onClick={handleShareOnWhatsApp}
           className="mt-4 w-full px-4 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700"
         >
-          Send OTP via WhatsApp
+          Share code via WhatsApp
         </button>
 
         <div className="mt-8">

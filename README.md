@@ -15,7 +15,6 @@ Next.js front-end + Firebase backend for the Betese PMU horse-betting platform.
 | Storage | Firebase Cloud Storage |
 | Backend | Firebase Cloud Functions v2 (Node 20, Express) |
 | Payments | Modem Pay (Wave / APS / AfriMoney / QMoney / Card) |
-| SMS / OTP | Africell SMS gateway |
 
 ## Printer Support
 
@@ -90,7 +89,7 @@ Trigger a redeploy from Vercel after adding the keys so they take effect.
 ### 2. Backend → Firebase
 
 Copy `functions/.env.example` to `functions/.env` and fill in server-only
-credentials (ModemPay, Africell SMS, OTP salt). Firebase loads that file
+credentials (ModemPay). Firebase loads that file
 automatically on deploy — no `firebase functions:secrets:set` step needed.
 
 ```powershell
@@ -151,8 +150,6 @@ https://us-central1-betesepmu-4ffc7.cloudfunctions.net
 
 | Function | Route (legacy) | Purpose |
 | --- | --- | --- |
-| `sendOtp` | `POST /send-otp` | Africell SMS OTP, hashed in Firestore |
-| `verifyOtp` | `POST /verify-otp` | Verifies the hashed OTP |
 | `modempayCheckout` | `POST /modempay-checkout` | Unified hosted-checkout (wave / aps / afrimoney / qmoney / card) |
 | `wavePayment` | `POST /wave-payment` | Alias for wave |
 | `apsPayment` | `POST /aps-payment` | Alias for aps |

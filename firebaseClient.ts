@@ -29,11 +29,6 @@ import { getStorage } from 'firebase/storage';
 import { db, firebaseApp } from './lib/firebase/client';
 import { apiUrl } from './lib/apiUrl';
 import {
-  sendFirebasePhoneOtp,
-  verifyFirebasePhoneOtp,
-  clearFirebasePhoneOtpSession,
-} from './lib/firebase/phoneAuth';
-import {
     Ticket,
     User,
     Race,
@@ -42,7 +37,6 @@ import {
     ChatThread,
     ChatMessage,
     PaymentIntegrationConfig,
-    OTPConfig,
     ProgramImage,
     ManualBetOrder,
     WithdrawalRequest,
@@ -807,12 +801,6 @@ export const dbAddUser = async (user: User) => {
         created_by_id: user.createdById || null,
         created_by_name: user.createdByName || null,
     });
-    if (normalizedCustomerPhone) {
-        const verifiedSnap = await getDocs(
-            query(collection(db, 'otp_verified_phones'), where('phone', '==', normalizedCustomerPhone))
-        );
-        await Promise.all(verifiedSnap.docs.map((d) => deleteDoc(d.ref)));
-    }
 };
 
 export const dbToggleUserLock = async (userId: string, isLocked: boolean) => {
@@ -1541,90 +1529,3 @@ export const dbFreshStart = async () => {
     );
     await batch.commit();
 };
-
-// ============================================================================
-// OTP — Firebase Phone Auth (client SDK). Africell Cloud Functions are unused.
-// ============================================================================
-
-export const dbFetchOTPConfig = async (): Promise<OTPConfig | null> => {
-    try {
-        const snap = await getDoc(doc(db, 'otp_config', 'default'));
-        if (!snap.exists()) return null;
-        const c = snap.data() as any;
-        return {
-            id: c.id,
-            isEnabled: !!c.is_enabled,
-            provider: c.provider || 'builtin',
-            apiKey: c.api_key || '',
-            apiSecret: c.api_secret || '',
-            phoneFromNumber: c.phone_from_number || undefined,
-            codeLength: Number(c.code_length || 6),
-            expiryMinutes: Number(c.expiry_minutes || 5),
-            maxRetries: Number(c.max_retries || 3),
-            message: c.message || 'Your BETESE verification code is: {{code}}',
-            createdAt: toDate(c.created_at),
-            updatedAt: toDate(c.updated_at),
-        };
-    } catch {
-        return null;
-    }
-};
-
-export const dbSaveOTPConfig = async (config: OTPConfig): Promise<void> => {
-    await setDoc(doc(db, 'otp_config', 'default'), {
-        id: 'default',
-        is_enabled: config.isEnabled,
-        provider: config.provider,
-        api_key: config.apiKey,
-        api_secret: config.apiSecret,
-        phone_from_number: config.phoneFromNumber || null,
-        code_length: config.codeLength,
-        expiry_minutes: config.expiryMinutes,
-        max_retries: config.maxRetries,
-        message: config.message,
-        updated_at: new Date().toISOString(),
-    });
-};
-
-export const dbGenerateAndSendOTP = async (
-    phone: string,
-    forcedCode?: string
-): Promise<{ success: boolean; message: string; expirySeconds?: number }> => {
-    // Withdrawal codes are shared manually (WhatsApp) — not via Firebase Phone Auth.
-    if (forcedCode) {
-        return {
-            success: false,
-            message: 'Automatic withdrawal SMS is disabled. Share the code via WhatsApp.',
-        };
-    }
-
-    try {
-        const { expirySeconds } = await sendFirebasePhoneOtp(phone);
-        return {
-            success: true,
-            message: 'Verification code sent via Firebase SMS.',
-            expirySeconds,
-        };
-    } catch (err: any) {
-        return { success: false, message: err?.message || 'Could not send verification code.' };
-    }
-};
-
-export const dbVerifyOTP = async (
-    phone: string,
-    code: string
-): Promise<{ success: boolean; message: string; isValid?: boolean }> => {
-    void phone;
-    try {
-        await verifyFirebasePhoneOtp(code);
-        return { success: true, message: 'Phone verified.', isValid: true };
-    } catch (err: any) {
-        return {
-            success: false,
-            message: err?.message || 'Invalid or expired verification code.',
-            isValid: false,
-        };
-    }
-};
-
-export { clearFirebasePhoneOtpSession };
