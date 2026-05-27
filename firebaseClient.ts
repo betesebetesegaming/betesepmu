@@ -1047,6 +1047,9 @@ export const dbCreateWithdrawalRequest = async (request: any) => {
         status: request.status,
         code: request.code,
         requested_at: request.requestedAt.toISOString(),
+        payout_method: request.payoutMethod || null,
+        recipient_phone: request.recipientPhone || null,
+        external_ref: request.id,
     });
 };
 

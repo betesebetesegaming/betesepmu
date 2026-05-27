@@ -4,10 +4,15 @@ import { User, WithdrawalRequest, DepositRequest, Ticket } from '../types';
 import { useLanguage } from '../LanguageContext';
 import { WithdrawalCodeModal } from './WithdrawalCodeModal';
 import { PaymentSheet } from './PaymentSheet';
+import { Smartphone, Hash, Phone, Banknote, ArrowDownToLine, Loader2, AlertCircle } from 'lucide-react';
+
+const WAVE_LOGO = '/payment-logos/wave.png';
+const AFRIMONEY_LOGO = '/payment-logos/afrimoney.png';
 
 interface WalletPanelProps {
   user: User;
     onWithdrawalRequest: (amount: number) => Promise<WithdrawalRequest | null>;
+  onMobileWithdrawal?: (amount: number, method: 'Wave' | 'AfriMoney', phone: string) => Promise<WithdrawalRequest | null>;
   withdrawalRequests: WithdrawalRequest[];
   onWalletFlash: () => void;
   onDepositRequest: (amount: number, method: 'Wave' | 'AfriMoney' | 'APS' | 'QMoney' | 'Card', transactionId: string, externalRef?: string) => void;
@@ -19,8 +24,10 @@ interface WalletPanelProps {
 const getStatusChipStyle = (status: string) => {
     switch(status) {
         case 'Pending': return 'bg-yellow-200 text-yellow-800';
+        case 'Processing': return 'bg-blue-200 text-blue-800';
         case 'Approved':
         case 'Completed': return 'bg-green-200 text-green-800';
+        case 'Failed': return 'bg-red-200 text-red-800';
         case 'Rejected':
         case 'Canceled': return 'bg-gray-200 text-gray-700';
         default: return '';
@@ -44,14 +51,18 @@ const getVerificationBadge = (request: DepositRequest) => {
     return null;
 };
 
-export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequest, withdrawalRequests, onWalletFlash, onDepositRequest, depositRequests, tickets, onCancelWithdrawal }) => {
+export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequest, onMobileWithdrawal, withdrawalRequests, onWalletFlash, onDepositRequest, depositRequests, tickets, onCancelWithdrawal }) => {
   const [activeTab, setActiveTab] = useState<'deposit' | 'withdraw'>('deposit');
 
   // Payment sheet
   const [isPaymentSheetOpen, setIsPaymentSheetOpen] = useState(false);
 
   // Withdrawal Form State
+  const [withdrawMode, setWithdrawMode] = useState<'cash' | 'mobile'>('mobile');
   const [withdrawAmount, setWithdrawAmount] = useState<number | ''>('');
+  const [withdrawPhone, setWithdrawPhone] = useState(user.phone?.replace(/^\+220/, '') || '');
+  const [withdrawMethod, setWithdrawMethod] = useState<'Wave' | 'AfriMoney'>('Wave');
+  const [withdrawBusy, setWithdrawBusy] = useState(false);
   const [withdrawError, setWithdrawError] = useState('');
     const [latestWithdrawalRequest, setLatestWithdrawalRequest] = useState<WithdrawalRequest | null>(null);
   const { t } = useLanguage();
@@ -114,11 +125,32 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
         onWalletFlash();
         return;
     }
+
+    setWithdrawBusy(true);
+    try {
+      if (withdrawMode === 'mobile' && onMobileWithdrawal) {
+        const createdRequest = await onMobileWithdrawal(withdrawAmount, withdrawMethod, withdrawPhone);
+        if (createdRequest) {
+          if (createdRequest.status === 'Completed') {
+            setLatestWithdrawalRequest(null);
+            setWithdrawAmount('');
+          } else {
+            setLatestWithdrawalRequest(createdRequest);
+            setWithdrawAmount('');
+          }
+        }
+      } else {
         const createdRequest = await onWithdrawalRequest(withdrawAmount);
         if (createdRequest) {
             setLatestWithdrawalRequest(createdRequest);
             setWithdrawAmount('');
         }
+      }
+    } catch (err: unknown) {
+      setWithdrawError(err instanceof Error ? err.message : 'Withdrawal failed. Please try again.');
+    } finally {
+      setWithdrawBusy(false);
+    }
   };
 
   return (
@@ -237,8 +269,8 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
 
                   <div className="mt-4 flex items-center gap-3">
                       <div className="flex-1 flex items-center gap-2 bg-white rounded-xl p-2 shadow-inner border border-gray-200 overflow-hidden">
-                          <img src="/payment-logos/africell.png" alt="AfriMoney" className="h-8 w-auto object-contain" />
-                          <img src="/payment-logos/wave.png" alt="Wave" className="h-8 w-auto object-contain" />
+                          <img src={AFRIMONEY_LOGO} alt="AfriMoney" className="h-8 w-auto object-contain" />
+                          <img src={WAVE_LOGO} alt="Wave" className="h-8 w-auto object-contain" />
                           <img src="/payment-logos/aps.svg" alt="APS Wallet" className="h-8 w-auto object-contain" />
                       </div>
                       <button
@@ -280,21 +312,150 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
 
       {activeTab === 'withdraw' && (
           <div className="space-y-6 animate-fade-in">
-            <form onSubmit={handleWithdrawalSubmit} className="space-y-3">
-                <label className="block text-sm font-medium text-gray-700">{t('amount_to_withdraw')}</label>
-                <input 
-                    type="number"
-                    value={withdrawAmount}
-                    onChange={e => setWithdrawAmount(e.target.value === '' ? '' : parseFloat(e.target.value))}
-                    placeholder="Enter amount"
-                    className="w-full p-2 border border-gray-300 rounded-md"
-                    min="1"
-                    step="any"
-                    required
-                />
-                {withdrawError && <p className="text-sm text-red-500">{withdrawError}</p>}
-                <button type="submit" className="w-full px-4 py-3 bg-yellow-500 text-betese-dark font-bold rounded-lg hover:bg-yellow-600">
-                    {t('generate_code')}
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setWithdrawMode('mobile')}
+                className={`flex flex-col items-center gap-2 px-3 py-4 rounded-xl font-bold text-sm border-2 transition-all ${
+                  withdrawMode === 'mobile'
+                    ? 'border-blue-600 bg-blue-50 text-blue-900 shadow-md'
+                    : 'border-gray-200 bg-white text-gray-600 hover:border-blue-300'
+                }`}
+              >
+                <Smartphone className={`w-6 h-6 ${withdrawMode === 'mobile' ? 'text-blue-700' : 'text-gray-400'}`} />
+                <span>Mobile money</span>
+                <div className="flex items-center justify-center gap-3 py-1">
+                  <img src={WAVE_LOGO} alt="Wave" className="h-6 w-auto object-contain" />
+                  <img src={AFRIMONEY_LOGO} alt="AfriMoney" className="h-6 w-auto object-contain" />
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setWithdrawMode('cash')}
+                className={`flex flex-col items-center gap-2 px-3 py-4 rounded-xl font-bold text-sm border-2 transition-all ${
+                  withdrawMode === 'cash'
+                    ? 'border-gray-900 bg-gray-50 text-gray-900 shadow-md'
+                    : 'border-gray-200 bg-white text-gray-600 hover:border-gray-400'
+                }`}
+              >
+                <Hash className={`w-6 h-6 ${withdrawMode === 'cash' ? 'text-gray-900' : 'text-gray-400'}`} />
+                <span>Withdrawal Code</span>
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Collect cash at vendor</span>
+              </button>
+            </div>
+
+            <div className={`rounded-xl border p-4 flex gap-3 ${
+              withdrawMode === 'mobile' ? 'border-blue-200 bg-blue-50' : 'border-amber-200 bg-amber-50'
+            }`}>
+              {withdrawMode === 'mobile' ? (
+                <ArrowDownToLine className="w-5 h-5 text-blue-700 shrink-0 mt-0.5" />
+              ) : (
+                <Banknote className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
+              )}
+              <p className="text-sm text-gray-700">
+                {withdrawMode === 'mobile'
+                  ? 'Send funds directly to your Wave or AfriMoney wallet. Your balance is deducted immediately and refunded automatically if the transfer fails.'
+                  : 'Generate a withdrawal code and collect cash from a vendor. Show the code when you arrive.'}
+              </p>
+            </div>
+
+            <form onSubmit={handleWithdrawalSubmit} className="space-y-4">
+                <div>
+                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
+                    <Banknote className="w-4 h-4 text-gray-500" />
+                    {t('amount_to_withdraw')}
+                  </label>
+                  <input 
+                      type="number"
+                      value={withdrawAmount}
+                      onChange={e => setWithdrawAmount(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                      placeholder="Enter amount in GMD"
+                      className="w-full p-3 border border-gray-300 rounded-xl"
+                      min="1"
+                      step="any"
+                      required
+                  />
+                </div>
+
+                {withdrawMode === 'mobile' && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Choose network</label>
+                      <div className="grid grid-cols-2 gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setWithdrawMethod('Wave')}
+                          aria-label="Wave"
+                          className={`flex items-center justify-center px-3 py-4 rounded-xl border-2 transition-all ${
+                            withdrawMethod === 'Wave'
+                              ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-200'
+                              : 'border-gray-200 bg-white hover:border-blue-300'
+                          }`}
+                        >
+                          <img src={WAVE_LOGO} alt="Wave" className="h-9 w-auto object-contain" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setWithdrawMethod('AfriMoney')}
+                          aria-label="AfriMoney"
+                          className={`flex items-center justify-center px-3 py-4 rounded-xl border-2 transition-all ${
+                            withdrawMethod === 'AfriMoney'
+                              ? 'border-purple-600 bg-purple-50 ring-2 ring-purple-200'
+                              : 'border-gray-200 bg-white hover:border-purple-300'
+                          }`}
+                        >
+                          <img src={AFRIMONEY_LOGO} alt="AfriMoney" className="h-9 w-auto object-contain" />
+                        </button>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
+                        <Phone className="w-4 h-4 text-gray-500" />
+                        Mobile money phone
+                      </label>
+                      <input
+                        type="tel"
+                        value={withdrawPhone}
+                        onChange={e => setWithdrawPhone(e.target.value)}
+                        placeholder="7-digit Gambian number"
+                        className="w-full p-3 border border-gray-300 rounded-xl"
+                        required
+                      />
+                    </div>
+                  </>
+                )}
+
+                {withdrawError && (
+                  <div className="flex items-start gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl p-3">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>{withdrawError}</span>
+                  </div>
+                )}
+                <button
+                  type="submit"
+                  disabled={withdrawBusy}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-yellow-500 text-betese-dark font-bold rounded-xl hover:bg-yellow-600 disabled:opacity-60 transition-colors"
+                >
+                  {withdrawBusy ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      Processing…
+                    </>
+                  ) : withdrawMode === 'mobile' ? (
+                    <>
+                      <img
+                        src={withdrawMethod === 'Wave' ? WAVE_LOGO : AFRIMONEY_LOGO}
+                        alt={withdrawMethod}
+                        className="h-6 w-auto object-contain"
+                      />
+                      Withdraw
+                    </>
+                  ) : (
+                    <>
+                      <Hash className="w-5 h-5" />
+                      {t('generate_code')}
+                    </>
+                  )}
                 </button>
             </form>
 
@@ -307,6 +468,15 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
                                 <div>
                                     <p className="font-bold">{req.amount.toFixed(2)} GMD</p>
                                     <p className="text-xs text-gray-500">{new Date(req.requestedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}</p>
+                                    {req.payoutMethod && req.payoutMethod !== 'Cash' && (
+                                      <div className="mt-1">
+                                        <img
+                                          src={req.payoutMethod === 'Wave' ? WAVE_LOGO : AFRIMONEY_LOGO}
+                                          alt={req.payoutMethod}
+                                          className="h-4 w-auto object-contain"
+                                        />
+                                      </div>
+                                    )}
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusChipStyle(req.status)}`}>

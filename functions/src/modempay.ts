@@ -148,26 +148,81 @@ export interface CreateTransferInput {
   recipient: {
     name?: string;
     phone: string;
-    method: ModemPayMethod;
+    method: ModemPayPayoutNetwork;
   };
   reason?: string;
   externalRef: string;
   metadata?: Record<string, string>;
 }
 
+export type ModemPayPayoutNetwork = 'wave' | 'afrimoney';
+
+export const MODEMPAY_PAYOUT_NETWORKS: ReadonlyArray<ModemPayPayoutNetwork> = [
+  'wave', 'afrimoney',
+];
+
+export function isModemPayPayoutNetwork(v: unknown): v is ModemPayPayoutNetwork {
+  return typeof v === 'string' && (MODEMPAY_PAYOUT_NETWORKS as ReadonlyArray<string>).includes(v.toLowerCase());
+}
+
 export async function createTransfer(input: CreateTransferInput) {
+  const network = input.recipient.method.toLowerCase();
+  if (!isModemPayPayoutNetwork(network)) {
+    throw new Error(`Payout network must be one of: ${MODEMPAY_PAYOUT_NETWORKS.join(', ')}`);
+  }
+
+  const accountNumber = String(input.recipient.phone || '')
+    .replace(/\D/g, '')
+    .replace(/^220/, '');
+
   const payload = {
     amount: input.amount,
     currency: input.currency || 'GMD',
-    recipient: input.recipient,
-    description: input.reason,
-    external_reference: input.externalRef,
+    network,
+    account_number: accountNumber,
+    beneficiary_name: input.recipient.name || 'Customer',
+    narration: input.reason || 'Betese PMU withdrawal',
     metadata: {
       source: 'betese-pmu',
+      external_reference: input.externalRef,
       ...(input.metadata || {}),
     },
   };
-  return modemFetch({ method: 'POST', path: '/v1/transfers', body: payload });
+
+  const url = `${baseUrl().replace(/\/+$/, '')}/v1/transfers`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${secretKey()}`,
+      'Idempotency-Key': input.externalRef,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const text = await res.text();
+  let data: unknown;
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    data = { raw: text };
+  }
+
+  const envelope = data as { data?: Record<string, unknown>; status?: boolean; message?: string; error?: string };
+  const inner = envelope.data || (data as Record<string, unknown>);
+  const errorMessage =
+    envelope.message ||
+    envelope.error ||
+    (typeof inner.message === 'string' ? inner.message : undefined) ||
+    (typeof inner.error === 'string' ? inner.error : undefined);
+
+  return {
+    ok: res.ok && envelope.status !== false,
+    status: res.status,
+    data: inner,
+    errorMessage,
+    raw: data,
+  };
 }
 
 // -----------------------------------------------------------------------------

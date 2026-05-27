@@ -51,6 +51,7 @@ interface CustomerDashboardProps {
   seenWinningTickets: Set<string>;
   onMarkWinningTicketAsSeen: (id: string) => void;
   onWithdrawalRequest: (amount: number) => Promise<WithdrawalRequest | null>;
+  onMobileWithdrawal?: (amount: number, method: 'Wave' | 'AfriMoney', phone: string) => Promise<WithdrawalRequest | null>;
   withdrawalRequests: WithdrawalRequest[];
   onWalletFlash: () => void;
   programImages: ProgramImage[];
@@ -82,6 +83,7 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   seenWinningTickets,
   onMarkWinningTicketAsSeen,
   onWithdrawalRequest,
+  onMobileWithdrawal,
   withdrawalRequests,
   onWalletFlash,
   programImages,
@@ -262,7 +264,7 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
             {activeTab === 'history' && <TicketHistoryPanel tickets={placedTickets} onCancelTicket={onCancelTicket} races={races} effectiveTime={effectiveTime} />}
             {activeTab === 'wallet' && (
                 <div className="space-y-6">
-                    <WalletPanel user={user} onWithdrawalRequest={onWithdrawalRequest} withdrawalRequests={withdrawalRequests} onWalletFlash={onWalletFlash} onDepositRequest={onDepositRequest} depositRequests={depositRequests.filter(r => r.customerId === user.id)} tickets={placedTickets} onCancelWithdrawal={onCancelWithdrawal} />
+                    <WalletPanel user={user} onWithdrawalRequest={onWithdrawalRequest} onMobileWithdrawal={onMobileWithdrawal} withdrawalRequests={withdrawalRequests} onWalletFlash={onWalletFlash} onDepositRequest={onDepositRequest} depositRequests={depositRequests.filter(r => r.customerId === user.id)} tickets={placedTickets} onCancelWithdrawal={onCancelWithdrawal} />
                     <PasswordChangePanel user={user} onChangePassword={onChangePassword} />
                 </div>
             )}

@@ -1,8 +1,16 @@
 import React, { useMemo, useState } from 'react';
 import { WithdrawalRequest, User } from '../types';
 
+const WAVE_LOGO = '/payment-logos/wave.png';
+const AFRIMONEY_LOGO = '/payment-logos/afrimoney.png';
+
 interface ProcessWithdrawalPanelProps {
-  onProcessWithdrawal: (code: string, payoutMethod?: 'Cash' | 'Wave', payoutReference?: string) => Promise<boolean>;
+  onProcessWithdrawal: (
+    code: string,
+    payoutMethod?: 'Cash' | 'Wave' | 'AfriMoney',
+    payoutReference?: string,
+    recipientPhone?: string,
+  ) => Promise<boolean>;
   withdrawalRequests: WithdrawalRequest[];
   customers: User[];
 }
@@ -15,13 +23,14 @@ export const ProcessWithdrawalPanel: React.FC<ProcessWithdrawalPanelProps> = ({ 
   const [foundRequest, setFoundRequest] = useState<WithdrawalRequest | null>(null);
   const [customer, setCustomer] = useState<User | null>(null);
   const [newBalance, setNewBalance] = useState<number | null>(null);
-  const [payoutMethod, setPayoutMethod] = useState<'Cash' | 'Wave'>('Cash');
-  const [payoutReference, setPayoutReference] = useState('');
+  const [payoutMethod, setPayoutMethod] = useState<'Cash' | 'Wave' | 'AfriMoney'>('Cash');
+  const [recipientPhone, setRecipientPhone] = useState('');
   const [customerOtpCode, setCustomerOtpCode] = useState('');
+  const [busy, setBusy] = useState(false);
 
-  const recentWavePayouts = useMemo(() => {
+  const recentMobilePayouts = useMemo(() => {
     return (withdrawalRequests || [])
-      .filter(r => r.status === 'Completed' && String(r.processedByName || '').includes('[Wave'))
+      .filter(r => r.status === 'Completed' && (r.payoutMethod === 'Wave' || r.payoutMethod === 'AfriMoney'))
       .sort((a, b) => (b.completedAt?.getTime() || 0) - (a.completedAt?.getTime() || 0))
       .slice(0, 10);
   }, [withdrawalRequests]);
@@ -35,8 +44,9 @@ export const ProcessWithdrawalPanel: React.FC<ProcessWithdrawalPanelProps> = ({ 
     setCustomer(null);
     setNewBalance(null);
     setPayoutMethod('Cash');
-    setPayoutReference('');
+    setRecipientPhone('');
     setCustomerOtpCode('');
+    setBusy(false);
   };
 
   const handleFindRequest = () => {
@@ -51,10 +61,8 @@ export const ProcessWithdrawalPanel: React.FC<ProcessWithdrawalPanelProps> = ({ 
     const pendingRequests = (withdrawalRequests || []).filter(r => r.status === 'Pending');
     const upperSearch = search.toUpperCase();
 
-    // First priority: exact withdrawal code
     let request = pendingRequests.find(r => r.code.toUpperCase() === upperSearch);
 
-    // Fallback: customer ID or phone number (for quick finding by staff)
     if (!request) {
       const normalizedSearchDigits = search.replace(/\D/g, '');
       const matchedCustomers = customers.filter(c => {
@@ -78,6 +86,8 @@ export const ProcessWithdrawalPanel: React.FC<ProcessWithdrawalPanelProps> = ({ 
         if (reqCustomer) {
             setFoundRequest(request);
             setCustomer(reqCustomer);
+            const defaultPhone = request.recipientPhone || reqCustomer.phone?.replace(/^\+220/, '') || '';
+            setRecipientPhone(defaultPhone);
             setStep('confirm');
             if (request.code.toUpperCase() !== upperSearch) {
               setMessage(`Found pending request for ${reqCustomer.name}. Confirm withdrawal code from customer before payout.`);
@@ -109,20 +119,28 @@ export const ProcessWithdrawalPanel: React.FC<ProcessWithdrawalPanelProps> = ({ 
       return;
     }
 
-    if (payoutMethod === 'Wave' && !payoutReference.trim()) {
-      setMessage('Enter Wave transfer reference/receipt before completing payout.');
+    if (payoutMethod !== 'Cash' && !recipientPhone.trim()) {
+      setMessage('Enter the customer mobile money phone number before ModemPay payout.');
       setIsSuccess(false);
       return;
     }
 
-    const success = await onProcessWithdrawal(foundRequest.code, payoutMethod, payoutReference.trim());
+    setBusy(true);
+    const success = await onProcessWithdrawal(
+      foundRequest.code,
+      payoutMethod,
+      undefined,
+      recipientPhone.trim() || undefined,
+    );
+    setBusy(false);
+
     if (success) {
       const updatedBalance = (customer.walletBalance ?? 0) - foundRequest.amount;
       setNewBalance(updatedBalance);
       setMessage(
-        payoutMethod === 'Wave'
-          ? `Winning payout of ${foundRequest.amount.toFixed(2)} GMD completed by Wave for ${customer.name}.`
-          : `Withdrawal of ${foundRequest.amount.toFixed(2)} GMD completed successfully for ${customer.name}.`
+        payoutMethod === 'Cash'
+          ? `Withdrawal of ${foundRequest.amount.toFixed(2)} GMD completed successfully for ${customer.name}.`
+          : `${foundRequest.amount.toFixed(2)} GMD sent via ModemPay ${payoutMethod} to ${recipientPhone.trim()}.`
       );
       setIsSuccess(true);
       setStep('done');
@@ -144,7 +162,7 @@ export const ProcessWithdrawalPanel: React.FC<ProcessWithdrawalPanelProps> = ({ 
              </div>
              <div className="mt-4 p-4 rounded-lg border border-blue-200 bg-blue-50 space-y-3">
               <p className="text-sm font-bold text-blue-900">Payout Method</p>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 <button
                   type="button"
                   onClick={() => setPayoutMethod('Cash')}
@@ -155,21 +173,31 @@ export const ProcessWithdrawalPanel: React.FC<ProcessWithdrawalPanelProps> = ({ 
                 <button
                   type="button"
                   onClick={() => setPayoutMethod('Wave')}
-                  className={`px-3 py-2 rounded-lg font-bold text-sm ${payoutMethod === 'Wave' ? 'bg-blue-700 text-white' : 'bg-white border border-blue-300 text-blue-700'}`}
+                  aria-label="Wave"
+                  className={`flex items-center justify-center px-3 py-3 rounded-lg border-2 ${payoutMethod === 'Wave' ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-200' : 'bg-white border-gray-300'}`}
                 >
-                  Pay by Wave
+                  <img src={WAVE_LOGO} alt="Wave" className="h-7 w-auto object-contain" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPayoutMethod('AfriMoney')}
+                  aria-label="AfriMoney"
+                  className={`flex items-center justify-center px-3 py-3 rounded-lg border-2 ${payoutMethod === 'AfriMoney' ? 'border-purple-600 bg-purple-50 ring-2 ring-purple-200' : 'bg-white border-gray-300'}`}
+                >
+                  <img src={AFRIMONEY_LOGO} alt="AfriMoney" className="h-7 w-auto object-contain" />
                 </button>
               </div>
-              {payoutMethod === 'Wave' && (
+              {payoutMethod !== 'Cash' && (
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-widest text-blue-800 mb-1">Wave transfer reference</label>
+                  <label className="block text-xs font-bold uppercase tracking-widest text-blue-800 mb-1">Mobile money phone</label>
                   <input
-                    type="text"
-                    value={payoutReference}
-                    onChange={(e) => setPayoutReference(e.target.value)}
-                    placeholder="Paste Wave transfer ref / receipt id"
+                    type="tel"
+                    value={recipientPhone}
+                    onChange={(e) => setRecipientPhone(e.target.value)}
+                    placeholder="7-digit Gambian number"
                     className="w-full p-2 border border-blue-300 rounded-md"
                   />
+                  <p className="text-xs text-blue-800 mt-1">Funds are sent automatically via ModemPay. Wallet is deducted immediately; failed transfers are refunded.</p>
                 </div>
               )}
               <div>
@@ -184,8 +212,10 @@ export const ProcessWithdrawalPanel: React.FC<ProcessWithdrawalPanelProps> = ({ 
               </div>
              </div>
               <div className="mt-6 flex gap-4">
-                <button onClick={resetState} className="w-full px-4 py-3 bg-gray-300 text-gray-800 font-bold rounded-lg hover:bg-gray-400">Cancel</button>
-                <button onClick={handleProcess} className="w-full px-4 py-3 bg-betese-green text-white font-bold rounded-lg hover:bg-green-700">Confirm & Pay</button>
+                <button onClick={resetState} disabled={busy} className="w-full px-4 py-3 bg-gray-300 text-gray-800 font-bold rounded-lg hover:bg-gray-400 disabled:opacity-60">Cancel</button>
+                <button onClick={handleProcess} disabled={busy} className="w-full px-4 py-3 bg-betese-green text-white font-bold rounded-lg hover:bg-green-700 disabled:opacity-60">
+                  {busy ? 'Processing…' : payoutMethod === 'Cash' ? 'Confirm & Pay Cash' : `Send via ${payoutMethod}`}
+                </button>
              </div>
         </div>
      )
@@ -201,10 +231,10 @@ export const ProcessWithdrawalPanel: React.FC<ProcessWithdrawalPanelProps> = ({ 
                 <p><strong>Amount Paid:</strong> <span className="font-bold text-red-600">{foundRequest.amount.toFixed(2)} GMD</span></p>
                 <p><strong>Previous Balance:</strong> {(customer.walletBalance ?? 0).toFixed(2)} GMD</p>
                 <p><strong>New Balance:</strong> <span className="font-bold text-betese-green">{newBalance?.toFixed(2)} GMD</span></p>
-              <p><strong>Paid By:</strong> {payoutMethod === 'Wave' ? <span className="font-bold text-blue-700">Wave ✓</span> : <span className="font-bold text-gray-800">Cash</span>}</p>
-              {payoutMethod === 'Wave' && payoutReference && (
-                <p><strong>Wave Ref:</strong> <span className="font-bold text-blue-700">{payoutReference}</span></p>
-              )}
+              <p><strong>Paid By:</strong> {payoutMethod === 'Cash'
+                ? <span className="font-bold text-gray-800">Cash</span>
+                : <span className="font-bold text-blue-700">ModemPay {payoutMethod} ✓</span>}
+              </p>
              </div>
              <div className="mt-6">
                 <button onClick={resetState} className="w-full px-4 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700">Next Customer</button>
@@ -217,7 +247,7 @@ export const ProcessWithdrawalPanel: React.FC<ProcessWithdrawalPanelProps> = ({ 
     <div className="bg-white p-6 rounded-lg shadow-lg">
       <h3 className="text-xl font-bold text-betese-dark mb-4">Process Withdrawal</h3>
       <div className="space-y-4">
-        <p className="text-sm text-gray-600">Find by withdrawal code, customer ID, or phone. Before payout, confirm the code the customer shares via WhatsApp.</p>
+        <p className="text-sm text-gray-600">Find by withdrawal code, customer ID, or phone. Pay cash at the desk or send funds via ModemPay Wave / AfriMoney.</p>
         <div className="flex gap-2">
             <input
                 type="text"
@@ -236,15 +266,15 @@ export const ProcessWithdrawalPanel: React.FC<ProcessWithdrawalPanelProps> = ({ 
         {message && <p className={`text-center text-sm p-2 rounded-md ${isSuccess ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{message}</p>}
 
         <div className="pt-2 border-t border-gray-200">
-          <h4 className="text-sm font-black uppercase tracking-widest text-blue-700 mb-2">Recent Wave Winning Payouts</h4>
-          {recentWavePayouts.length === 0 ? (
-            <p className="text-xs text-gray-500">No completed Wave payouts yet.</p>
+          <h4 className="text-sm font-black uppercase tracking-widest text-blue-700 mb-2">Recent ModemPay Payouts</h4>
+          {recentMobilePayouts.length === 0 ? (
+            <p className="text-xs text-gray-500">No completed mobile money payouts yet.</p>
           ) : (
             <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
-              {recentWavePayouts.map(req => (
+              {recentMobilePayouts.map(req => (
                 <div key={req.id} className="p-2 rounded border border-blue-200 bg-blue-50">
                   <p className="text-sm font-bold text-blue-900">{req.customerName} - {Number(req.amount || 0).toFixed(2)} GMD</p>
-                  <p className="text-xs text-blue-800">Winning paid by Wave ✓ by {req.processedByName || 'System'}</p>
+                  <p className="text-xs text-blue-800">Paid via ModemPay {req.payoutMethod} by {req.processedByName || 'System'}</p>
                 </div>
               ))}
             </div>

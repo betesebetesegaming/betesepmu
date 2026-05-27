@@ -21,7 +21,7 @@ const generateRef = () => `BETESE-${Date.now()}-${Math.random().toString(36).sli
 
 const methodMeta: Record<Method, { logo: string; label: string; sub: string; tint: string; border: string; bg: string; powered: boolean }> = {
   AfriMoney: {
-    logo: '/payment-logos/africell.png',
+    logo: '/payment-logos/afrimoney.png',
     label: 'AfriMoney',
     sub: 'Pay from your Africell AfriMoney wallet',
     tint: 'text-purple-800',

@@ -8,6 +8,7 @@ import { ConfirmationModal } from './components/ConfirmationModal';
 import { BookingCodeModal } from './components/BookingCodeModal';
 import { WithdrawalCodeModal } from './components/WithdrawalCodeModal';
 import { SEVEN_DAYS_IN_MS, BETTING_CUTOFF_MS, calculateTicketWinnings, validateTicketForPlacement, validateTicketAgainstRaceState, normalizeGambiaPhone } from './utils';
+import { apiUrl } from './lib/apiUrl';
 import { LanguageProvider } from './LanguageContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { deferWork } from './perf';
@@ -400,15 +401,19 @@ const AppContent: React.FC = () => {
           if (withdrawalsResult.status === 'fulfilled') {
               setWithdrawalRequests((withdrawalsResult.value || []).map((r: any) => ({
               id: r.id, 
-              customerId: r.user_id, // Corrected from userId to customerId to match type
+              customerId: r.user_id,
               customerName: r.user_name || 'Client',
               amount: Number(r.amount) || 0, 
-              status: r.status,
+              status: r.status === 'settled' ? 'Completed' : r.status === 'failed' ? 'Failed' : r.status,
               code: r.code, 
               requestedAt: r.requested_at ? new Date(r.requested_at) : new Date(),
               completedAt: r.completed_at ? new Date(r.completed_at) : undefined,
               processedBy: r.processed_by,
-              processedByName: r.processed_by_name
+              processedByName: r.processed_by_name,
+              payoutMethod: r.payout_method || undefined,
+              recipientPhone: r.recipient_phone || undefined,
+              providerTransferId: r.provider_transfer_id || undefined,
+              failureReason: r.failure_reason || undefined,
           })));
           }
 
@@ -1515,29 +1520,76 @@ const AppContent: React.FC = () => {
       }
   };
 
-  const processWithdrawal = async (code: string, payoutMethod: 'Cash' | 'Wave' = 'Cash', payoutReference?: string) => {
+  const processWithdrawal = async (
+      code: string,
+      payoutMethod: 'Cash' | 'Wave' | 'AfriMoney' = 'Cash',
+      payoutReference?: string,
+      recipientPhoneOverride?: string,
+  ) => {
       const req = (withdrawalRequests || []).find(r => r.code === code && r.status === 'Pending');
       if (!req || !currentUser) return false;
 
-      const safeReference = String(payoutReference || '').replace(/[\[\]]/g, '').trim();
-      const processedByName = payoutMethod === 'Wave'
-          ? `${currentUser.name} [Wave${safeReference ? ` Ref:${safeReference}` : ''}]`
-          : currentUser.name;
-
-      if (realtimeDb) {
-          try {
-              const success = await dbProcessWithdrawalRequest(code, currentUser.id, processedByName, effectiveTime);
-              if (success) loadLiveSystemData(currentUser);
-              return success;
-          } catch (e) {
-              console.error("Process withdrawal failed", e);
-              return false;
+      if (payoutMethod === 'Cash') {
+          if (realtimeDb) {
+              try {
+                  const success = await dbProcessWithdrawalRequest(code, currentUser.id, currentUser.name, effectiveTime);
+                  if (success) loadLiveSystemData(currentUser);
+                  return success;
+              } catch (e) {
+                  console.error("Process withdrawal failed", e);
+                  return false;
+              }
           }
+          const updated = { ...req, status: 'Completed' as const, completedAt: effectiveTime, processedBy: currentUser.id, processedByName: currentUser.name, payoutMethod: 'Cash' as const };
+          setWithdrawalRequests(prev => (prev || []).map(r => r.id === req.id ? updated : r));
+          return true;
       }
 
-      const updated = { ...req, status: 'Completed' as const, completedAt: effectiveTime, processedBy: currentUser.id, processedByName };
-      setWithdrawalRequests(prev => (prev || []).map(r => r.id === req.id ? updated : r));
-      return true;
+      const customer = (users || []).find(u => u.id === req.customerId);
+      const recipientPhone = recipientPhoneOverride || req.recipientPhone || customer?.phone || '';
+      if (!recipientPhone) {
+          alert('Customer phone number is required for mobile money payout.');
+          return false;
+      }
+
+      try {
+          const res = await fetch(apiUrl('/modempay-payout'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                  withdrawalRequestId: req.id,
+                  withdrawalCode: code,
+                  customerId: req.customerId,
+                  amount: req.amount,
+                  method: payoutMethod.toLowerCase(),
+                  recipientPhone,
+                  recipientName: req.customerName || customer?.name,
+                  processedById: currentUser.id,
+                  processedByName: `${currentUser.name} [ModemPay ${payoutMethod}${payoutReference ? ` Ref:${payoutReference}` : ''}]`,
+              }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+              alert(data.hint ? `${data.error}\n\n${data.hint}` : (data.error || 'ModemPay payout failed'));
+              return false;
+          }
+
+          setWithdrawalRequests(prev => (prev || []).map(r => r.id === req.id
+              ? {
+                  ...r,
+                  status: data.status === 'completed' ? 'Completed' as const : 'Processing' as const,
+                  payoutMethod,
+                  processedBy: currentUser.id,
+                  processedByName: `${currentUser.name} [ModemPay ${payoutMethod}]`,
+                  providerTransferId: data.transferId || undefined,
+              }
+              : r));
+          loadLiveSystemData(currentUser);
+          return true;
+      } catch (e) {
+          console.error('ModemPay payout failed', e);
+          return false;
+      }
   };
 
   const handleLogin = (user: User) => {
@@ -1577,18 +1629,18 @@ const AppContent: React.FC = () => {
         customerName: currentUser.name,
         amount,
         status: 'Pending' as const,
-        requestedAt: effectiveTime
+        requestedAt: effectiveTime,
+        payoutMethod: 'Cash' as const,
       };
 
       try {
           if (realtimeDb) {
-              // Retry a few times in case random 6-digit code hits unique constraint.
               let savedRequest: WithdrawalRequest | null = null;
               for (let attempt = 0; attempt < 5; attempt++) {
                   const candidate: WithdrawalRequest = {
-                      id: Math.floor(10000000 + Math.random() * 90000000).toString(),
+                      id: `BETESE-WD-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
                       code: Math.floor(100000 + Math.random() * 900000).toString(),
-                      ...baseRequest
+                      ...baseRequest,
                   };
                   try {
                       await dbCreateWithdrawalRequest(candidate);
@@ -1605,14 +1657,13 @@ const AppContent: React.FC = () => {
                   throw new Error('Unable to generate a unique withdrawal code. Please try again.');
               }
 
-              // Update local state immediately so customer sees code without needing refresh.
               setWithdrawalRequests(prev => [savedRequest!, ...(prev || [])]);
               return savedRequest;
           } else {
               const newRequest: WithdrawalRequest = {
-                  id: Math.floor(10000000 + Math.random() * 90000000).toString(),
+                  id: `BETESE-WD-${Date.now()}`,
                   code: Math.floor(100000 + Math.random() * 900000).toString(),
-                  ...baseRequest
+                  ...baseRequest,
               };
               setWithdrawalRequests(prev => [newRequest, ...(prev || [])]);
               return newRequest;
@@ -1620,6 +1671,81 @@ const AppContent: React.FC = () => {
       } catch (e: any) {
           alert("Withdrawal Failed: " + e.message);
           return null;
+      }
+  };
+
+  const handleMobileWithdrawal = async (
+      amount: number,
+      method: 'Wave' | 'AfriMoney',
+      phone: string,
+  ): Promise<WithdrawalRequest | null> => {
+      if (!currentUser) return null;
+      const normalizedPhone = normalizeGambiaPhone(phone || currentUser.phone || '');
+      if (!normalizedPhone) {
+          alert('Enter a valid phone number for mobile money payout.');
+          return null;
+      }
+      const normalizedAmount = Number(amount.toFixed(2));
+      if (!Number.isFinite(normalizedAmount) || normalizedAmount <= 0) {
+          alert('Enter a valid withdrawal amount.');
+          return null;
+      }
+      if (normalizedAmount > (currentUser.walletBalance ?? 0)) {
+          alert('Withdrawal amount exceeds available balance.');
+          return null;
+      }
+
+      const requestId = `BETESE-WD-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+      const cleanPhone = normalizedPhone.replace(/^\+220/, '').replace(/\D/g, '');
+      const newRequest: WithdrawalRequest = {
+          id: requestId,
+          code: Math.floor(100000 + Math.random() * 900000).toString(),
+          customerId: currentUser.id,
+          customerName: currentUser.name,
+          amount: normalizedAmount,
+          status: 'Pending',
+          requestedAt: effectiveTime,
+          payoutMethod: method,
+          recipientPhone: cleanPhone,
+      };
+
+      try {
+          if (realtimeDb) {
+              await dbCreateWithdrawalRequest(newRequest);
+          }
+
+          const res = await fetch(apiUrl('/modempay-payout'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                  withdrawalRequestId: requestId,
+                  customerId: currentUser.id,
+                  amount: normalizedAmount,
+                  method: method.toLowerCase(),
+                  recipientPhone: cleanPhone,
+                  recipientName: currentUser.name,
+                  processedById: currentUser.id,
+                  processedByName: `${currentUser.name} [ModemPay ${method}]`,
+              }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+              const detail = data.hint ? `${data.error}\n\n${data.hint}` : (data.error || 'ModemPay withdrawal failed');
+              throw new Error(detail);
+          }
+
+          const finalRequest: WithdrawalRequest = {
+              ...newRequest,
+              status: data.status === 'completed' ? 'Completed' : 'Processing',
+              providerTransferId: data.transferId || undefined,
+              processedBy: currentUser.id,
+              processedByName: `${currentUser.name} [ModemPay ${method}]`,
+          };
+          setWithdrawalRequests(prev => [finalRequest, ...(prev || []).filter(r => r.id !== requestId)]);
+          loadLiveSystemData(currentUser);
+          return finalRequest;
+      } catch (e: any) {
+          throw new Error(e?.message || 'ModemPay withdrawal failed');
       }
   };
 
@@ -2233,6 +2359,7 @@ const AppContent: React.FC = () => {
                 seenWinningTickets={seenWinningTickets}
                 onMarkWinningTicketAsSeen={(id) => setSeenWinningTickets(prev => new Set(prev).add(id))}
                 onWithdrawalRequest={handleWithdrawalRequest}
+                onMobileWithdrawal={handleMobileWithdrawal}
                 withdrawalRequests={withdrawalRequests}
                 onWalletFlash={() => setWalletFlash(true)}
                 programImages={programImages}

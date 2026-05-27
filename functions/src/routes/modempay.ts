@@ -8,7 +8,9 @@ import {
   retrieveTransaction,
   verifyWebhookSignature,
   isModemPayMethod,
+  isModemPayPayoutNetwork,
   type ModemPayMethod,
+  type ModemPayPayoutNetwork,
 } from '../modempay';
 import { adminDb } from '../admin';
 
@@ -133,57 +135,177 @@ export const cardPaymentHandler      = makeMethodWrapper('card');
 /**
  * POST /api/modempay-payout
  *
- * Initiates a Modem Pay transfer to a customer's mobile wallet — used to
- * settle vendor-approved withdrawal requests.
+ * Initiates a Modem Pay mobile-money transfer (Wave / AfriMoney).
+ * Deducts the customer wallet immediately, then sends funds via ModemPay.
+ * Webhook `transfer.succeeded` marks the request Completed; failures refund the hold.
  */
 interface PayoutBody {
   amount?: number | string;
   recipientPhone?: string;
   recipientName?: string;
   method?: string;
+  network?: string;
   externalRef?: string;
+  customerId?: string;
+  withdrawalRequestId?: string;
+  withdrawalCode?: string;
+  processedById?: string;
+  processedByName?: string;
   reason?: string;
   metadata?: Record<string, string>;
 }
 
 export async function payoutHandler(req: Request, res: Response): Promise<void> {
   const body = (req.body || {}) as PayoutBody;
-  const method = String(body.method || '').toLowerCase();
-  if (!isModemPayMethod(method)) {
-    res.status(400).json({ error: 'method must be one of wave, aps, afrimoney, qmoney, card' });
-    return;
-  }
-  const amount = Number(body.amount);
-  if (!Number.isFinite(amount) || amount <= 0) {
-    res.status(400).json({ error: 'amount must be a positive number' });
-    return;
-  }
-  if (!body.recipientPhone) {
-    res.status(400).json({ error: 'recipientPhone is required' });
-    return;
-  }
-  if (!body.externalRef) {
-    res.status(400).json({ error: 'externalRef is required' });
+  const method = String(body.method || body.network || '').toLowerCase();
+  if (!isModemPayPayoutNetwork(method)) {
+    res.status(400).json({ error: 'method must be wave or afrimoney for mobile money payout' });
     return;
   }
 
+  const requestId = String(body.withdrawalRequestId || body.externalRef || '').trim();
+  if (!requestId) {
+    res.status(400).json({ error: 'withdrawalRequestId (or externalRef) is required' });
+    return;
+  }
+
+  let customerId = String(body.customerId || '').trim();
+  let amount = Number(body.amount);
+  let recipientPhone = String(body.recipientPhone || '').trim();
+  let recipientName = String(body.recipientName || '').trim();
+  let withdrawalCode = String(body.withdrawalCode || '').trim();
+
   try {
+    const requestRef = adminDb.collection('withdrawal_requests').doc(requestId);
+    const requestSnap = await requestRef.get();
+    if (!requestSnap.exists) {
+      res.status(404).json({ error: 'Withdrawal request not found' });
+      return;
+    }
+    const requestData = requestSnap.data() as {
+      user_id?: string;
+      user_name?: string;
+      amount?: number;
+      status?: string;
+      code?: string;
+      recipient_phone?: string;
+    };
+
+    if (requestData.status !== 'Pending') {
+      res.status(409).json({ error: `Withdrawal request is already ${requestData.status}` });
+      return;
+    }
+
+    if (withdrawalCode && requestData.code && withdrawalCode !== requestData.code) {
+      res.status(403).json({ error: 'Withdrawal code mismatch' });
+      return;
+    }
+
+    customerId = customerId || String(requestData.user_id || '');
+    if (!Number.isFinite(amount) || amount <= 0) amount = Number(requestData.amount || 0);
+    recipientPhone = recipientPhone || String(requestData.recipient_phone || '');
+    recipientName = recipientName || String(requestData.user_name || 'Customer');
+
+    if (!customerId) {
+      res.status(400).json({ error: 'customerId is required' });
+      return;
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      res.status(400).json({ error: 'amount must be a positive number' });
+      return;
+    }
+    if (!recipientPhone) {
+      res.status(400).json({ error: 'recipientPhone is required' });
+      return;
+    }
+
+    const cleanPhone = recipientPhone.replace(/\D/g, '').replace(/^220/, '');
+    const processedById = body.processedById || 'MODEMPAY_PAYOUT';
+    const processedByName = body.processedByName || 'ModemPay Payout';
+    const payoutLabel = method === 'wave' ? 'Wave' : 'AfriMoney';
+
+    // Hold wallet balance before calling ModemPay.
+    const holdOk = await adminDb.runTransaction(async (tx) => {
+      const userRef = adminDb.collection('users').doc(customerId);
+      const userSnap = await tx.get(userRef);
+      if (!userSnap.exists) throw new Error('Customer not found');
+      const walletBalance = Number((userSnap.data() as { wallet_balance?: number }).wallet_balance || 0);
+      if (walletBalance < amount) throw new Error('Insufficient wallet balance');
+
+      tx.update(userRef, {
+        wallet_balance: Number((walletBalance - amount).toFixed(2)),
+      });
+      tx.update(requestRef, {
+        status: 'Processing',
+        payout_method: payoutLabel,
+        payout_network: method,
+        recipient_phone: cleanPhone,
+        external_ref: requestId,
+        processed_by: processedById,
+        processed_by_name: processedByName,
+        processing_at: new Date().toISOString(),
+      });
+      return true;
+    }).catch((err) => {
+      logger.warn('Withdrawal hold failed', { requestId, err });
+      return false;
+    });
+
+    if (!holdOk) {
+      res.status(400).json({ error: 'Could not hold wallet balance for withdrawal' });
+      return;
+    }
+
     const result = await createTransfer({
       amount,
       recipient: {
-        name: body.recipientName,
-        phone: body.recipientPhone,
-        method: method as ModemPayMethod,
+        name: recipientName,
+        phone: cleanPhone,
+        method: method as ModemPayPayoutNetwork,
       },
       reason: body.reason || `${MERCHANT_NAME} withdrawal`,
-      externalRef: body.externalRef,
-      metadata: body.metadata,
+      externalRef: requestId,
+      metadata: {
+        customer_id: customerId,
+        withdrawal_request_id: requestId,
+        ...(body.metadata || {}),
+      },
     });
+
+    const transfer = result.data as Record<string, unknown>;
+    const transferId = (transfer.id as string | undefined) || null;
+    const transferStatus = String(transfer.status || '').toLowerCase();
+
     if (!result.ok) {
-      res.status(result.status || 502).json({ error: 'ModemPay transfer failed', details: result.data });
+      const upstreamMessage = result.errorMessage || 'ModemPay transfer rejected';
+      await refundWithdrawalHold(requestId, customerId, amount, upstreamMessage);
+      res.status(502).json({
+        error: upstreamMessage,
+        upstreamStatus: result.status,
+        details: result.data,
+        hint: /balance/i.test(upstreamMessage)
+          ? 'The ModemPay payout wallet has insufficient funds. Top up payout balance in your ModemPay dashboard before sending withdrawals.'
+          : undefined,
+      });
       return;
     }
-    res.json({ ok: true, transfer: result.data });
+
+    await requestRef.set({
+      provider_transfer_id: transferId,
+      provider_status: transferStatus || 'processing',
+      updated_at: new Date().toISOString(),
+    }, { merge: true });
+
+    if (transferStatus === 'completed') {
+      await markWithdrawalSettled(requestId, transfer);
+    }
+
+    res.json({
+      ok: true,
+      transferId,
+      status: transferStatus || 'processing',
+      withdrawalRequestId: requestId,
+    });
   } catch (err) {
     logger.error('Payout error', err);
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
@@ -355,7 +477,8 @@ async function processModemPayEvent(event: ModemPayEvent): Promise<void> {
     }
 
     case 'transfer.succeeded': {
-      if (externalRef) await markWithdrawalSettled(externalRef, payload);
+      const transferRef = externalRef || extractExternalRef(payload);
+      if (transferRef) await markWithdrawalSettled(transferRef, payload);
       return;
     }
 
@@ -363,7 +486,8 @@ async function processModemPayEvent(event: ModemPayEvent): Promise<void> {
     case 'transfer.reversed':
     case 'transfer.cancelled':
     case 'transfer.flagged': {
-      if (externalRef) await markWithdrawalFailed(externalRef, eventType, payload);
+      const transferRef = externalRef || extractExternalRef(payload);
+      if (transferRef) await markWithdrawalFailed(transferRef, eventType, payload);
       return;
     }
 
@@ -530,19 +654,54 @@ async function markDepositFailed(externalRef: string, reason: string, payload: R
 }
 
 async function markWithdrawalSettled(externalRef: string, payload: Record<string, unknown>) {
+  const completedAt = new Date().toISOString();
   const ref = adminDb.collection('withdrawal_requests').doc(externalRef);
   await ref.set({
-    status: 'settled',
+    status: 'Completed',
     provider_transfer_id: payload.id || null,
-    settled_at: new Date().toISOString(),
+    provider_status: payload.status || 'completed',
+    completed_at: completedAt,
     raw_payload: payload,
   }, { merge: true }).catch(err => logger.warn('Failed to settle withdrawal', err));
 }
 
+async function refundWithdrawalHold(requestId: string, customerId: string, amount: number, reason: string) {
+  await adminDb.runTransaction(async (tx) => {
+    const userRef = adminDb.collection('users').doc(customerId);
+    const userSnap = await tx.get(userRef);
+    if (userSnap.exists) {
+      const walletBalance = Number((userSnap.data() as { wallet_balance?: number }).wallet_balance || 0);
+      tx.update(userRef, {
+        wallet_balance: Number((walletBalance + amount).toFixed(2)),
+      });
+    }
+    tx.update(adminDb.collection('withdrawal_requests').doc(requestId), {
+      status: 'Failed',
+      failure_reason: reason,
+      failed_at: new Date().toISOString(),
+    });
+  }).catch(err => logger.warn('Failed to refund withdrawal hold', { requestId, err }));
+}
+
 async function markWithdrawalFailed(externalRef: string, reason: string, payload: Record<string, unknown>) {
   const ref = adminDb.collection('withdrawal_requests').doc(externalRef);
+  const snap = await ref.get();
+  if (!snap.exists) {
+    logger.warn('Withdrawal request not found for failure', { externalRef });
+    return;
+  }
+  const data = snap.data() as { user_id?: string; amount?: number; status?: string };
+  if (data.status === 'Failed' || data.status === 'Canceled') return;
+
+  const customerId = String(data.user_id || '');
+  const amount = Number(data.amount || 0);
+  if (customerId && amount > 0 && data.status === 'Processing') {
+    await refundWithdrawalHold(externalRef, customerId, amount, reason);
+    return;
+  }
+
   await ref.set({
-    status: 'failed',
+    status: 'Failed',
     failure_reason: reason,
     failed_at: new Date().toISOString(),
     raw_payload: payload,

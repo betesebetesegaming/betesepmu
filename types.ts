@@ -164,11 +164,15 @@ export interface WithdrawalRequest {
   customerId: string;
   customerName: string;
   amount: number;
-  status: 'Pending' | 'Completed' | 'Canceled';
+  status: 'Pending' | 'Processing' | 'Completed' | 'Failed' | 'Canceled';
   requestedAt: Date;
   completedAt?: Date;
   processedBy?: string; // Vendor/Admin/Supervisor ID
   processedByName?: string;
+  payoutMethod?: 'Cash' | 'Wave' | 'AfriMoney';
+  recipientPhone?: string;
+  providerTransferId?: string;
+  failureReason?: string;
 }
 
 export interface DepositRequest {
