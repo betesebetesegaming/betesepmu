@@ -29,6 +29,11 @@ import { getStorage } from 'firebase/storage';
 import { db, firebaseApp } from './lib/firebase/client';
 import { apiUrl } from './lib/apiUrl';
 import {
+  sendFirebasePhoneOtp,
+  verifyFirebasePhoneOtp,
+  clearFirebasePhoneOtpSession,
+} from './lib/firebase/phoneAuth';
+import {
     Ticket,
     User,
     Race,
@@ -1538,8 +1543,7 @@ export const dbFreshStart = async () => {
 };
 
 // ============================================================================
-// OTP — stubs. Firebase Phone Auth handles real OTP from the client SDK directly.
-// These are kept for compatibility with the old LoginScreen flow.
+// OTP — Firebase Phone Auth (client SDK). Africell Cloud Functions are unused.
 // ============================================================================
 
 export const dbFetchOTPConfig = async (): Promise<OTPConfig | null> => {
@@ -1586,37 +1590,23 @@ export const dbGenerateAndSendOTP = async (
     phone: string,
     forcedCode?: string
 ): Promise<{ success: boolean; message: string; expirySeconds?: number }> => {
-    // Calls the server-side /api/send-otp route, which uses the Africell SMS
-    // gateway to deliver the code. When `forcedCode` is provided (e.g. the
-    // withdrawal code generated when a withdrawal request is created), the SMS
-    // carries that exact code and no hash is persisted — verification is the
-    // caller's responsibility (vendor enters code, system matches against
-    // WithdrawalRequest.code). When `forcedCode` is omitted, the server
-    // generates a fresh 6-digit code and stores a salted SHA-256 hash for
-    // later validation by /api/verify-otp. The plaintext code is never
-    // returned to the client.
+    // Withdrawal codes are shared manually (WhatsApp) — not via Firebase Phone Auth.
+    if (forcedCode) {
+        return {
+            success: false,
+            message: 'Automatic withdrawal SMS is disabled. Share the code via WhatsApp.',
+        };
+    }
+
     try {
-        const payload: { phone: string; code?: string } = { phone };
-        if (forcedCode) payload.code = forcedCode;
-        const res = await fetch(apiUrl('/send-otp'), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-        });
-        const data = await res.json().catch(() => ({} as any));
-        if (!res.ok || !data?.ok) {
-            return {
-                success: false,
-                message: data?.error || `OTP send failed (HTTP ${res.status})`,
-            };
-        }
+        const { expirySeconds } = await sendFirebasePhoneOtp(phone);
         return {
             success: true,
-            message: 'OTP sent via SMS.',
-            expirySeconds: Number(data?.expirySeconds || 300),
+            message: 'Verification code sent via Firebase SMS.',
+            expirySeconds,
         };
     } catch (err: any) {
-        return { success: false, message: err?.message || 'Network error sending OTP' };
+        return { success: false, message: err?.message || 'Could not send verification code.' };
     }
 };
 
@@ -1624,22 +1614,17 @@ export const dbVerifyOTP = async (
     phone: string,
     code: string
 ): Promise<{ success: boolean; message: string; isValid?: boolean }> => {
+    void phone;
     try {
-        const res = await fetch(apiUrl('/verify-otp'), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ phone, code }),
-        });
-        const data = await res.json().catch(() => ({} as any));
-        if (res.ok && data?.ok) {
-            return { success: true, message: 'OTP verified.', isValid: true };
-        }
+        await verifyFirebasePhoneOtp(code);
+        return { success: true, message: 'Phone verified.', isValid: true };
+    } catch (err: any) {
         return {
             success: false,
-            message: data?.error || `OTP verification failed (HTTP ${res.status})`,
+            message: err?.message || 'Invalid or expired verification code.',
             isValid: false,
         };
-    } catch (err: any) {
-        return { success: false, message: err?.message || 'Network error verifying OTP', isValid: false };
     }
 };
+
+export { clearFirebasePhoneOtpSession };

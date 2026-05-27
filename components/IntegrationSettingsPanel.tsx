@@ -441,8 +441,8 @@ export const IntegrationSettingsPanel: React.FC<IntegrationSettingsPanelProps> =
                             value={otpConfig.provider}
                             onChange={(e) => handleOTPChange('provider', e.target.value as OTPConfig['provider'])}
                         >
-                            <option value="builtin">Mock / Development (No SMS Sent)</option>
-                            <option value="africell">Africell SMS Gateway (Basic Auth)</option>
+                            <option value="builtin">Firebase Phone Auth (default)</option>
+                            <option value="africell" disabled>Africell SMS Gateway (disabled)</option>
                             <option value="twilio">Twilio</option>
                             <option value="aws_sns">AWS SNS</option>
                             <option value="custom">Custom Provider</option>
@@ -488,8 +488,8 @@ export const IntegrationSettingsPanel: React.FC<IntegrationSettingsPanelProps> =
 
                 {otpConfig.provider === 'africell' && (
                     <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                        <p className="text-xs text-blue-800 font-semibold">Africell API URL is loaded from environment variable: VITE_AFRICELL_SMS_BASE_URL</p>
-                        <p className="text-[11px] text-blue-700 mt-1">Example: http://IP:Port</p>
+                        <p className="text-xs text-blue-800 font-semibold">Customer signup uses Firebase Phone Auth (built-in SMS).</p>
+                        <p className="text-[11px] text-blue-700 mt-1">Africell gateway is disabled until a cloud-reachable API is available.</p>
                     </div>
                 )}
 

@@ -226,9 +226,9 @@ const SignUpForm: React.FC<{ onSignUp: (name: string, phone: string, password: s
             }
             setNormalizedPhoneState(normalizedPhone);
             setOtpCode('');
-            setOtpExpiresIn(result.expirySeconds || 300);
+            setOtpExpiresIn(result.expirySeconds || 60);
             setStage('otp');
-            setInfo(`We sent a 6-digit code to ${normalizedPhone}. Enter it below to finish creating your account.`);
+            setInfo(`We sent a verification code to ${normalizedPhone}. Enter it below to finish creating your account.`);
         } catch (err: any) {
             setError(err?.message || 'Could not send verification code. Please try again.');
         } finally {
@@ -247,8 +247,8 @@ const SignUpForm: React.FC<{ onSignUp: (name: string, phone: string, password: s
                 setError(result.message || 'Could not resend verification code.');
                 return;
             }
-            setOtpExpiresIn(result.expirySeconds || 300);
-            setInfo(`A new 6-digit code was sent to ${normalizedPhoneState}.`);
+            setOtpExpiresIn(result.expirySeconds || 60);
+            setInfo(`A new verification code was sent to ${normalizedPhoneState}.`);
         } catch (err: any) {
             setError(err?.message || 'Could not resend verification code.');
         } finally {
@@ -272,7 +272,7 @@ const SignUpForm: React.FC<{ onSignUp: (name: string, phone: string, password: s
                 setError(verification.message || 'Invalid or expired code. Please try again.');
                 return;
             }
-            const createdUser = await onSignUp(name, normalizedPhoneState, password, code);
+            const createdUser = await onSignUp(name, normalizedPhoneState, password);
             if (!createdUser) {
                 setError('Unable to create account. Please check your details and try again, or contact support.');
             }
@@ -324,7 +324,7 @@ const SignUpForm: React.FC<{ onSignUp: (name: string, phone: string, password: s
                         value={phoneDigits}
                         onChange={setPhoneDigits}
                     />
-                    <p className="text-[10px] text-gray-500 -mt-2 ml-2">This number will be used for all deposits &amp; withdrawals — we&apos;ll send a verification SMS.</p>
+                    <p className="text-[10px] text-gray-500 -mt-2 ml-2">This number will be used for all deposits &amp; withdrawals — Firebase will send a verification SMS.</p>
 
                     <ModernInput
                         id="signup-password"
@@ -372,7 +372,7 @@ const SignUpForm: React.FC<{ onSignUp: (name: string, phone: string, password: s
                     </div>
                     <ModernInput
                         id="signup-otp"
-                        label="6-digit verification code"
+                        label="Verification code"
                         value={otpCode}
                         onChange={(v) => setOtpCode(v.replace(/\D/g, '').slice(0, 6))}
                         type="text"

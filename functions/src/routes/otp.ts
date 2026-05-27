@@ -83,6 +83,7 @@ export async function sendOtpHandler(req: Request, res: Response): Promise<void>
 
   const url = `${baseUrl.replace(/\/+$/, '')}/api/sendsms?sender=${encodeURIComponent(sender)}&msisdn=${encodeURIComponent(msisdn)}`;
   const basic = Buffer.from(`${username}:${password}`).toString('base64');
+  const smsTimeoutMs = Number(process.env.AFRICELL_SMS_TIMEOUT_MS || 8000);
 
   try {
     const upstream = await fetch(url, {
@@ -92,6 +93,7 @@ export async function sendOtpHandler(req: Request, res: Response): Promise<void>
         Authorization: `Basic ${basic}`,
       },
       body: message,
+      signal: AbortSignal.timeout(smsTimeoutMs),
     });
     const text = await upstream.text();
     const statusMatch = text.match(/<Status>(\d+)<\/Status>/i);
@@ -106,8 +108,17 @@ export async function sendOtpHandler(req: Request, res: Response): Promise<void>
     }
     res.status(502).json({ error: `SMS gateway error (${statusCode}): ${gatewayMessage}`, statusCode });
   } catch (err) {
-    logger.error('SMS dispatch failed', err);
-    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    logger.error('SMS dispatch failed', { url: baseUrl, msisdn, err });
+    const message = err instanceof Error ? err.message : String(err);
+    const timedOut = /timeout|abort|ETIMEDOUT|UND_ERR_CONNECT_TIMEOUT/i.test(message);
+    if (timedOut) {
+      res.status(502).json({
+        error: 'SMS gateway unreachable from cloud (connection timed out). The Africell ESME endpoint on port 5991 is not reachable from Google Cloud — ask Africell to provide a public HTTPS API or whitelist your Cloud Functions egress IP.',
+        detail: message,
+      });
+      return;
+    }
+    res.status(500).json({ error: message });
   }
 }
 

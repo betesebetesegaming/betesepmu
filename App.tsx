@@ -28,7 +28,7 @@ import {
     dbToggleUserLock, dbAdminResetPassword, dbRecalculateAllTicketsSafely,
     dbApplyCustomerDeposit, dbApplyCustomerBalanceAdjustment, dbFreshStart, dbFetchUserBalance,
     dbMigrateLegacyBookedTicketsToActive, dbFetchDepositLogs, dbInsertDepositLog,
-    dbGenerateAndSendOTP, dbFetchOTPConfig, dbVerifyOTP
+    dbGenerateAndSendOTP
 } from './firebaseClient';
 
 const LAZY_CHUNK_RETRY_KEY = 'betese_lazy_chunk_retry';
@@ -1621,7 +1621,7 @@ const AppContent: React.FC = () => {
               if (normalizedPhone) {
                   const otpResult = await dbGenerateAndSendOTP(normalizedPhone, savedRequest.code);
                   if (!otpResult.success) {
-                      alert(`Withdrawal created, but OTP SMS could not be sent automatically. Share code manually via WhatsApp. Reason: ${otpResult.message}`);
+                      alert(`Withdrawal created. Share this code with the vendor via WhatsApp: ${savedRequest.code}`);
                   }
               } else {
                   alert('Withdrawal created. Add a valid phone number on your customer profile to receive OTP by SMS automatically.');
@@ -1703,25 +1703,9 @@ const AppContent: React.FC = () => {
         return null;
     }
 
-    // OTP verification on public customer self-signup.
-    // Africell SMS credentials are placeholders right now, so registration
-    // proceeds without OTP when no code is supplied. When a code IS supplied
-    // (legacy mobile bundles), we still verify it so good clients aren't broken.
-    if (!currentUser && resolvedRole === 'Customer' && normalizedPhone && String(otpCode || '').trim()) {
-        try {
-            const otpConfig = await dbFetchOTPConfig();
-            if (otpConfig?.isEnabled) {
-                const verify = await dbVerifyOTP(normalizedPhone, String(otpCode).trim());
-                if (!verify.success || !verify.isValid) {
-                    alert(verify.message || 'Invalid OTP code.');
-                    return null;
-                }
-            }
-        } catch (otpErr) {
-            console.warn('OTP verification skipped due to error:', otpErr);
-            // OTP service unavailable — fall through and continue registration.
-        }
-    }
+    // Customer self-signup: phone is verified in LoginScreen via Firebase Phone Auth
+    // before onSignUp is called (no server-side OTP check needed here).
+    void otpCode;
 
     if (resolvedRole === 'Customer' && normalizedPhone) {
         const duplicate = (users || []).find(u =>
