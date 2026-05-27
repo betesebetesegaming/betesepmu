@@ -126,10 +126,17 @@ export async function checkoutHandler(req: Request, res: Response): Promise<void
     }).catch(err => logger.warn('RTDB checkout sync failed', err));
 
     if (result.sessionId) {
-      await linkPaymentIntentIndex(result.sessionId, body.externalRef).catch(() => null);
+      await linkPaymentIntentIndex(result.sessionId, body.externalRef)
+        .catch(err => logger.warn('intentIndex link failed', { sessionId: result.sessionId, externalRef: body.externalRef, err }));
+    } else {
+      logger.warn('ModemPay /v1/payments did not return a session id — webhook will rely on hint matching', {
+        externalRef: body.externalRef,
+        raw: result.raw,
+      });
     }
     if (result.paymentLinkId) {
-      await linkPaymentLinkIndex(result.paymentLinkId, body.externalRef).catch(() => null);
+      await linkPaymentLinkIndex(result.paymentLinkId, body.externalRef)
+        .catch(err => logger.warn('linkIndex link failed', { paymentLinkId: result.paymentLinkId, externalRef: body.externalRef, err }));
     }
 
     if (body.customerId && body.externalRef) {
@@ -491,15 +498,18 @@ export async function webhookHandler(req: Request, res: Response): Promise<void>
     return;
   }
 
-  // Always 200 immediately — Modem Pay retries on non-2xx. We finish the
-  // business logic in the background.
-  res.status(200).json({ ok: true });
-
+  // IMPORTANT: process BEFORE responding 200. Cloud Functions Gen 2 runs on
+  // Cloud Run and may freeze the container as soon as the response is sent,
+  // which silently kills any awaited work that runs after `res.send()`. This
+  // is why the dashboard previously showed Success while wallets never got
+  // credited. ModemPay's timeout is generous; finishing under ~10s is safe.
   try {
     await processModemPayEvent(event);
   } catch (err) {
-    logger.error('Async modempay webhook processing failed', { event: event.event, err });
+    logger.error('modempay webhook processing failed', { event: event.event, err });
   }
+
+  res.status(200).json({ ok: true });
 }
 
 async function processModemPayEvent(event: ModemPayEvent): Promise<void> {
@@ -610,6 +620,24 @@ async function handlePaymentIntentCreated(payload: Record<string, unknown>): Pro
     return;
   }
 
+  // 1. RTDB intentIndex: written at checkout creation when ModemPay returned
+  //    the intent id. This is the fast path — it covers the common case where
+  //    /v1/payments echoed the same id back to us.
+  if (!externalRef) {
+    externalRef = await resolveExternalRefByPaymentIntent(intentId);
+  }
+
+  // 2. Firestore: maybe a previous webhook already linked the intent.
+  if (!externalRef) {
+    const bySession = await adminDb.collection('modempay_checkouts')
+      .where('session_id', '==', intentId)
+      .limit(1)
+      .get()
+      .catch(() => null);
+    if (bySession && !bySession.empty) externalRef = bySession.docs[0].id;
+  }
+
+  // 3. Amount + phone hint match against pending checkouts (last resort).
   if (!externalRef) {
     externalRef = await findPendingCheckoutByHints(payload);
   }
@@ -651,6 +679,7 @@ async function handlePaymentIntentCreated(payload: Record<string, unknown>): Pro
 async function findPendingCheckoutByHints(payload: Record<string, unknown>): Promise<string | undefined> {
   const amount = Number(payload.amount || 0);
   const phone = String(payload.customer_phone || payload.account_number || '').replace(/\D/g, '').replace(/^220/, '');
+  const intentId = String(payload.payment_intent_id || payload.payment_intentId || payload.id || '').trim();
   const pending = await adminDb.collection('modempay_checkouts')
     .where('status', '==', 'pending')
     .orderBy('created_at', 'desc')
@@ -661,8 +690,16 @@ async function findPendingCheckoutByHints(payload: Record<string, unknown>): Pro
   if (!pending || pending.empty) return undefined;
 
   for (const doc of pending.docs) {
-    const data = doc.data() as { amount?: number; customer_phone?: string; session_id?: string };
-    if (data.session_id) continue;
+    const data = doc.data() as {
+      amount?: number;
+      customer_phone?: string;
+      session_id?: string;
+      payment_intent_id?: string;
+    };
+    // Skip only if THIS checkout was already linked to a DIFFERENT intent id —
+    // we set session_id at creation to the same id ModemPay returns, so a
+    // matching session_id is a positive signal, not a reason to skip.
+    if (intentId && data.session_id && data.session_id !== intentId && data.payment_intent_id && data.payment_intent_id !== intentId) continue;
     const docPhone = String(data.customer_phone || '').replace(/\D/g, '').replace(/^220/, '');
     const amountMatch = !amount || Math.abs(Number(data.amount || 0) - amount) < 0.01;
     const phoneMatch = !phone || !docPhone || docPhone.endsWith(phone) || phone.endsWith(docPhone);

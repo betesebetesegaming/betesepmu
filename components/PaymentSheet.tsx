@@ -108,16 +108,43 @@ export const PaymentSheet: React.FC<PaymentSheetProps> = ({
   useEffect(() => {
     if (!trackingRef || stage !== 'confirm') return;
     setLiveStatus('Pending');
+    let settled = false;
     const unsub = subscribeDepositById(trackingRef, (record) => {
       if (!record) return;
       const status = String(record.status || 'Pending');
       if (status === 'Approved' || status === 'Rejected') {
+        settled = true;
         setLiveStatus(status as 'Approved' | 'Rejected');
       } else {
         setLiveStatus('Pending');
       }
     });
-    return () => unsub();
+
+    // Safety net: if the deposit is still Pending after 20s (webhook missed,
+    // backend crashed, etc.) poll the reconcile endpoint which asks ModemPay
+    // directly and replays any stored events for this externalRef. Stops as
+    // soon as status flips or after ~3 minutes.
+    let stopped = false;
+    const pollReconcile = async () => {
+      const started = Date.now();
+      await new Promise(r => setTimeout(r, 20000));
+      while (!stopped && !settled && Date.now() - started < 3 * 60 * 1000) {
+        try {
+          await fetch(apiUrl('/modempay-reconcile-deposit'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ externalRef: trackingRef }),
+          });
+        } catch { /* ignore — RTDB subscription will catch the update */ }
+        await new Promise(r => setTimeout(r, 10000));
+      }
+    };
+    pollReconcile();
+
+    return () => {
+      stopped = true;
+      unsub();
+    };
   }, [trackingRef, stage]);
 
   const handleTouchStart = (e: React.TouchEvent) => {
