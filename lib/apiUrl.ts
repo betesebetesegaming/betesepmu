@@ -14,6 +14,8 @@ const DEFAULT_BASE = 'https://us-central1-betesepmu-4ffc7.cloudfunctions.net';
 
 /** Legacy kebab-case route → camelCase Cloud Function export name. */
 const ROUTE_TO_FUNCTION: Record<string, string> = {
+  '/send-otp': 'sendOtp',
+  '/verify-otp': 'verifyOtp',
   '/modempay-checkout': 'modempayCheckout',
   '/wave-payment': 'wavePayment',
   '/aps-payment': 'apsPayment',

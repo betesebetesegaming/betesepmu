@@ -89,7 +89,7 @@ Trigger a redeploy from Vercel after adding the keys so they take effect.
 ### 2. Backend → Firebase
 
 Copy `functions/.env.example` to `functions/.env` and fill in server-only
-credentials (ModemPay). Firebase loads that file
+credentials (ModemPay and Africell SMS for the dormant OTP functions). Firebase loads that file
 automatically on deploy — no `firebase functions:secrets:set` step needed.
 
 ```powershell
@@ -150,6 +150,8 @@ https://us-central1-betesepmu-4ffc7.cloudfunctions.net
 
 | Function | Route (legacy) | Purpose |
 | --- | --- | --- |
+| `sendOtp` | `POST /send-otp` | Africell SMS OTP (deployed; signup not wired until gateway is fixed) |
+| `verifyOtp` | `POST /verify-otp` | Verifies hashed Africell OTP |
 | `modempayCheckout` | `POST /modempay-checkout` | Unified hosted-checkout (wave / aps / afrimoney / qmoney / card) |
 | `wavePayment` | `POST /wave-payment` | Alias for wave |
 | `apsPayment` | `POST /aps-payment` | Alias for aps |
