@@ -48,7 +48,7 @@ const methodMeta: Record<Method, { logo: string; label: string; sub: string; tin
     powered: true,
   },
   QMoney: {
-    logo: '/payment-logos/qcell.png',
+    logo: '/payment-logos/qmoney.svg',
     label: 'QMoney',
     sub: 'Pay from your Qcell QMoney wallet',
     tint: 'text-emerald-800',

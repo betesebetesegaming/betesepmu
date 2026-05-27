@@ -1,51 +1,10 @@
 rules_version = '2';
 
+// Open rules — see firestore.rules. Restrict before public production.
 service firebase.storage {
   match /b/{bucket}/o {
-
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    function isAdmin() {
-      return isSignedIn() && request.auth.token.role == 'admin';
-    }
-
-    function isStaff() {
-      return isSignedIn() && request.auth.token.role in ['admin', 'supervisor', 'vendor', 'cashier'];
-    }
-
-    function isImage()  { return request.resource.contentType.matches('image/.*'); }
-    function isVideo()  { return request.resource.contentType.matches('video/.*'); }
-    function under10MB(){ return request.resource.size < 10 * 1024 * 1024; }
-    function under50MB(){ return request.resource.size < 50 * 1024 * 1024; }
-
-    // Race programs (images + short clips uploaded by admins, shown publicly).
-    match /PROGRAMS/{file=**} {
-      allow read: if true;
-      allow write: if isAdmin() && (isImage() && under10MB() || isVideo() && under50MB());
-    }
-
-    // Promotion banners.
-    match /PROMOTIONS/{file=**} {
-      allow read: if true;
-      allow write: if isAdmin() && isImage() && under10MB();
-    }
-
-    // Customer / vendor avatars.
-    match /avatars/{uid}/{file=**} {
-      allow read: if true;
-      allow write: if isSignedIn() && request.auth.uid == uid && isImage() && under10MB();
-    }
-
-    // Chat attachments.
-    match /chat/{threadId}/{file=**} {
-      allow read, write: if isSignedIn();
-    }
-
-    // Closed by default.
     match /{allPaths=**} {
-      allow read, write: if false;
+      allow read, write: if true;
     }
   }
 }

@@ -1,8 +1,11 @@
 /**
  * Maps legacy route paths (e.g. `/modempay-checkout`) to individual Firebase
- * Cloud Function names. Each endpoint is its own function:
+ * Cloud Function export names. Each endpoint is its own function:
  *
- *   https://<region>-<project-id>.cloudfunctions.net/<functionName>
+ *   https://<region>-<project-id>.cloudfunctions.net/<exportName>
+ *
+ * Gen 2 URLs on cloudfunctions.net match the camelCase export name in
+ * `functions/src/index.ts` (e.g. `modempayCheckout`, not `modempaycheckout`).
  *
  * Set NEXT_PUBLIC_API_BASE_URL in Vercel (and in `.env.local` for `next dev`)
  * to the functions root (no trailing `/api`). Emulator example:
@@ -12,7 +15,7 @@
 
 const DEFAULT_BASE = 'https://us-central1-betesepmu-4ffc7.cloudfunctions.net';
 
-/** Legacy kebab-case route → camelCase Cloud Function export name. */
+/** Legacy kebab-case route → Cloud Function export name. */
 const ROUTE_TO_FUNCTION: Record<string, string> = {
   '/send-otp': 'sendOtp',
   '/verify-otp': 'verifyOtp',
