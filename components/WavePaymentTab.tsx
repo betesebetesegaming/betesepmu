@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { User } from '../types';
 import { WaveLogo } from './WaveLogo';
+import { apiUrl } from '../lib/apiUrl';
 
 interface Props {
   customers: User[];
@@ -38,7 +39,7 @@ export const WavePaymentTab: React.FC<Props> = ({ customers, onDeposit }) => {
       const externalRef = generateRef();
       const cleanPhone = phone.replace(/^\+220/, '').replace(/\D/g, '');
 
-      const res = await fetch('/api/wave-payment', {
+      const res = await fetch(apiUrl('/wave-payment'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

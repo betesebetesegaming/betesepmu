@@ -1,8 +1,10 @@
 /* eslint-disable no-undef */
-const CACHE_NAME = 'betese-pmu-v17';
+// Bumped from v17 → v18 to evict the legacy entry for /index.html that no
+// longer exists under the Next.js App Router. Old browsers will reinstall
+// this fresh SW and drop the stale 404-causing cache entries.
+const CACHE_NAME = 'betese-pmu-v18';
 const URLS_TO_CACHE = [
   '/',
-  '/index.html',
   '/manifest.json',
 ];
 

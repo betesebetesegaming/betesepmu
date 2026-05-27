@@ -1,5 +1,5 @@
-// Pure pari-mutuel payout math.
-// No database deps — wired up to Firestore by the calculate-pmu-payouts Cloud Function.
+// Pure pari-mutuel payout math (mirror of lib/pmu/calculate.ts).
+// No database deps — invoked from the calculate-pmu-payouts handler.
 
 export const BET_TYPES = [
   'gagnant',

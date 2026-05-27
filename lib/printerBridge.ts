@@ -20,6 +20,7 @@
  * unrecognised scheme just stays on our page silently.
  */
 
+import { apiUrl } from './apiUrl';
 import { ThermerEntry, encodeThermerPayload } from './thermerReceipt';
 
 export type PrintResult = {
@@ -33,8 +34,7 @@ const buildResponseUrl = (entries: ThermerEntry[]): string => {
     throw new Error('printViaThermer must be called in the browser');
   }
   const data = encodeThermerPayload(entries);
-  const origin = window.location.origin.replace(/\/$/, '');
-  return `${origin}/api/print-receipt?data=${encodeURIComponent(data)}`;
+  return `${apiUrl('/print-receipt')}?data=${encodeURIComponent(data)}`;
 };
 
 const buildBluetoothPrintUrl = (responseUrl: string): string =>

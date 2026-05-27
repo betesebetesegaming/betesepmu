@@ -81,7 +81,67 @@ export const normalizeGambiaPhone = (input: string): string | null => {
         return `+221${local}`;
     }
 
+    // Guinea-Bissau: +245 followed by 9 digits.
+    if (digits.startsWith('245') && digits.length === 12) {
+        const local = digits.slice(3);
+        if (!/^\d{9}$/.test(local)) return null;
+        return `+245${local}`;
+    }
+
     return null;
+};
+
+export interface SupportedCountry {
+    code: 'GM' | 'SN' | 'GW';
+    name: string;
+    flag: string;
+    dialCode: string; // e.g. "+220"
+    nationalDigits: number;
+    placeholder: string; // example local number
+}
+
+/**
+ * Countries the login + sign-up flows accept. Keep Gambia first — it is the
+ * default selection in the country picker.
+ */
+export const SUPPORTED_COUNTRIES: SupportedCountry[] = [
+    {
+        code: 'GM',
+        name: 'The Gambia',
+        flag: '🇬🇲',
+        dialCode: '+220',
+        nationalDigits: 7,
+        placeholder: '7701234',
+    },
+    {
+        code: 'SN',
+        name: 'Senegal',
+        flag: '🇸🇳',
+        dialCode: '+221',
+        nationalDigits: 9,
+        placeholder: '771234567',
+    },
+    {
+        code: 'GW',
+        name: 'Guinea-Bissau',
+        flag: '🇬🇼',
+        dialCode: '+245',
+        nationalDigits: 9,
+        placeholder: '955123456',
+    },
+];
+
+/**
+ * Combine a country and a national-digit string into the canonical
+ * +CCNNNNNN format. Returns null when the digit count doesn't match.
+ */
+export const composeInternationalPhone = (
+    country: SupportedCountry,
+    nationalDigits: string,
+): string | null => {
+    const cleaned = String(nationalDigits || '').replace(/\D/g, '');
+    if (cleaned.length !== country.nationalDigits) return null;
+    return `${country.dialCode}${cleaned}`;
 };
 
 export const isValidGambiaPhone = (input: string): boolean => {

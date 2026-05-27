@@ -1981,12 +1981,12 @@ const AppContent: React.FC = () => {
 
               if (missingServerEnv) {
                   try {
-                      // Emergency fallback: keep upload functional even when Netlify server env vars are not configured.
+                      // Emergency fallback: keep upload functional even when Firebase Storage write rejects the upload.
                       image.url = await fileToDataUrl(file);
                       await dbAddProgramImage(image);
                       setProgramImages(prev => [image, ...prev]);
                       alert('Media uploaded successfully.');
-                      console.warn('Program media uploaded in emergency fallback mode. Configure Netlify realtimeDb_URL and realtimeDb_SERVICE_ROLE_KEY for full storage mode.');
+                      console.warn('Program media stored inline as a data URL — verify Firebase Storage rules in storage.rules.');
                       return;
                   } catch (fallbackErr: any) {
                       alert('Failed to upload media: server env missing and fallback failed. ' + String(fallbackErr?.message || fallbackErr));

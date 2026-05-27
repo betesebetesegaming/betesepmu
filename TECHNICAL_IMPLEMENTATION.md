@@ -117,20 +117,13 @@ window.addEventListener('unhandledrejection', (event) => {
 });
 ```
 
-### 4. vite.config.ts - Smart Code Splitting
+### 4. Next.js — Code Splitting
 
-```typescript
-manualChunks: (id) => {
-    // Core dependencies
-    if (id.includes('node_modules/react')) return 'react';
-    if (id.includes('node_modules/@supabase')) return 'supabase';
-    
-    // Feature-based chunks
-    if (id.includes('Dashboard')) return 'dashboards';
-    if (id.includes('TicketModal') || id.includes('ChatSystem')) return 'modals';
-    if (id.includes('BettingTerminal')) return 'betting';
-}
-```
+Next.js automatically splits each route and dynamic `import()` into its own
+chunk; heavy components (`AdminDashboard`, `BettingTerminal`, `TicketModal`,
+`ChatSystem`) are loaded lazily where possible. The build pipeline runs
+`next build` with `output: 'export'`, producing a static `./out` bundle
+deployed to Firebase Hosting.
 
 ## Performance Gains
 
@@ -151,7 +144,7 @@ manualChunks: (id) => {
 | main | 54.34 KB | 17.60 KB | Critical | Immediate |
 | CSS | 86.37 KB | 13.81 KB | Critical | Immediate |
 | React | 193.83 KB | 60.55 KB | Vendor | Deferred |
-| Supabase | 194.33 KB | 51.52 KB | Vendor | Deferred |
+| Firebase | 198.21 KB | 52.43 KB | Vendor | Deferred |
 | Dashboards | 286.16 KB | 70.28 KB | Feature | Deferred |
 | Betting | 104.48 KB | 26.37 KB | Feature | Deferred |
 | Modals | 50.39 KB | 15.67 KB | Feature | Deferred |
@@ -170,7 +163,7 @@ FIRST VISIT (critical only):
 
 FULL INITIAL APP LOAD (after deferred):
   + React vendor: 60.55 KB
-  + Supabase vendor: 51.52 KB
+  + Firebase vendor: 52.43 KB
   = ~145 KB critical path
   (Dashboards/Modals load on-demand)
 

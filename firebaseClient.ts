@@ -27,6 +27,7 @@ import {
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { getStorage } from 'firebase/storage';
 import { db, firebaseApp } from './lib/firebase/client';
+import { apiUrl } from './lib/apiUrl';
 import {
     Ticket,
     User,
@@ -715,7 +716,7 @@ export const dbFindUser = async (usernameOrPhone: string): Promise<User | null> 
 };
 
 export const dbAuthenticateViaFunction = async (username: string, password: string): Promise<User | null> => {
-    // Migrated: instead of calling a Netlify function, look up the user directly via Firestore.
+    // Migrated: look up the user directly via Firestore (used to call a server function).
     // Firebase Auth integration (email/password, phone, Google) lives in Phase 4 / lib/firebase/client.ts.
     const user = await dbFindUser(username);
     if (!user) return null;
@@ -1597,7 +1598,7 @@ export const dbGenerateAndSendOTP = async (
     try {
         const payload: { phone: string; code?: string } = { phone };
         if (forcedCode) payload.code = forcedCode;
-        const res = await fetch('/api/send-otp', {
+        const res = await fetch(apiUrl('/send-otp'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
@@ -1624,7 +1625,7 @@ export const dbVerifyOTP = async (
     code: string
 ): Promise<{ success: boolean; message: string; isValid?: boolean }> => {
     try {
-        const res = await fetch('/api/verify-otp', {
+        const res = await fetch(apiUrl('/verify-otp'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ phone, code }),

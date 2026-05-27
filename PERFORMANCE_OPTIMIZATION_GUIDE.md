@@ -29,7 +29,7 @@ Your app has been optimized for faster loading on Android with significantly red
 
 ### 5. **Improved Build Optimization**
 - ✅ Better code splitting (separate chunks for dashboards, betting, modals)
-- ✅ React and Supabase in separate vendor chunks
+- ✅ React and Firebase in separate vendor chunks
 - ✅ ES2020 target for better compression
 - ✅ Asset inline limit optimization
 

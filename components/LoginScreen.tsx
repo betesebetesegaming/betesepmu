@@ -1,11 +1,116 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { User, Role } from '../types';
 import { Logo } from './Logo';
 import { RulesModal } from './RulesModal';
 import { useLanguage } from '../LanguageContext';
-import { normalizeGambiaPhone } from '../utils';
-import { dbFindUser, dbAuthenticateViaFunction } from '../firebaseClient';
+import {
+    composeInternationalPhone,
+    SUPPORTED_COUNTRIES,
+    type SupportedCountry,
+} from '../utils';
+import {
+    dbFindUser,
+    dbAuthenticateViaFunction,
+    dbGenerateAndSendOTP,
+    dbVerifyOTP,
+} from '../firebaseClient';
+
+/**
+ * Country picker + national-number input. Renders a dropdown of supported
+ * countries (flag emoji + dial code) on the left and a digit-only input on
+ * the right. The input's max length and placeholder change with the selected
+ * country.
+ *
+ * `value` and `onChange` are the national digits (no country code, no spaces).
+ * Pair this with `composeInternationalPhone(country, value)` on submit.
+ */
+interface CountryPhoneInputProps {
+    id: string;
+    label: string;
+    country: SupportedCountry;
+    onCountryChange: (c: SupportedCountry) => void;
+    value: string;
+    onChange: (digits: string) => void;
+    autoFocus?: boolean;
+}
+
+const CountryPhoneInput: React.FC<CountryPhoneInputProps> = ({
+    id,
+    label,
+    country,
+    onCountryChange,
+    value,
+    onChange,
+    autoFocus,
+}) => {
+    const handleNationalChange = (raw: string) => {
+        const digits = raw.replace(/\D/g, '').slice(0, country.nationalDigits);
+        onChange(digits);
+    };
+
+    const handleCountrySelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const next = SUPPORTED_COUNTRIES.find((c) => c.code === e.target.value);
+        if (!next) return;
+        onCountryChange(next);
+        // Trim any digits that now exceed the new country's allowed length.
+        if (value.length > next.nationalDigits) {
+            onChange(value.slice(0, next.nationalDigits));
+        }
+    };
+
+    return (
+        <div className="space-y-1">
+            <label htmlFor={id} className="block text-sm font-medium text-gray-700 ml-1">
+                {label}
+            </label>
+            <div className="flex gap-2">
+                <div className="relative">
+                    <select
+                        aria-label="Country"
+                        value={country.code}
+                        onChange={handleCountrySelect}
+                        className="appearance-none rounded-xl border border-gray-300 bg-gray-50 py-3 pl-3 pr-8 text-sm font-semibold focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
+                    >
+                        {SUPPORTED_COUNTRIES.map((c) => (
+                            <option key={c.code} value={c.code}>
+                                {c.flag} {c.dialCode}
+                            </option>
+                        ))}
+                    </select>
+                    <svg
+                        aria-hidden="true"
+                        className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                    >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
+                    </svg>
+                </div>
+                <input
+                    id={id}
+                    name={id}
+                    type="tel"
+                    inputMode="numeric"
+                    autoComplete="tel-national"
+                    autoFocus={autoFocus}
+                    maxLength={country.nationalDigits}
+                    value={value}
+                    onChange={(e) => handleNationalChange(e.target.value)}
+                    placeholder={country.placeholder}
+                    className="flex-1 block w-full rounded-xl border-gray-300 bg-gray-50 text-gray-900 focus:ring-2 focus:ring-green-500 focus:border-green-500 sm:text-sm py-3 px-4 transition-all tracking-widest font-semibold"
+                    required
+                />
+            </div>
+            <p className="text-[11px] text-gray-500 font-semibold ml-1">
+                {country.flag} {country.name} — enter {country.nationalDigits} digits, e.g.{' '}
+                <span className="font-mono">{country.placeholder}</span>.
+            </p>
+        </div>
+    );
+};
 
 interface LoginScreenProps {
   onLogin: (user: User) => void;
@@ -47,18 +152,46 @@ const ModernInput: React.FC<{
 );
 
 const SignUpForm: React.FC<{ onSignUp: (name: string, phone: string, password: string, otpCode?: string) => Promise<User | null>; onBack: () => void; users: User[]; onOpenRules: () => void; }> = ({ onSignUp, onBack, users, onOpenRules }) => {
+    type Stage = 'details' | 'otp';
+    const [stage, setStage] = useState<Stage>('details');
     const [name, setName] = useState('');
-    const [phone, setPhone] = useState('');
+    const [country, setCountry] = useState<SupportedCountry>(SUPPORTED_COUNTRIES[0]);
+    const [phoneDigits, setPhoneDigits] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
+    const [otpCode, setOtpCode] = useState('');
+    const [normalizedPhoneState, setNormalizedPhoneState] = useState('');
+    const [otpExpiresIn, setOtpExpiresIn] = useState<number>(0);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [info, setInfo] = useState('');
     const [error, setError] = useState('');
     const { t } = useLanguage();
 
-    const handleSignUp = async (e: React.FormEvent) => {
+    const knownPhonesByCountry = useMemo(() => {
+        const known = new Set<string>();
+        for (const u of users) {
+            for (const c of SUPPORTED_COUNTRIES) {
+                const normalised = composeInternationalPhone(c, (u.phone || '').replace(/\D/g, ''));
+                if (normalised) known.add(normalised);
+            }
+        }
+        return known;
+    }, [users]);
+
+    // OTP expiry countdown.
+    useEffect(() => {
+        if (stage !== 'otp' || otpExpiresIn <= 0) return;
+        const timer = window.setInterval(() => {
+            setOtpExpiresIn((prev) => (prev > 0 ? prev - 1 : 0));
+        }, 1000);
+        return () => window.clearInterval(timer);
+    }, [stage, otpExpiresIn]);
+
+    const handleRequestOtp = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
-        if (!name || !phone || !password || !confirmPassword) {
+        setInfo('');
+        if (!name || !phoneDigits || !password || !confirmPassword) {
             setError(t('error_fill_fields'));
             return;
         }
@@ -71,22 +204,75 @@ const SignUpForm: React.FC<{ onSignUp: (name: string, phone: string, password: s
             return;
         }
 
-        const normalizedPhone = normalizeGambiaPhone(phone || '');
+        const normalizedPhone = composeInternationalPhone(country, phoneDigits);
         if (!normalizedPhone) {
-            setError('Use valid phone: Gambia local 7 digits or +220XXXXXXX; Senegal must be +221XXXXXXXXX only.');
+            setError(
+                `Enter your ${country.nationalDigits}-digit ${country.name} mobile number (e.g. ${country.placeholder}).`,
+            );
             return;
         }
 
-        if (users.some(u => normalizeGambiaPhone(u.phone || '') === normalizedPhone)) {
+        if (knownPhonesByCountry.has(normalizedPhone)) {
             setError('This phone number is already registered.');
             return;
         }
 
         setIsSubmitting(true);
         try {
-            // OTP/SMS provider is not ready (Africell credentials still placeholders),
-            // so registration bypasses OTP. The parent wrapper handles auto-login.
-            const createdUser = await onSignUp(name, normalizedPhone, password, undefined);
+            const result = await dbGenerateAndSendOTP(normalizedPhone);
+            if (!result.success) {
+                setError(result.message || 'Could not send verification code. Please try again.');
+                return;
+            }
+            setNormalizedPhoneState(normalizedPhone);
+            setOtpCode('');
+            setOtpExpiresIn(result.expirySeconds || 300);
+            setStage('otp');
+            setInfo(`We sent a 6-digit code to ${normalizedPhone}. Enter it below to finish creating your account.`);
+        } catch (err: any) {
+            setError(err?.message || 'Could not send verification code. Please try again.');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleResendOtp = async () => {
+        if (!normalizedPhoneState) return;
+        setError('');
+        setInfo('');
+        setIsSubmitting(true);
+        try {
+            const result = await dbGenerateAndSendOTP(normalizedPhoneState);
+            if (!result.success) {
+                setError(result.message || 'Could not resend verification code.');
+                return;
+            }
+            setOtpExpiresIn(result.expirySeconds || 300);
+            setInfo(`A new 6-digit code was sent to ${normalizedPhoneState}.`);
+        } catch (err: any) {
+            setError(err?.message || 'Could not resend verification code.');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleVerifyAndSignUp = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+        setInfo('');
+        const code = otpCode.trim();
+        if (!/^\d{4,8}$/.test(code)) {
+            setError('Enter the 6-digit code we sent to your phone.');
+            return;
+        }
+        setIsSubmitting(true);
+        try {
+            const verification = await dbVerifyOTP(normalizedPhoneState, code);
+            if (!verification.success || !verification.isValid) {
+                setError(verification.message || 'Invalid or expired code. Please try again.');
+                return;
+            }
+            const createdUser = await onSignUp(name, normalizedPhoneState, password, code);
             if (!createdUser) {
                 setError('Unable to create account. Please check your details and try again, or contact support.');
             }
@@ -97,69 +283,127 @@ const SignUpForm: React.FC<{ onSignUp: (name: string, phone: string, password: s
         }
     };
 
+    const minutes = Math.floor(otpExpiresIn / 60);
+    const seconds = otpExpiresIn % 60;
+
     return (
          <div className="animate-fade-in-up">
             <div className="text-center mb-6">
                 <h1 className="text-3xl font-extrabold text-gray-900">{t('create_account')}</h1>
-                <p className="mt-2 text-sm text-gray-600">{t('join_message')}</p>
+                <p className="mt-2 text-sm text-gray-600">
+                    {stage === 'details' ? t('join_message') : 'Verify the code we just sent to your phone.'}
+                </p>
             </div>
-            
+
             {error && (
                 <div className="mb-4 p-3 bg-red-50 border-l-4 border-red-500 text-red-700 text-sm rounded">
                     <p className="font-bold">Error</p>
                     <p>{error}</p>
                 </div>
             )}
-
-            <form className="space-y-5" onSubmit={handleSignUp}>
-                <ModernInput 
-                    id="signup-name" 
-                    label={t('full_name')} 
-                    value={name} 
-                    onChange={setName}
-                    icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>}
-                />
-                <ModernInput 
-                    id="signup-phone" 
-                    label="Mobile Money Number (User ID)" 
-                    value={phone} 
-                    onChange={setPhone} 
-                    type="tel"
-                    icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>}
-                />
-                <p className="text-[10px] text-gray-500 -mt-3 ml-2">This number will be used for all deposits & withdrawals.</p>
-
-                <ModernInput 
-                    id="signup-password" 
-                    label={t('password')} 
-                    value={password} 
-                    onChange={setPassword} 
-                    type="password"
-                    icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>}
-                />
-                <ModernInput 
-                    id="signup-confirm-password" 
-                    label={t('confirm_password')} 
-                    value={confirmPassword} 
-                    onChange={setConfirmPassword} 
-                    type="password"
-                    icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>}
-                />
-
-                <div className="text-xs text-gray-500 text-center px-4">
-                    {t('agree_terms')} <button type="button" onClick={onOpenRules} className="text-green-600 hover:text-green-800 font-semibold underline">{t('official_rules_link')}</button>.
-                    <br/><span className="text-red-500 font-bold">{t('must_be_18')}</span>
+            {info && !error && (
+                <div className="mb-4 p-3 bg-green-50 border-l-4 border-green-500 text-green-800 text-sm rounded">
+                    <p>{info}</p>
                 </div>
+            )}
 
-                <button 
-                    type="submit" 
-                    disabled={isSubmitting}
-                    className="w-full flex justify-center py-3.5 px-4 border border-transparent rounded-xl shadow-lg text-sm font-bold text-white bg-gradient-to-r from-betese-green to-green-600 hover:from-green-700 hover:to-green-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transform transition hover:-translate-y-0.5"
-                >
-                    {isSubmitting ? 'Please wait...' : t('open_account')}
-                </button>
-            </form>
-            
+            {stage === 'details' && (
+                <form className="space-y-5" onSubmit={handleRequestOtp}>
+                    <ModernInput
+                        id="signup-name"
+                        label={t('full_name')}
+                        value={name}
+                        onChange={setName}
+                        icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>}
+                    />
+                    <CountryPhoneInput
+                        id="signup-phone"
+                        label="Mobile Money Number (User ID)"
+                        country={country}
+                        onCountryChange={setCountry}
+                        value={phoneDigits}
+                        onChange={setPhoneDigits}
+                    />
+                    <p className="text-[10px] text-gray-500 -mt-2 ml-2">This number will be used for all deposits &amp; withdrawals — we&apos;ll send a verification SMS.</p>
+
+                    <ModernInput
+                        id="signup-password"
+                        label={t('password')}
+                        value={password}
+                        onChange={setPassword}
+                        type="password"
+                        icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>}
+                    />
+                    <ModernInput
+                        id="signup-confirm-password"
+                        label={t('confirm_password')}
+                        value={confirmPassword}
+                        onChange={setConfirmPassword}
+                        type="password"
+                        icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>}
+                    />
+
+                    <div className="text-xs text-gray-500 text-center px-4">
+                        {t('agree_terms')} <button type="button" onClick={onOpenRules} className="text-green-600 hover:text-green-800 font-semibold underline">{t('official_rules_link')}</button>.
+                        <br/><span className="text-red-500 font-bold">{t('must_be_18')}</span>
+                    </div>
+
+                    <button
+                        type="submit"
+                        disabled={isSubmitting}
+                        className="w-full flex justify-center py-3.5 px-4 border border-transparent rounded-xl shadow-lg text-sm font-bold text-white bg-gradient-to-r from-betese-green to-green-600 hover:from-green-700 hover:to-green-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transform transition hover:-translate-y-0.5"
+                    >
+                        {isSubmitting ? 'Sending code…' : 'Send verification code'}
+                    </button>
+                </form>
+            )}
+
+            {stage === 'otp' && (
+                <form className="space-y-5" onSubmit={handleVerifyAndSignUp}>
+                    <div className="rounded-xl bg-gray-50 p-3 border border-gray-200 text-sm">
+                        <p className="font-semibold text-gray-700">{normalizedPhoneState}</p>
+                        <button
+                            type="button"
+                            onClick={() => { setStage('details'); setError(''); setInfo(''); }}
+                            className="mt-1 text-xs text-blue-600 hover:underline"
+                        >
+                            Change phone number
+                        </button>
+                    </div>
+                    <ModernInput
+                        id="signup-otp"
+                        label="6-digit verification code"
+                        value={otpCode}
+                        onChange={(v) => setOtpCode(v.replace(/\D/g, '').slice(0, 6))}
+                        type="text"
+                        icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>}
+                    />
+                    <div className="flex items-center justify-between text-xs text-gray-500">
+                        <span>
+                            {otpExpiresIn > 0
+                                ? `Code expires in ${minutes}:${seconds.toString().padStart(2, '0')}`
+                                : 'Code expired — request a new one.'}
+                        </span>
+                        <button
+                            type="button"
+                            onClick={handleResendOtp}
+                            disabled={isSubmitting}
+                            className="font-semibold text-betese-green hover:underline disabled:opacity-50"
+                        >
+                            Resend code
+                        </button>
+                    </div>
+
+                    <button
+                        type="submit"
+                        disabled={isSubmitting}
+                        className="w-full flex justify-center py-3.5 px-4 border border-transparent rounded-xl shadow-lg text-sm font-bold text-white bg-gradient-to-r from-betese-green to-green-600 hover:from-green-700 hover:to-green-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transform transition hover:-translate-y-0.5"
+                    >
+                        {isSubmitting ? 'Verifying…' : t('open_account')}
+                    </button>
+                </form>
+            )}
+
             <div className="mt-6 text-center">
                 <button onClick={onBack} type="button" className="text-sm font-medium text-gray-600 hover:text-betese-dark flex items-center justify-center gap-2 w-full">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
@@ -171,7 +415,8 @@ const SignUpForm: React.FC<{ onSignUp: (name: string, phone: string, password: s
 };
 
 const LoginForm: React.FC<{ onLogin: (user: User) => void; users: User[]; onSwitchToSignUp: () => void; onOpenRules: () => void; }> = ({ onLogin, users, onSwitchToSignUp, onOpenRules }) => {
-    const [username, setUsername] = useState('');
+    const [country, setCountry] = useState<SupportedCountry>(SUPPORTED_COUNTRIES[0]);
+    const [phoneDigits, setPhoneDigits] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const { t } = useLanguage();
@@ -180,25 +425,36 @@ const LoginForm: React.FC<{ onLogin: (user: User) => void; users: User[]; onSwit
         e.preventDefault();
         setError('');
 
-        if (!username || !password) {
+        if (!phoneDigits || !password) {
             setError(t('error_fill_fields'));
             return;
         }
 
-        const rawUsername = username.trim();
-        const lowerCaseUsername = rawUsername.toLowerCase();
-        const normalizedInputPhone = normalizeGambiaPhone(rawUsername);
+        const normalizedPhone = composeInternationalPhone(country, phoneDigits);
+        if (!normalizedPhone) {
+            setError(
+                `Enter your ${country.nationalDigits}-digit ${country.name} mobile number (e.g. ${country.placeholder}).`,
+            );
+            return;
+        }
         const trimmedPassword = password.trim();
 
         // Fast path: preloaded users array. Only used when password matches —
         // if mismatched we still fall through to the server check below, since
         // the local cache may be stale (admin password reset, etc.).
-        const localMatch = users.find(u =>
-            u.name.toLowerCase() === lowerCaseUsername ||
-            u.id.toLowerCase() === lowerCaseUsername ||
-            (u.phone && normalizeGambiaPhone(u.phone) === normalizedInputPhone) ||
-            normalizeGambiaPhone(u.id) === normalizedInputPhone
-        );
+        const localMatch = users.find((u) => {
+            const compareToPhone = (val: string | undefined) => {
+                if (!val) return false;
+                // Try every supported country prefix so admins-created accounts
+                // (which may live with a different country code) still match.
+                for (const c of SUPPORTED_COUNTRIES) {
+                    const normalised = composeInternationalPhone(c, val.replace(/\D/g, ''));
+                    if (normalised && normalised === normalizedPhone) return true;
+                }
+                return val === normalizedPhone;
+            };
+            return compareToPhone(u.phone) || compareToPhone(u.id);
+        });
 
         if (localMatch && (localMatch.password || '').trim() === trimmedPassword) {
             if (localMatch.isLocked) {
@@ -212,7 +468,7 @@ const LoginForm: React.FC<{ onLogin: (user: User) => void; users: User[]; onSwit
         // Fallback 1: direct database query (catches users not yet in preloaded array)
         let user: User | null = null;
         try {
-            user = await dbFindUser(rawUsername);
+            user = await dbFindUser(normalizedPhone);
         } catch {
             user = null;
         }
@@ -228,7 +484,7 @@ const LoginForm: React.FC<{ onLogin: (user: User) => void; users: User[]; onSwit
 
         // Fallback 2: server-side API route (bypasses client-side RLS/grant issues)
         try {
-            const serverUser = await dbAuthenticateViaFunction(rawUsername, trimmedPassword);
+            const serverUser = await dbAuthenticateViaFunction(normalizedPhone, trimmedPassword);
             if (serverUser) {
                 if (serverUser.isLocked) {
                     setError('Your account is locked. Please contact a supervisor.');
@@ -238,11 +494,8 @@ const LoginForm: React.FC<{ onLogin: (user: User) => void; users: User[]; onSwit
                 return;
             }
         } catch (serviceErr: any) {
-            // Server or DB error — not a wrong-password situation.
-            // If we already had a local match with wrong password, prefer the
-            // simple credentials message so the customer can retry.
             if (localMatch || user) {
-                setError('Invalid username or password.');
+                setError('Invalid phone number or password.');
                 return;
             }
             const msg = String(serviceErr?.message || '').trim();
@@ -254,14 +507,14 @@ const LoginForm: React.FC<{ onLogin: (user: User) => void; users: User[]; onSwit
             return;
         }
 
-        setError('Invalid username or password.');
+        setError('Invalid phone number or password.');
     };
 
     return (
         <div className="animate-fade-in-up">
             <div className="text-center mb-8">
                 <div className="flex justify-center mb-4 transform hover:scale-105 transition-transform duration-500">
-                    <Logo className="text-4xl drop-shadow-md" />
+                    <Logo className="h-20 w-auto drop-shadow-md" />
                 </div>
                 <h2 className="text-2xl font-bold text-gray-800">{t('welcome')}</h2>
                 <p className="text-gray-500 text-sm">{t('login_title')}</p>
@@ -275,25 +528,26 @@ const LoginForm: React.FC<{ onLogin: (user: User) => void; users: User[]; onSwit
             )}
 
             <form className="space-y-6" onSubmit={handleLogin}>
-                <ModernInput 
-                    id="username" 
-                    label="Account ID / Mobile Number / Username" 
-                    value={username} 
-                    onChange={setUsername}
-                    icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>}
+                <CountryPhoneInput
+                    id="phone"
+                    label="Mobile number"
+                    country={country}
+                    onCountryChange={setCountry}
+                    value={phoneDigits}
+                    onChange={setPhoneDigits}
+                    autoFocus
                 />
-                <p className="-mt-4 text-[11px] text-gray-500 font-semibold">You can sign in with your account ID, mobile number, or username.</p>
-                <ModernInput 
-                    id="password" 
-                    label={t('password')} 
-                    value={password} 
-                    onChange={setPassword} 
+                <ModernInput
+                    id="password"
+                    label={t('password')}
+                    value={password}
+                    onChange={setPassword}
                     type="password"
                     icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>}
                 />
-                
-                <button 
-                    type="submit" 
+
+                <button
+                    type="submit"
                     className="w-full flex justify-center py-3.5 px-4 border border-transparent rounded-xl shadow-lg text-sm font-bold text-white bg-gradient-to-r from-betese-green to-green-600 hover:from-green-700 hover:to-green-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transform transition hover:-translate-y-0.5"
                 >
                     {t('sign_in')}
@@ -344,9 +598,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, users, onSign
       <RulesModal isOpen={isRulesOpen} onClose={() => setIsRulesOpen(false)} />
       
       <div className="relative z-10 w-full max-w-[420px] bg-white/95 backdrop-blur-md rounded-3xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)] overflow-hidden border border-white/20">
-        {/* Top Accent Bar */}
-        <div className="h-2 w-full bg-gradient-to-r from-yellow-400 via-betese-green to-green-800"></div>
-        
         <div className="p-8 sm:p-10">
             {isSigningUp ? (
                 <SignUpForm onSignUp={handleSignUpAndLogin} onBack={() => setIsSigningUp(false)} users={users} onOpenRules={() => setIsRulesOpen(true)} />

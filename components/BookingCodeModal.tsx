@@ -49,7 +49,7 @@ export const BookingCodeModal: React.FC<BookingCodeModalProps> = ({ ticket, onCl
               </div>
               <div className="print:text-black print:bg-white bg-white">
                   <div className="text-center mb-4 border-b-2 border-dashed border-black pb-2">
-                    <div className="flex justify-center"><Logo className="text-4xl" /></div>
+                    <div className="flex justify-center"><Logo className="h-16 w-auto" /></div>
                     <h2 className="text-2xl font-bold text-betese-dark">Bet Booking Confirmation</h2>
                   </div>
                   <p className="text-gray-600 mt-2">Pay Cash at any Betese vendor using this code to print your official ticket.</p>

@@ -37,10 +37,10 @@
     "node_modules",
     "android",
     "dist",
-    "supabase",
+    "out",
+    "functions",
     "scripts",
     "index.tsx",
-    "vite.config.ts",
     "capacitor.config.ts"
   ]
 }

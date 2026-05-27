@@ -3,8 +3,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { User } from '../types';
 import { normalizeGambiaPhone } from '../utils';
+import { apiUrl } from '../lib/apiUrl';
 
-type Method = 'AfriMoney' | 'Wave' | 'APS';
+type Method = 'AfriMoney' | 'Wave' | 'APS' | 'QMoney' | 'Card';
 
 interface PaymentSheetProps {
   isOpen: boolean;
@@ -44,6 +45,24 @@ const methodMeta: Record<Method, { logo: string; label: string; sub: string; tin
     tint: 'text-indigo-800',
     border: 'border-indigo-400',
     bg: 'bg-indigo-50',
+    powered: true,
+  },
+  QMoney: {
+    logo: '/payment-logos/qcell.png',
+    label: 'QMoney',
+    sub: 'Pay from your Qcell QMoney wallet',
+    tint: 'text-emerald-800',
+    border: 'border-emerald-400',
+    bg: 'bg-emerald-50',
+    powered: true,
+  },
+  Card: {
+    logo: '/payment-logos/card.png',
+    label: 'Debit / Credit Card',
+    sub: 'Visa, Mastercard and local cards',
+    tint: 'text-slate-800',
+    border: 'border-slate-400',
+    bg: 'bg-slate-50',
     powered: true,
   },
 };
@@ -101,12 +120,17 @@ export const PaymentSheet: React.FC<PaymentSheetProps> = ({
     setMessage(null);
   };
 
-  const handleModemPay = async (provider: 'wave' | 'aps' | 'afrimoney', numAmount: number, cleanPhone: string, externalRef: string) => {
-    const res = await fetch('/api/modempay-checkout', {
+  const handleModemPay = async (
+    provider: 'wave' | 'aps' | 'afrimoney' | 'qmoney' | 'card',
+    numAmount: number,
+    cleanPhone: string,
+    externalRef: string,
+  ) => {
+    const res = await fetch(apiUrl('/modempay-checkout'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        provider,
+        method: provider,
         amount: numAmount,
         customerId: user.id,
         customerName: user.name,
@@ -120,8 +144,14 @@ export const PaymentSheet: React.FC<PaymentSheetProps> = ({
       throw new Error(data.error || 'Could not start checkout');
     }
     window.open(data.checkoutUrl, '_blank', 'noopener,noreferrer');
-    const methodLabel: Method = provider === 'wave' ? 'Wave' : provider === 'aps' ? 'APS' : 'AfriMoney';
-    onDepositRequest(numAmount, methodLabel, cleanPhone);
+    const labelByProvider: Record<typeof provider, Method> = {
+      wave: 'Wave',
+      aps: 'APS',
+      afrimoney: 'AfriMoney',
+      qmoney: 'QMoney',
+      card: 'Card',
+    };
+    onDepositRequest(numAmount, labelByProvider[provider], cleanPhone);
     return { transactionId: externalRef };
   };
 
@@ -145,7 +175,12 @@ export const PaymentSheet: React.FC<PaymentSheetProps> = ({
     const cleanPhone = normalizedPhone.replace(/^\+220/, '').replace(/\D/g, '');
 
     try {
-      const providerKey: 'wave' | 'aps' | 'afrimoney' = method === 'Wave' ? 'wave' : method === 'APS' ? 'aps' : 'afrimoney';
+      const providerKey: 'wave' | 'aps' | 'afrimoney' | 'qmoney' | 'card' =
+        method === 'Wave' ? 'wave'
+        : method === 'APS' ? 'aps'
+        : method === 'QMoney' ? 'qmoney'
+        : method === 'Card' ? 'card'
+        : 'afrimoney';
       await handleModemPay(providerKey, numAmount, cleanPhone, normalizedPhone);
       setMessage({
         ok: true,
@@ -290,7 +325,10 @@ export const PaymentSheet: React.FC<PaymentSheetProps> = ({
 
               <div>
                 <label className="block text-xs font-black uppercase tracking-widest text-gray-500 mb-1">
-                  {method === 'AfriMoney' ? 'AfriMoney phone' : 'Phone (for receipt)'}
+                  {method === 'AfriMoney' ? 'AfriMoney phone'
+                    : method === 'QMoney' ? 'QMoney phone'
+                    : method === 'Card' ? 'Phone (for receipt)'
+                    : 'Phone (for receipt)'}
                 </label>
                 <input
                   type="tel"

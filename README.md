@@ -2,174 +2,199 @@
 <img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
 </div>
 
-# Run and deploy your AI Studio app
+# Betese PMU
 
-This contains everything you need to run your app locally.
+Next.js front-end + Firebase backend for the Betese PMU horse-betting platform.
 
-View your app in AI Studio: https://ai.studio/apps/8a0a6433-a001-4676-ac57-90372e4ae581
+| Layer | Stack |
+| --- | --- |
+| Web app | Next.js 15 (static export) |
+| Mobile | Capacitor (Android APK in `android/`) |
+| Auth | Firebase Auth |
+| Database | Firestore + Realtime Database |
+| Storage | Firebase Cloud Storage |
+| Backend | Firebase Cloud Functions v2 (Node 20, Express) |
+| Payments | Modem Pay (Wave / APS / AfriMoney / QMoney / Card) |
+| SMS / OTP | Africell SMS gateway |
 
 ## Printer Support
 
-**Supported Thermal Printers:**
-- ✅ **Sunmi built-in** - Native AIDL service (recommended for Sunmi v2Pro)
-- ✅ **Mate Bluetooth Printer** - External Bluetooth thermal printer
-- ✅ **Bluetooth Thermal Print** - Generic Bluetooth printers
-- ✅ **RawBT** - RawBT Android app support
-- ✅ **Android native** - System print dialog fallback
+- ✅ **Sunmi built-in** — Native AIDL service (recommended for Sunmi v2Pro)
+- ✅ **Mate Bluetooth Printer** — External Bluetooth thermal printer
+- ✅ **Bluetooth Thermal Print** — Generic Bluetooth printers
+- ✅ **RawBT** — RawBT Android app support
+- ✅ **Android native** — System print dialog fallback
 
-**Setup Guide:** See [MATE_BLUETOOTH_PRINTER_SETUP.md](docs/MATE_BLUETOOTH_PRINTER_SETUP.md) for Sunmi v2Pro with Mate app integration.
+Setup guide: [MATE_BLUETOOTH_PRINTER_SETUP.md](docs/MATE_BLUETOOTH_PRINTER_SETUP.md).
 
-## Run Locally
+## Run locally
 
-**Prerequisites:**  Node.js
+Prerequisites: **Node 20**, Firebase CLI (`npm install -g firebase-tools`).
 
+```powershell
+# Front-end
+npm install
+copy .env.local.example .env.local   # then fill in the blanks
+npm run dev                          # Next.js dev server on :3000
+```
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+To exercise the backend locally use the Firebase emulator suite (functions +
+Firestore + RTDB + Storage + Auth):
 
-## Sunmi Performance Benchmark
+```powershell
+cd functions
+npm install
+npm run build
+cd ..
+firebase emulators:start
+# Emulator UI:    http://localhost:4000
+# Functions URL:  http://localhost:5001/betesepmu-4ffc7/us-central1/api
+```
 
-Use this to compare startup and memory between normal APK and lite APK on a real Sunmi terminal.
+Point the front-end at the emulator by setting `NEXT_PUBLIC_API_BASE_URL`
+in `.env.local`:
 
-Prerequisites:
+```
+NEXT_PUBLIC_API_BASE_URL=http://localhost:5001/betesepmu-4ffc7/us-central1/api
+```
 
-- USB debugging enabled on the device
-- `adb` available in terminal (`adb devices` must show one device)
+## Deploy
 
-Commands:
+The front-end ships to **Vercel** (via GitHub auto-deploy on push to `main`).
+Only the backend (Cloud Functions + Firestore / RTDB / Storage rules) ships to
+**Firebase**.
 
-- Full build package benchmark:
-   `npm run sunmi:bench:full`
-- Lite build package benchmark:
-   `npm run sunmi:bench:lite`
-- No-device proxy benchmark (build + APK internals comparison):
-   `npm run sunmi:bench:proxy`
-- Local macrobenchmark on connected Android:
-   `npm run sunmi:bench:macro`
+### 1. Front-end → Vercel
 
-The script runs cold starts, prints per-run `ThisTime`, `TotalTime`, `WaitTime`, and a `dumpsys meminfo` PSS snapshot, then shows averages.
+The Vercel project is already wired to the GitHub repo. On every push to
+`main` Vercel runs `next build` and rolls out automatically.
 
-Optional direct script usage:
+Set these env vars in **Vercel → Project Settings → Environment Variables**
+(Production + Preview):
 
-`powershell -ExecutionPolicy Bypass -File scripts/sunmi-benchmark.ps1 -PackageName com.betese.pmu.poslite -Runs 7 -ClearData`
+| Key | Value |
+| --- | --- |
+| `NEXT_PUBLIC_API_BASE_URL` | `https://us-central1-betesepmu-4ffc7.cloudfunctions.net` |
+| `NEXT_PUBLIC_FIREBASE_API_KEY` | `AIzaSyBc9gCvUCGXxscMGVLwaOJHv9I75E_3pns` |
+| `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | `betesepmu-4ffc7.firebaseapp.com` |
+| `NEXT_PUBLIC_FIREBASE_DATABASE_URL` | `https://betesepmu-4ffc7-default-rtdb.firebaseio.com` |
+| `NEXT_PUBLIC_FIREBASE_PROJECT_ID` | `betesepmu-4ffc7` |
+| `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` | `betesepmu-4ffc7.firebasestorage.app` |
+| `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | `564957052051` |
+| `NEXT_PUBLIC_FIREBASE_APP_ID` | `1:564957052051:web:5df2b5268d17d6ec786166` |
+| `NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID` | `G-7LJGW9ED0R` |
+| `NEXT_PUBLIC_MODEMPAY_PUBLIC_KEY` | `pk_live_4831da13e43954a46b9ef60cdabf02e7502b1814ee140d8497bff80af5bb51a6` |
 
-If you do not have Sunmi connected over ADB, use:
+Trigger a redeploy from Vercel after adding the keys so they take effect.
 
-`powershell -ExecutionPolicy Bypass -File scripts/sunmi-proxy-benchmark.ps1`
+### 2. Backend → Firebase
 
-This generates:
+Copy `functions/.env.example` to `functions/.env` and fill in server-only
+credentials (ModemPay, Africell SMS, OTP salt). Firebase loads that file
+automatically on deploy — no `firebase functions:secrets:set` step needed.
 
-`docs/sunmi-proxy-benchmark-report.md`
+```powershell
+npm install -g firebase-tools
 
-## Remote Real-Device Benchmark (No USB)
+firebase login
+firebase use betesepmu-4ffc7
 
-A GitHub Actions workflow is included to run Android Macrobenchmark on Firebase Test Lab:
+cd functions
+copy .env.example .env
+npm install
+npm run build
+cd ..
 
-`.github/workflows/android-macrobenchmark.yml`
+firebase deploy --only functions,firestore,storage,database
+```
 
-Set these repository secrets before running:
+After the first deploy, register the webhook URL in the Modem Pay dashboard
+(Developers → Webhooks):
 
-- `GCP_PROJECT_ID`
-- `GCP_SA_KEY` (service account JSON with Firebase Test Lab permissions)
+```
+https://us-central1-betesepmu-4ffc7.cloudfunctions.net/modempayWebhook
+```
 
-How to run:
+Paste the webhook secret into `functions/.env` as `MODEMPAY_WEBHOOK_SECRET`, then
+redeploy:
 
-1. Open Actions tab in GitHub.
-2. Run `Android Macrobenchmark (Firebase Test Lab)`.
-3. Choose target: `full` or `lite`.
-4. Keep defaults (`oriole`, API `33`) or pick another device/API.
+```powershell
+firebase deploy --only functions
+```
 
-The workflow builds both APK variants, runs macrobenchmark startup tests remotely, and stores results in Firebase Test Lab under:
+> The support-AI endpoint uses **Vertex AI Gemini** via Application Default
+> Credentials — no API key needed. Just grant the Cloud Functions service
+> account the **Vertex AI User** role once (see below).
 
-`macrobenchmark/<github-run-id>-<target>`
+### 3. One-time GCP setup (Vertex AI access)
 
-## PMU Pari-Mutuel Payout Engine
+```bash
+gcloud projects add-iam-policy-binding betesepmu-4ffc7 \
+  --member="serviceAccount:betesepmu-4ffc7@appspot.gserviceaccount.com" \
+  --role="roles/aiplatform.user"
+```
 
-This repository now includes a full PMU-style payout module with:
+Or use the GCP Console → IAM → grant `roles/aiplatform.user` to the default
+App Engine service account.
 
-- Separate pools per bet type (`gagnant`, `place`, `couple`, `tierce`, `quarte`, `quinte`, `multi4`-`multi7`)
-- Configurable payout percentages (for example 75% or 80%)
-- Per bet-type ON/OFF switch (`is_enabled`) so you can choose what to use each day
-- Per bet-type mode switch (`calculation_mode`): `automatic` or `manual`
-- Split rules by winning level
-- Winner classification priority (`order` -> `disorder` -> `bonus`)
-- Jackpot carry forward when no winners
-- Minimum dividend and rounding controls
-- Live preview and finalize in back office
+## Firebase Functions endpoints
 
-### 1) Run SQL schema in Supabase
+Each route is its own Cloud Function. Public base URL:
 
-Execute:
+```
+https://us-central1-betesepmu-4ffc7.cloudfunctions.net
+```
 
-`supabase/pmu_schema.sql`
+| Function | Route (legacy) | Purpose |
+| --- | --- | --- |
+| `sendOtp` | `POST /send-otp` | Africell SMS OTP, hashed in Firestore |
+| `verifyOtp` | `POST /verify-otp` | Verifies the hashed OTP |
+| `modempayCheckout` | `POST /modempay-checkout` | Unified hosted-checkout (wave / aps / afrimoney / qmoney / card) |
+| `wavePayment` | `POST /wave-payment` | Alias for wave |
+| `apsPayment` | `POST /aps-payment` | Alias for aps |
+| `afrimoneyPayment` | `POST /afrimoney-payment` | Alias for afrimoney |
+| `qmoneyPayment` | `POST /qmoney-payment` | Alias for qmoney |
+| `cardPayment` | `POST /card-payment` | Alias for card |
+| `modempayPayout` | `POST /modempay-payout` | Wallet → mobile-money payout (used for withdrawals) |
+| `modempayRefund` | `POST /modempay-refund` | Refund a transaction |
+| `modempayBalances` | `GET /modempay-balances` | Available + payout balances |
+| `modempayTransactions` | `GET /modempay-transactions/:id` | Single transaction lookup |
+| `modempayWebhook` | `POST /modempay-webhook` | HMAC-SHA512 verified webhook receiver |
+| `calculatePmuPayouts` | `POST /calculate-pmu-payouts` | Pari-mutuel dividend engine |
+| `programMediaUpload` | `POST /program-media-upload` | Race-programme media upload to Cloud Storage |
+| `programMediaInsert` | `POST /program-media-insert` | Firestore registration for uploaded media |
+| `supportAi` | `POST /support-ai` | Vertex AI Gemini support diagnostics |
+| `printReceipt` | `GET /print-receipt` | Thermer Browser-Print response endpoint |
 
-This now creates both:
+## PMU pari-mutuel payout engine
 
-- PMU payout engine tables (`bets`, `results`, `config`, `payouts`, `jackpot_carry`)
-- Core app tables and transaction functions (`users`, `races`, `tickets`, `deposit_requests`, `withdrawal_requests`, `promotions`, `program_images`, `payment_configs`, `chat_threads`, `chat_messages`, `manual_bet_orders`)
+The pure dividend math is in [`lib/pmu/calculate.ts`](lib/pmu/calculate.ts) and
+runs server-side via `POST /api/calculate-pmu-payouts`. Features:
 
-It also installs DB transaction functions used by the app:
+- Separate pools per bet type (`gagnant`, `place`, `couple`, `tierce`, `quarte`,
+  `quinte`, `multi4`–`multi7`).
+- Configurable payout percentages (e.g. 75% / 80%).
+- Per bet-type on/off (`is_enabled`) and per bet-type mode (`automatic` /
+  `manual`).
+- Split rules by winning level.
+- Winner classification priority (`order` → `disorder` → `bonus`).
+- Jackpot carry forward when no winners.
+- Minimum dividend + rounding controls.
 
-- `payout_ticket_transaction`
-- `approve_deposit_transaction`
-- `pay_for_booking_transaction`
-- `process_withdrawal_request_transaction`
-- `mark_message_thread_read`
+In the Admin dashboard, open **PMU Dividend Engine** to preview and finalise
+payouts; see [`docs/pmu-api.md`](docs/pmu-api.md) for details.
 
-### 1.1) Required frontend env vars
+## Sunmi performance benchmark
 
-Create `.env.local` with:
+See [`PERFORMANCE_OPTIMIZATION_GUIDE.md`](PERFORMANCE_OPTIMIZATION_GUIDE.md) for
+detailed startup / memory benchmarks on Sunmi terminals.
 
-`VITE_SUPABASE_URL=your_supabase_project_url`
+Quick commands:
 
-`VITE_SUPABASE_ANON_KEY=your_supabase_anon_key`
+- `npm run sunmi:bench:full`  — full build benchmark
+- `npm run sunmi:bench:lite`  — lite build benchmark
+- `npm run sunmi:bench:proxy` — build + APK internals comparison (no device)
+- `npm run sunmi:bench:macro` — macrobenchmark on a connected Android
 
-Without these values, the app will run disconnected from Supabase.
-
-### 2) Next.js API routes (Vercel)
-
-All server functionality runs as Next.js Route Handlers under `app/api/*`:
-
-- `app/api/calculate-pmu-payouts/route.ts` — pari-mutuel payout math
-- `app/api/support-ai/route.ts` — AI diagnosis endpoint for the Support panel
-- `app/api/program-media-upload/route.ts` — program media upload fallback
-- `app/api/program-media-insert/route.ts` — program media insert fallback
-- `app/api/modempay-checkout/route.ts` — Wave / APS / AfriMoney hosted checkout (via ModemPay)
-- `app/api/authenticate-user/route.ts` — server-side auth fallback
-- `app/api/print-receipt/route.ts` — Thermer Browser-Print response endpoint
-
-Required Vercel environment variables:
-
-- `OPENAI_API_KEY` (required for AI diagnosis in Support panel)
-- `OPENAI_MODEL` (optional, default: `gpt-4o-mini`)
-- `MODEMPAY_SECRET_KEY` / `MODEMPAY_PUBLIC_KEY` (for Wave / APS / AfriMoney checkout)
-- Firebase service-account env (`FIREBASE_*`) for server-side reads
-
-Optional frontend override:
-
-- `VITE_SUPPORT_AI_WEBHOOK` (defaults to `/api/support-ai` if not set)
-
-### 3) Admin back-office payout box
-
-In Admin dashboard, open:
-
-`PMU Dividend Engine`
-
-You can:
-
-- Enter result positions
-- Click `CALCULATE (Preview)` to see payout by type/level
-- Click `FINALIZE PAYOUTS` to store payouts and jackpot carry
-- Turn specific bet types ON/OFF before calculation
-- Choose manual or automatic per bet type before calculation
-- Edit payout percentages and split ratios
-- Apply manual dividend overrides
-
-### API details
-
-See:
-
-`docs/pmu-api.md`
+A GitHub Actions workflow under `.github/workflows/android-macrobenchmark.yml`
+runs the same benchmark on Firebase Test Lab.

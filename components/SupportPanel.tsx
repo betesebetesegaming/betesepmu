@@ -1,5 +1,6 @@
 
 import React, { useState, useRef } from 'react';
+import { apiUrl } from '../lib/apiUrl';
 
 interface SupportPanelProps {
     onRecalculateAllTickets?: () => Promise<void>;
@@ -70,7 +71,7 @@ export const SupportPanel: React.FC<SupportPanelProps> = ({ onRecalculateAllTick
         setAiDiagnosis(null);
 
         const snapshot = collectLocalSnapshot();
-        const aiWebhookUrl = (import.meta as any)?.env?.VITE_SUPPORT_AI_WEBHOOK || '/api/support-ai';
+        const aiWebhookUrl = apiUrl('/support-ai');
 
         try {
             if (aiWebhookUrl) {

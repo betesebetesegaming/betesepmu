@@ -1,0 +1,23 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "presence": {
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+
+    "race_clocks": {
+      ".read": true,
+      ".write": "auth != null && (auth.token.role === 'admin' || auth.token.role === 'supervisor')"
+    },
+
+    "live_ticker": {
+      ".read": true,
+      ".write": "auth != null && (auth.token.role === 'admin' || auth.token.role === 'supervisor')"
+    }
+  }
+}
