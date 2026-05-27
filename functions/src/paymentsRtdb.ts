@@ -41,6 +41,8 @@ export type RtdbWithdrawalRecord = {
 export type RtdbCheckoutRecord = {
   external_ref: string;
   session_id?: string | null;
+  payment_link_id?: string | null;
+  intent_secret?: string | null;
   method?: string;
   amount?: number;
   customer_id?: string | null;
@@ -51,10 +53,36 @@ export type RtdbCheckoutRecord = {
   completed_at?: string | null;
   failed_at?: string | null;
   failure_reason?: string | null;
+  provider_transaction_id?: string | null;
 };
 
 function rtdbRef() {
   return getDatabase(ensureAdminApp()).ref();
+}
+
+/** O(1) lookup: payment_intent_id → BETESE-* external ref */
+export async function linkPaymentIntentIndex(paymentIntentId: string, externalRef: string): Promise<void> {
+  if (!paymentIntentId || !externalRef) return;
+  await rtdbRef().child(`payments/intentIndex/${paymentIntentId}`).set(externalRef);
+}
+
+export async function resolveExternalRefByPaymentIntent(paymentIntentId: string): Promise<string | undefined> {
+  if (!paymentIntentId) return undefined;
+  const snap = await rtdbRef().child(`payments/intentIndex/${paymentIntentId}`).get();
+  const value = snap.val();
+  return typeof value === 'string' && value.startsWith('BETESE-') ? value : undefined;
+}
+
+export async function linkPaymentLinkIndex(paymentLinkId: string, externalRef: string): Promise<void> {
+  if (!paymentLinkId || !externalRef) return;
+  await rtdbRef().child(`payments/linkIndex/${paymentLinkId}`).set(externalRef);
+}
+
+export async function resolveExternalRefByPaymentLink(paymentLinkId: string): Promise<string | undefined> {
+  if (!paymentLinkId) return undefined;
+  const snap = await rtdbRef().child(`payments/linkIndex/${paymentLinkId}`).get();
+  const value = snap.val();
+  return typeof value === 'string' && value.startsWith('BETESE-') ? value : undefined;
 }
 
 export async function syncDepositToRtdb(record: RtdbDepositRecord): Promise<void> {
@@ -106,5 +134,14 @@ export async function patchWithdrawalOnRtdb(
 }
 
 export async function syncCheckoutToRtdb(record: RtdbCheckoutRecord): Promise<void> {
-  await rtdbRef().child(`payments/checkouts/${record.external_ref}`).set(record);
+  const updates: Record<string, unknown> = {
+    [`payments/checkouts/${record.external_ref}`]: record,
+  };
+  if (record.session_id) {
+    updates[`payments/intentIndex/${record.session_id}`] = record.external_ref;
+  }
+  if (record.payment_link_id) {
+    updates[`payments/linkIndex/${record.payment_link_id}`] = record.external_ref;
+  }
+  await rtdbRef().update(updates);
 }

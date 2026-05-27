@@ -143,9 +143,14 @@ export async function createCheckoutSession(input: CreateCheckoutInput) {
     (inner.id as string | undefined) ||
     null;
 
+  const intentSecret = (inner.intent_secret as string | undefined) || null;
+  const paymentLinkId =
+    (inner.payment_link_id as string | undefined) ||
+    (checkoutUrl?.match(/checkout\.modempay\.com\/([a-f0-9-]+)/i)?.[1] ?? null);
+
   const apiOk = ok && envelope.status !== false && !!checkoutUrl;
 
-  return { ok: apiOk, status, checkoutUrl, sessionId, raw: data };
+  return { ok: apiOk, status, checkoutUrl, sessionId, paymentLinkId, intentSecret, raw: data };
 }
 
 // -----------------------------------------------------------------------------

@@ -47,6 +47,22 @@
         { "fieldPath": "event_type", "order": "ASCENDING" },
         { "fieldPath": "received_at", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "modempay_checkouts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "modempay_checkouts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "session_id", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

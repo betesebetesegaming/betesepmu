@@ -19,6 +19,10 @@ import {
   syncCheckoutToRtdb,
   syncDepositToRtdb,
   patchWithdrawalOnRtdb,
+  linkPaymentIntentIndex,
+  linkPaymentLinkIndex,
+  resolveExternalRefByPaymentIntent,
+  resolveExternalRefByPaymentLink,
   type RtdbDepositRecord,
 } from '../paymentsRtdb';
 
@@ -96,6 +100,8 @@ export async function checkoutHandler(req: Request, res: Response): Promise<void
     await adminDb.collection('modempay_checkouts').doc(body.externalRef).set({
       external_ref: body.externalRef,
       session_id: result.sessionId,
+      payment_link_id: result.paymentLinkId || null,
+      intent_secret: result.intentSecret || null,
       method: provider,
       amount,
       customer_id: body.customerId || null,
@@ -108,6 +114,8 @@ export async function checkoutHandler(req: Request, res: Response): Promise<void
     await syncCheckoutToRtdb({
       external_ref: body.externalRef,
       session_id: result.sessionId || null,
+      payment_link_id: result.paymentLinkId || null,
+      intent_secret: result.intentSecret || null,
       method: provider,
       amount,
       customer_id: body.customerId || null,
@@ -116,6 +124,13 @@ export async function checkoutHandler(req: Request, res: Response): Promise<void
       status: 'pending',
       created_at: createdAt,
     }).catch(err => logger.warn('RTDB checkout sync failed', err));
+
+    if (result.sessionId) {
+      await linkPaymentIntentIndex(result.sessionId, body.externalRef).catch(() => null);
+    }
+    if (result.paymentLinkId) {
+      await linkPaymentLinkIndex(result.paymentLinkId, body.externalRef).catch(() => null);
+    }
 
     if (body.customerId && body.externalRef) {
       const pendingDeposit: RtdbDepositRecord = {
@@ -489,7 +504,7 @@ export async function webhookHandler(req: Request, res: Response): Promise<void>
 
 async function processModemPayEvent(event: ModemPayEvent): Promise<void> {
   const eventType = String(event?.event || '');
-  const payload = (event?.payload || {}) as Record<string, unknown>;
+  const payload = normalizeModemPayPayload((event?.payload || {}) as Record<string, unknown>);
 
   // 1. Persist raw event for audit.
   await adminDb.collection('modempay_events').add({
@@ -497,6 +512,12 @@ async function processModemPayEvent(event: ModemPayEvent): Promise<void> {
     payload,
     received_at: new Date().toISOString(),
   }).catch(err => logger.warn('Failed to log modempay event', err));
+
+  // 2. Link payment_intent.created → BETESE ref BEFORE charge.succeeded arrives.
+  if (eventType === 'payment_intent.created') {
+    await handlePaymentIntentCreated(payload);
+    return;
+  }
 
   const depositRef = await resolveDepositExternalRef(payload);
   const transferRef = extractTransferExternalRef(payload) || depositRef;
@@ -506,11 +527,16 @@ async function processModemPayEvent(event: ModemPayEvent): Promise<void> {
     case 'payment_intent.successful':
     case 'payment_intent.succeeded':
     case 'payment.succeeded': {
-      if (!depositRef) {
-        logger.warn(`${eventType} missing deposit externalRef`, payload);
+      const ref = depositRef || await resolveDepositExternalRef(payload, true);
+      if (!ref) {
+        logger.error(`${eventType} could not resolve deposit externalRef`, {
+          payment_intent_id: payload.payment_intent_id,
+          transaction_reference: payload.transaction_reference,
+          metadata: payload.metadata,
+        });
         return;
       }
-      await markDepositCompleted(depositRef, payload);
+      await markDepositCompleted(ref, payload);
       return;
     }
 
@@ -521,12 +547,15 @@ async function processModemPayEvent(event: ModemPayEvent): Promise<void> {
     case 'payment_intent.expired':
     case 'payment_intent.failed':
     case 'payment.failed': {
-      if (depositRef) await markDepositFailed(depositRef, eventType, payload);
+      const ref = depositRef || await resolveDepositExternalRef(payload, true);
+      if (ref) await markDepositFailed(ref, eventType, payload);
+      else logger.warn(`${eventType} could not resolve deposit externalRef`, payload);
       return;
     }
 
     case 'transfer.succeeded': {
       if (transferRef) await markWithdrawalSettled(transferRef, payload);
+      else logger.warn('transfer.succeeded missing withdrawal ref', payload);
       return;
     }
 
@@ -535,16 +564,26 @@ async function processModemPayEvent(event: ModemPayEvent): Promise<void> {
     case 'transfer.cancelled':
     case 'transfer.flagged': {
       if (transferRef) await markWithdrawalFailed(transferRef, eventType, payload);
+      else logger.warn(`${eventType} missing withdrawal ref`, payload);
+      return;
+    }
+
+    case 'charge.created':
+    case 'charge.updated': {
+      // Link provider charge id → checkout for later lookups.
+      const ref = depositRef || await resolveDepositExternalRef(payload, true);
+      if (ref && payload.id) {
+        await adminDb.collection('modempay_checkouts').doc(ref).set({
+          provider_transaction_id: payload.id,
+          payment_intent_id: payload.payment_intent_id || null,
+        }, { merge: true }).catch(() => null);
+      }
       return;
     }
 
     case 'customer.created':
     case 'customer.updated':
     case 'customer.deleted':
-    case 'payment_intent.created':
-    case 'charge.created':
-    case 'charge.updated':
-      // Informational — already audited above.
       return;
 
     default:
@@ -552,49 +591,153 @@ async function processModemPayEvent(event: ModemPayEvent): Promise<void> {
   }
 }
 
+/** Flatten nested ModemPay payloads (some events wrap fields under `data`). */
+function normalizeModemPayPayload(raw: Record<string, unknown>): Record<string, unknown> {
+  const nested = raw.data as Record<string, unknown> | undefined;
+  if (nested && typeof nested === 'object') {
+    return { ...nested, ...raw, metadata: raw.metadata || nested.metadata };
+  }
+  return raw;
+}
+
+/** When payment_intent.created fires, link intent id → our BETESE-* checkout id. */
+async function handlePaymentIntentCreated(payload: Record<string, unknown>): Promise<void> {
+  const intentId = String(payload.id || payload.payment_intent_id || '').trim();
+  let externalRef = extractExternalRef(payload);
+
+  if (!intentId) {
+    logger.warn('payment_intent.created missing intent id', payload);
+    return;
+  }
+
+  if (!externalRef) {
+    externalRef = await findPendingCheckoutByHints(payload);
+  }
+  if (!externalRef) {
+    logger.warn('payment_intent.created missing externalRef', { intentId, metadata: payload.metadata });
+    return;
+  }
+
+  await adminDb.collection('modempay_checkouts').doc(externalRef).set({
+    session_id: intentId,
+    payment_intent_id: intentId,
+    external_ref: externalRef,
+    status: 'pending',
+    linked_at: new Date().toISOString(),
+  }, { merge: true });
+
+  await linkPaymentIntentIndex(intentId, externalRef);
+
+  const checkoutSnap = await adminDb.collection('modempay_checkouts').doc(externalRef).get();
+  const checkout = checkoutSnap.data() as Record<string, unknown> | undefined;
+
+  await syncCheckoutToRtdb({
+    external_ref: externalRef,
+    session_id: intentId,
+    payment_link_id: (checkout?.payment_link_id as string) || null,
+    method: (checkout?.method as string) || undefined,
+    amount: Number(checkout?.amount || payload.amount || 0) || undefined,
+    customer_id: (checkout?.customer_id as string) || null,
+    customer_phone: (checkout?.customer_phone as string) || null,
+    customer_name: (checkout?.customer_name as string) || null,
+    status: 'pending',
+    created_at: (checkout?.created_at as string) || new Date().toISOString(),
+  }).catch(err => logger.warn('RTDB payment_intent.created sync failed', err));
+
+  logger.info('Linked payment_intent to checkout', { intentId, externalRef });
+}
+
+/** Match a pending checkout when metadata.external_reference is missing from ModemPay. */
+async function findPendingCheckoutByHints(payload: Record<string, unknown>): Promise<string | undefined> {
+  const amount = Number(payload.amount || 0);
+  const phone = String(payload.customer_phone || payload.account_number || '').replace(/\D/g, '').replace(/^220/, '');
+  const pending = await adminDb.collection('modempay_checkouts')
+    .where('status', '==', 'pending')
+    .orderBy('created_at', 'desc')
+    .limit(25)
+    .get()
+    .catch(() => null);
+
+  if (!pending || pending.empty) return undefined;
+
+  for (const doc of pending.docs) {
+    const data = doc.data() as { amount?: number; customer_phone?: string; session_id?: string };
+    if (data.session_id) continue;
+    const docPhone = String(data.customer_phone || '').replace(/\D/g, '').replace(/^220/, '');
+    const amountMatch = !amount || Math.abs(Number(data.amount || 0) - amount) < 0.01;
+    const phoneMatch = !phone || !docPhone || docPhone.endsWith(phone) || phone.endsWith(docPhone);
+    if (amountMatch && phoneMatch) return doc.id;
+  }
+  return undefined;
+}
+
 async function markDepositCompleted(externalRef: string, payload: Record<string, unknown>) {
   const payloadAmount = Number(payload.amount ?? payload.paid_amount ?? payload.total_amount ?? 0);
   let customerId: string | undefined;
   const completedAt = new Date().toISOString();
+  const providerTxnId = payload.id || payload.transaction_id || null;
+  const txnReference = payload.transaction_reference || null;
 
   await adminDb.runTransaction(async (tx) => {
     const checkoutRef = adminDb.collection('modempay_checkouts').doc(externalRef);
     const checkoutSnap = await tx.get(checkoutRef);
-    if (!checkoutSnap.exists) {
-      logger.warn('No checkout marker found for externalRef', { externalRef });
+    const depositReqRef = adminDb.collection('deposit_requests').doc(externalRef);
+    const depositReqSnap = await tx.get(depositReqRef);
+
+    const checkout = checkoutSnap.exists
+      ? checkoutSnap.data() as {
+          status?: string;
+          amount?: number;
+          customer_id?: string | null;
+          customer_name?: string | null;
+          customer_phone?: string | null;
+          method?: string;
+        }
+      : null;
+
+    const depositReq = depositReqSnap.exists
+      ? depositReqSnap.data() as {
+          status?: string;
+          amount?: number;
+          customer_id?: string;
+          customer_name?: string;
+          method?: string;
+        }
+      : null;
+
+    if (!checkout && !depositReq) {
+      logger.warn('markDepositCompleted: no checkout or deposit_request', { externalRef });
       return;
     }
-    const checkout = checkoutSnap.data() as {
-      status?: string;
-      amount?: number;
-      customer_id?: string | null;
-      customer_name?: string | null;
-      customer_phone?: string | null;
-      method?: string;
-    };
-    if (checkout.status === 'completed') return; // idempotent
+
+    if (checkout?.status === 'completed') return;
+    if (depositReq?.status === 'Approved') return;
 
     const creditAmount = Number(
-      (payloadAmount > 0 ? payloadAmount : checkout.amount) || 0,
+      (payloadAmount > 0 ? payloadAmount : checkout?.amount ?? depositReq?.amount) || 0,
     );
     if (creditAmount <= 0) {
       logger.warn('markDepositCompleted: no credit amount', { externalRef, payload });
       return;
     }
 
-    const providerTxnId = payload.id || payload.transaction_id || null;
-    const methodLabel = mapModemPayMethodLabel(checkout.method || payload.payment_method);
+    const methodLabel = mapModemPayMethodLabel(
+      checkout?.method || depositReq?.method || payload.payment_method,
+    );
+    customerId = String(checkout?.customer_id || depositReq?.customer_id || '') || undefined;
 
-    tx.update(checkoutRef, {
-      status: 'completed',
-      credited_amount: creditAmount,
-      provider_transaction_id: providerTxnId,
-      completed_at: completedAt,
-      raw_payload: payload,
-    });
+    if (checkoutSnap.exists) {
+      tx.update(checkoutRef, {
+        status: 'completed',
+        credited_amount: creditAmount,
+        provider_transaction_id: providerTxnId,
+        transaction_reference: txnReference,
+        payment_intent_id: payload.payment_intent_id || null,
+        completed_at: completedAt,
+        raw_payload: payload,
+      });
+    }
 
-    const depositReqRef = adminDb.collection('deposit_requests').doc(externalRef);
-    const depositReqSnap = await tx.get(depositReqRef);
     if (depositReqSnap.exists) {
       tx.update(depositReqRef, {
         status: 'Approved',
@@ -612,9 +755,9 @@ async function markDepositCompleted(externalRef: string, payload: Record<string,
     tx.set(depositLogRef, {
       id: externalRef,
       external_ref: externalRef,
-      customer_id: checkout.customer_id || null,
-      customer_name: checkout.customer_name || null,
-      customer_phone: checkout.customer_phone || null,
+      customer_id: customerId || null,
+      customer_name: checkout?.customer_name || depositReq?.customer_name || null,
+      customer_phone: checkout?.customer_phone || null,
       amount: creditAmount,
       method: methodLabel,
       status: 'completed',
@@ -625,9 +768,8 @@ async function markDepositCompleted(externalRef: string, payload: Record<string,
       transaction_id: providerTxnId,
     }, { merge: true });
 
-    if (checkout.customer_id) {
-      customerId = checkout.customer_id;
-      const userRef = adminDb.collection('users').doc(checkout.customer_id);
+    if (customerId) {
+      const userRef = adminDb.collection('users').doc(customerId);
       const userSnap = await tx.get(userRef);
       if (userSnap.exists) {
         const userData = userSnap.data() as {
@@ -665,21 +807,52 @@ async function markDepositCompleted(externalRef: string, payload: Record<string,
   }).catch(err => logger.warn('RTDB checkout complete sync failed', err));
 }
 
+/** Re-process stored modempay_events for a deposit that webhooks missed linking. */
+async function replayStoredEventsForDeposit(externalRef: string): Promise<void> {
+  const snap = await adminDb.collection('modempay_events')
+    .orderBy('received_at', 'desc')
+    .limit(200)
+    .get()
+    .catch(() => null);
+  if (!snap) return;
+
+  const relevantTypes = new Set([
+    'payment_intent.created',
+    'charge.succeeded',
+    'charge.failed',
+    'charge.cancelled',
+    'charge.expired',
+  ]);
+
+  for (const doc of snap.docs) {
+    const row = doc.data() as { event_type?: string; payload?: Record<string, unknown> };
+    if (!relevantTypes.has(String(row.event_type || ''))) continue;
+    const payload = normalizeModemPayPayload(row.payload || {});
+    const resolved = await resolveDepositExternalRef(payload, true);
+    if (resolved !== externalRef) continue;
+    await processModemPayEvent({ event: String(row.event_type), payload: row.payload || {} });
+  }
+}
+
 function isBeteseExternalRef(value: unknown): value is string {
   return typeof value === 'string' && value.trim().startsWith('BETESE-');
 }
 
 function extractExternalRef(payload: Record<string, unknown>): string | undefined {
   const metadata = payload.metadata as Record<string, unknown> | undefined;
+  const paymentMeta = payload.payment_metadata as Record<string, unknown> | undefined;
   const nested = payload.data as Record<string, unknown> | undefined;
   const nestedMeta = nested?.metadata as Record<string, unknown> | undefined;
   const candidates = [
     metadata?.external_reference,
     metadata?.externalReference,
+    metadata?.external_ref,
+    paymentMeta?.external_reference,
     payload.external_reference,
     payload.externalReference,
     nested?.external_reference,
     nestedMeta?.external_reference,
+    payload.reference,
   ];
   for (const value of candidates) {
     if (isBeteseExternalRef(value)) return value.trim();
@@ -697,26 +870,61 @@ function extractTransferExternalRef(payload: Record<string, unknown>): string | 
 }
 
 /** Map ModemPay webhook payloads back to our BETESE-* deposit / checkout id. */
-async function resolveDepositExternalRef(payload: Record<string, unknown>): Promise<string | undefined> {
+async function resolveDepositExternalRef(
+  payload: Record<string, unknown>,
+  forceLookup = false,
+): Promise<string | undefined> {
   const direct = extractExternalRef(payload);
+  if (direct && !forceLookup) return direct;
   if (direct) return direct;
 
-  const intentId = payload.payment_intent_id || payload.payment_intentId;
-  if (typeof intentId === 'string' && intentId.trim()) {
+  const intentId = String(
+    payload.payment_intent_id || payload.payment_intentId || payload.id || '',
+  ).trim();
+
+  if (intentId) {
+    const fromRtdb = await resolveExternalRefByPaymentIntent(intentId);
+    if (fromRtdb) return fromRtdb;
+
     const bySession = await adminDb.collection('modempay_checkouts')
-      .where('session_id', '==', intentId.trim())
+      .where('session_id', '==', intentId)
       .limit(1)
       .get();
     if (!bySession.empty) return bySession.docs[0].id;
+
+    const byIntentField = await adminDb.collection('modempay_checkouts')
+      .where('payment_intent_id', '==', intentId)
+      .limit(1)
+      .get();
+    if (!byIntentField.empty) return byIntentField.docs[0].id;
   }
 
-  const providerTxnId = payload.id || payload.transaction_id;
-  if (typeof providerTxnId === 'string' && providerTxnId.trim()) {
+  const linkId = String(payload.payment_link_id || '').trim();
+  if (linkId) {
+    const fromLink = await resolveExternalRefByPaymentLink(linkId);
+    if (fromLink) return fromLink;
+  }
+
+  const providerTxnId = String(payload.id || payload.transaction_id || '').trim();
+  if (providerTxnId && providerTxnId !== intentId) {
     const byProvider = await adminDb.collection('modempay_checkouts')
-      .where('provider_transaction_id', '==', providerTxnId.trim())
+      .where('provider_transaction_id', '==', providerTxnId)
       .limit(1)
       .get();
     if (!byProvider.empty) return byProvider.docs[0].id;
+  }
+
+  const txnRef = String(payload.transaction_reference || '').trim();
+  if (txnRef) {
+    const byTxnRef = await adminDb.collection('modempay_checkouts')
+      .where('transaction_reference', '==', txnRef)
+      .limit(1)
+      .get();
+    if (!byTxnRef.empty) return byTxnRef.docs[0].id;
+  }
+
+  if (forceLookup) {
+    return findPendingCheckoutByHints(payload);
   }
 
   return undefined;
@@ -889,8 +1097,11 @@ export async function reconcileDepositHandler(req: Request, res: Response): Prom
     let providerPayload = checkout.raw_payload || {};
 
     // If webhook hasn't updated Firestore yet, ask ModemPay directly.
-    if (checkoutStatus === 'pending' && checkout.session_id) {
-      const intentResult = await retrievePaymentIntent(checkout.session_id);
+    const intentId = checkout.session_id
+      || (checkout as { payment_intent_id?: string }).payment_intent_id
+      || null;
+    if (checkoutStatus === 'pending' && intentId) {
+      const intentResult = await retrievePaymentIntent(intentId);
       const intent = (intentResult.data as { data?: Record<string, unknown> }).data
         || (intentResult.data as Record<string, unknown>);
       const intentStatus = String(intent.status || intent.payment_status || '').toLowerCase();
@@ -929,6 +1140,17 @@ export async function reconcileDepositHandler(req: Request, res: Response): Prom
       }
       res.json({ ok: true, status: 'Rejected' });
       return;
+    }
+
+    // Last resort: replay stored webhook events for this deposit ref.
+    if (depositStatus === 'Pending') {
+      await replayStoredEventsForDeposit(externalRef);
+      const refreshedDeposit = await adminDb.collection('deposit_requests').doc(externalRef).get();
+      const newStatus = String(refreshedDeposit.data()?.status || depositStatus);
+      if (newStatus !== depositStatus) {
+        res.json({ ok: true, status: newStatus, replayed: true });
+        return;
+      }
     }
 
     res.json({ ok: true, status: depositStatus, checkoutStatus });
