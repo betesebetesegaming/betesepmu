@@ -1,16 +1,74 @@
 /**
- * Single source of truth for public (browser-safe) environment variables.
- * No hardcoded project IDs or API keys — values must come from Vercel / .env.local.
+ * Public (browser-safe) environment variables.
+ *
+ * On Vercel, NEXT_PUBLIC_* vars must exist at build time to be inlined into JS
+ * chunks. We also inject them at runtime via app/layout.tsx (window.__BETESE_ENV__)
+ * so production works even when env vars were added after the last client build.
  */
 
-function requirePublicEnv(name: string): string {
-  const value = String(process.env[name] || '').trim();
+export type PublicClientEnv = {
+  NEXT_PUBLIC_FIREBASE_API_KEY: string;
+  NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: string;
+  NEXT_PUBLIC_FIREBASE_DATABASE_URL: string;
+  NEXT_PUBLIC_FIREBASE_PROJECT_ID: string;
+  NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: string;
+  NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: string;
+  NEXT_PUBLIC_FIREBASE_APP_ID: string;
+  NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID?: string;
+  NEXT_PUBLIC_API_BASE_URL?: string;
+};
+
+declare global {
+  interface Window {
+    __BETESE_ENV__?: Partial<PublicClientEnv>;
+  }
+}
+
+const PUBLIC_ENV_KEYS = [
+  'NEXT_PUBLIC_FIREBASE_API_KEY',
+  'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN',
+  'NEXT_PUBLIC_FIREBASE_DATABASE_URL',
+  'NEXT_PUBLIC_FIREBASE_PROJECT_ID',
+  'NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET',
+  'NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID',
+  'NEXT_PUBLIC_FIREBASE_APP_ID',
+  'NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID',
+  'NEXT_PUBLIC_API_BASE_URL',
+] as const;
+
+function readPublicEnv(name: (typeof PUBLIC_ENV_KEYS)[number]): string {
+  if (typeof window !== 'undefined') {
+    const fromWindow = window.__BETESE_ENV__?.[name as keyof PublicClientEnv];
+    if (fromWindow && String(fromWindow).trim()) {
+      return String(fromWindow).trim();
+    }
+  }
+  return String(process.env[name] || '').trim();
+}
+
+function requirePublicEnv(name: (typeof PUBLIC_ENV_KEYS)[number]): string {
+  const value = readPublicEnv(name);
   if (!value) {
     throw new Error(
-      `Missing ${name}. Set it in .env.local (dev) or Vercel project settings (production).`,
+      `Missing ${name}. Set it in Vercel → Settings → Environment Variables (Production + Preview), then redeploy.`,
     );
   }
   return value;
+}
+
+/** Build the env object injected by the server layout into the HTML page. */
+export function getPublicEnvForInjection(): PublicClientEnv {
+  return {
+    NEXT_PUBLIC_FIREBASE_API_KEY: String(process.env.NEXT_PUBLIC_FIREBASE_API_KEY || '').trim(),
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: String(process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || '').trim(),
+    NEXT_PUBLIC_FIREBASE_DATABASE_URL: String(process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL || '').trim(),
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID: String(process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || '').trim(),
+    NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: String(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || '').trim(),
+    NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: String(process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '').trim(),
+    NEXT_PUBLIC_FIREBASE_APP_ID: String(process.env.NEXT_PUBLIC_FIREBASE_APP_ID || '').trim(),
+    NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID: String(process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || '').trim() || undefined,
+    NEXT_PUBLIC_API_BASE_URL: String(process.env.NEXT_PUBLIC_API_BASE_URL || '').trim() || undefined,
+  };
 }
 
 export function getPublicFirebaseConfig() {
@@ -22,7 +80,7 @@ export function getPublicFirebaseConfig() {
     storageBucket: requirePublicEnv('NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET'),
     messagingSenderId: requirePublicEnv('NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID'),
     appId: requirePublicEnv('NEXT_PUBLIC_FIREBASE_APP_ID'),
-    measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID?.trim() || undefined,
+    measurementId: readPublicEnv('NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID') || undefined,
   };
 }
 
@@ -36,7 +94,7 @@ export function getFirebaseProjectId(): string {
  * derive from project id (us-central1 default region for this project).
  */
 export function getApiBaseUrl(): string {
-  const explicit = String(process.env.NEXT_PUBLIC_API_BASE_URL || '').trim();
+  const explicit = readPublicEnv('NEXT_PUBLIC_API_BASE_URL');
   if (explicit) {
     return explicit.replace(/\/api\/?$/, '').replace(/\/+$/, '');
   }

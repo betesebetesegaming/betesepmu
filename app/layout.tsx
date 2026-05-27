@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { getPublicEnvForInjection } from '@/lib/env/publicConfig';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -29,8 +30,14 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const publicEnv = getPublicEnvForInjection();
+  const envScript = `window.__BETESE_ENV__=${JSON.stringify(publicEnv)};`;
+
   return (
     <html lang="en">
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: envScript }} />
+      </head>
       <body className="bg-gray-100">{children}</body>
     </html>
   );

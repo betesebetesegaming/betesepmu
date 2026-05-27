@@ -33,15 +33,21 @@ import {
 } from './firebaseClient';
 
 const LAZY_CHUNK_RETRY_KEY = 'betese_lazy_chunk_retry';
-const FIREBASE_PROJECT_ID = getFirebaseProjectId();
-const ACTIVE_USER_ID_KEY = `betese_active_user_id_${FIREBASE_PROJECT_ID}`;
-const ACTIVE_USER_CACHE_KEY = `betese_active_user_cache_${FIREBASE_PROJECT_ID}`;
 
-// Drop legacy unscoped keys from older builds / wrong Firebase projects.
-try {
+function activeUserIdKey(): string {
+  return `betese_active_user_id_${getFirebaseProjectId()}`;
+}
+
+function activeUserCacheKey(): string {
+  return `betese_active_user_cache_${getFirebaseProjectId()}`;
+}
+
+function clearLegacyActiveUserStorage(): void {
+  try {
     localStorage.removeItem('betese_active_user_id');
     localStorage.removeItem('betese_active_user_cache');
-} catch {}
+  } catch {}
+}
 
 const normalizeCachedUser = (value: any): User | null => {
     if (!value || typeof value !== 'object') return null;
@@ -69,7 +75,7 @@ const normalizeCachedUser = (value: any): User | null => {
 
 const readCachedActiveUser = (): User | null => {
     try {
-        const raw = localStorage.getItem(ACTIVE_USER_CACHE_KEY);
+        const raw = localStorage.getItem(activeUserCacheKey());
         if (!raw) return null;
         return normalizeCachedUser(JSON.parse(raw));
     } catch {
@@ -79,7 +85,7 @@ const readCachedActiveUser = (): User | null => {
 
 const writeCachedActiveUser = (user: User): void => {
     try {
-        localStorage.setItem(ACTIVE_USER_CACHE_KEY, JSON.stringify({
+        localStorage.setItem(activeUserCacheKey(), JSON.stringify({
             ...user,
             firstDepositAt: user.firstDepositAt ? user.firstDepositAt.toISOString() : undefined,
         }));
@@ -88,7 +94,7 @@ const writeCachedActiveUser = (user: User): void => {
 
 const clearCachedActiveUser = (): void => {
     try {
-        localStorage.removeItem(ACTIVE_USER_CACHE_KEY);
+        localStorage.removeItem(activeUserCacheKey());
     } catch {}
 };
 
@@ -239,7 +245,7 @@ const AppContent: React.FC = () => {
     const [usersReady, setUsersReady] = useState(false);
     const [sessionRestorePending, setSessionRestorePending] = useState(() => {
         try {
-            return !readCachedActiveUser() && Boolean(localStorage.getItem(ACTIVE_USER_ID_KEY));
+            return !readCachedActiveUser() && Boolean(localStorage.getItem(activeUserIdKey()));
         } catch {
             return false;
         }
@@ -260,6 +266,10 @@ const AppContent: React.FC = () => {
   const [paymentConfigs, setPaymentConfigs] = useState<PaymentIntegrationConfig[]>([]);
     const duplicatePhoneLockInFlightRef = useRef(false);
         const legacyBookedMigrationDoneRef = useRef(false);
+
+  useEffect(() => {
+      clearLegacyActiveUserStorage();
+  }, []);
 
   const [betSlip, setBetSlip] = useState<BetSlip>({ selections: [], totalCost: 0 });
   const isBettingInFlightRef = useRef(false); // prevents double-click on Place Bet / Book Bet
@@ -492,7 +502,7 @@ const AppContent: React.FC = () => {
                   setUsers(normalizedUsers);
 
                   // Restore active session after refresh/recovery on terminals.
-                  const rememberedUserId = localStorage.getItem(ACTIVE_USER_ID_KEY);
+                  const rememberedUserId = localStorage.getItem(activeUserIdKey());
                   if (rememberedUserId && !currentUser) {
                       const restored = normalizedUsers.find(u => u.id === rememberedUserId);
                       if (restored && !restored.isLocked) {
@@ -1603,7 +1613,7 @@ const AppContent: React.FC = () => {
   const handleLogin = (user: User) => {
       const normalizedUser = { ...user, role: normalizeRole(user.role) };
       setCurrentUser(normalizedUser);
-      try { localStorage.setItem(ACTIVE_USER_ID_KEY, normalizedUser.id); } catch {}
+      try { localStorage.setItem(activeUserIdKey(), normalizedUser.id); } catch {}
       writeCachedActiveUser(normalizedUser);
       if (realtimeDb) {
           loadLiveSystemData(normalizedUser);
@@ -1613,7 +1623,7 @@ const AppContent: React.FC = () => {
   const handleLogout = () => {
       setCurrentUser(null);
       setPlacedTickets([]);
-      try { localStorage.removeItem(ACTIVE_USER_ID_KEY); } catch {}
+      try { localStorage.removeItem(activeUserIdKey()); } catch {}
       clearCachedActiveUser();
   };
 
