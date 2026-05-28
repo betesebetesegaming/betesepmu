@@ -28,6 +28,20 @@ const nextConfig = {
       bodySizeLimit: '4mb',
     },
   },
+  async headers() {
+    return [
+      {
+        // Force browsers to revalidate /service-worker.js on every navigation
+        // so the kill-switch SW (and any future SW changes) reaches users on
+        // their next visit instead of after Chrome's ~24h update cadence.
+        source: '/service-worker.js',
+        headers: [
+          { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
+          { key: 'Service-Worker-Allowed', value: '/' },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;
