@@ -1,96 +1,40 @@
 /* eslint-disable no-undef */
-// Bumped from v17 → v18 to evict the legacy entry for /index.html that no
-// longer exists under the Next.js App Router. Old browsers will reinstall
-// this fresh SW and drop the stale 404-causing cache entries.
-const CACHE_NAME = 'betese-pmu-v18';
-const URLS_TO_CACHE = [
-  '/',
-  '/manifest.json',
-];
+// KILL-SWITCH service worker.
+//
+// Previous Vite-based deployments registered a caching SW that, after the
+// Next.js migration, kept serving cached HTML referencing assets that no
+// longer exist (e.g. /index.tsx) — leaving users on a blank white page.
+//
+// This version takes over, deletes every cache it owns, and unregisters
+// itself so subsequent loads bypass the SW entirely and go straight to the
+// network (and Next.js's own asset hashing handles cache busting).
+//
+// Once it's been live long enough that the vast majority of users have
+// picked it up, /public/service-worker.js can be deleted outright.
 
-// Install event - cache essential files
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(URLS_TO_CACHE).catch(() => {
-        // Continue even if some assets fail to cache
-      });
-    }).catch(() => {
-      // Continue on cache failure
-    })
-  );
   self.skipWaiting();
+  event.waitUntil(
+    caches.keys().then((names) => Promise.all(names.map((n) => caches.delete(n))))
+  );
 });
 
-// Activate event - clean up old caches
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    })
-  );
-  self.clients.claim();
-});
-
-// Fetch event - network first, fallback to cache
-self.addEventListener('fetch', (event) => {
-  const { request } = event;
-
-  // Skip POST, PUT, DELETE requests
-  if (request.method !== 'GET') {
-    return;
-  }
-
-  // Network first for JS/CSS chunks and API calls
-  if (request.url.includes('/assets/') || request.url.includes('/rest/')) {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          if (!response || response.status !== 200) {
-            return response;
-          }
-          const responseToCache = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(request, responseToCache);
-          });
-          return response;
-        })
-        .catch(() => {
-          return caches.match(request).catch(() => {
-            // Return default offline response
-            if (request.destination === 'document') {
-              return new Response('Offline - please check your connection', {
-                status: 503,
-                statusText: 'Service Unavailable',
-              });
-            }
-          });
-        })
-    );
-    return;
-  }
-
-  // Stale-while-revalidate for HTML
-  event.respondWith(
-    caches.match(request).then((response) => {
-      const fetchPromise = fetch(request).then((networkResponse) => {
-        if (networkResponse && networkResponse.status === 200) {
-          const responseToCache = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(request, responseToCache);
-          });
-        }
-        return networkResponse;
+    (async () => {
+      const names = await caches.keys();
+      await Promise.all(names.map((n) => caches.delete(n)));
+      await self.registration.unregister();
+      const clients = await self.clients.matchAll({ type: 'window' });
+      clients.forEach((client) => {
+        try { client.navigate(client.url); } catch { /* navigate may be blocked; fall through */ }
       });
-      return response || fetchPromise;
-    }).catch(() => {
-      return caches.match(request);
-    })
+    })()
   );
 });
+
+// Pass-through fetch — never serve cached responses. Required because the
+// SW remains active for the current page until activation completes; without
+// this, Chrome's default no-op fetch handler is used (which is fine), but
+// declaring it explicitly avoids any chance of intercepting with stale data.
+self.addEventListener('fetch', () => { /* network only */ });

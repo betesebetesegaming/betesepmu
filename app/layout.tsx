@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { getPublicEnvForInjection } from '@/lib/env/publicConfig';
+import { SwKillswitch } from './_components/sw-killswitch';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -38,7 +39,10 @@ export default function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: envScript }} />
       </head>
-      <body className="bg-gray-100">{children}</body>
+      <body className="bg-gray-100">
+        <SwKillswitch />
+        {children}
+      </body>
     </html>
   );
 }
