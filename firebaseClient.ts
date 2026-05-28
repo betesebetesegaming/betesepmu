@@ -1133,11 +1133,49 @@ export const dbCreateWithdrawalRequest = async (request: any) => {
     });
 };
 
-export const dbCancelWithdrawal = async (requestId: string) => {
-    const snap = await getDoc(doc(db, 'withdrawal_requests', requestId));
-    const userId = snap.exists() ? String((snap.data() as { user_id?: string }).user_id || '') : undefined;
-    await rtdbPatchWithdrawal(requestId, userId, { status: 'Canceled' });
-    await updateDoc(doc(db, 'withdrawal_requests', requestId), { status: 'Canceled' });
+export const dbCancelWithdrawal = async (requestId: string): Promise<void> => {
+    // Refund the wallet atomically with the status flip when a hold was placed
+    // (status === 'Processing' means the ModemPay payout endpoint already
+    // debited the wallet). Without this, cancelling a Processing withdrawal
+    // wipes the customer's money — they don't get the payout AND they don't
+    // get it back in the wallet to try again. Cash withdrawals stay at
+    // 'Pending' until paid out, so no refund is needed there.
+    let userIdForRtdb: string | undefined;
+
+    await runTransaction(db, async (tx) => {
+        const reqRef = doc(db, 'withdrawal_requests', requestId);
+        const reqSnap = await tx.get(reqRef);
+        if (!reqSnap.exists()) throw new Error('Withdrawal request not found');
+        const reqData = reqSnap.data() as any;
+        const status = String(reqData.status || '');
+
+        if (status === 'Completed' || status === 'Canceled' || status === 'Failed') return;
+
+        const userId = String(reqData.user_id || '');
+        const amount = Number(reqData.amount || 0);
+        userIdForRtdb = userId;
+
+        let refundedBalance: number | null = null;
+        if (status === 'Processing' && userId && amount > 0) {
+            const userRef = doc(db, 'users', userId);
+            const userSnap = await tx.get(userRef);
+            if (userSnap.exists()) {
+                const balance = Number((userSnap.data() as any).wallet_balance || 0);
+                refundedBalance = Number((balance + amount).toFixed(2));
+            }
+        }
+
+        if (refundedBalance !== null) {
+            tx.update(doc(db, 'users', userId), { wallet_balance: refundedBalance });
+        }
+        tx.update(reqRef, {
+            status: 'Canceled',
+            canceled_at: new Date().toISOString(),
+            ...(refundedBalance !== null ? { refunded_amount: amount } : {}),
+        });
+    });
+
+    await rtdbPatchWithdrawal(requestId, userIdForRtdb, { status: 'Canceled' });
 };
 
 export const dbProcessWithdrawalRequest = async (
