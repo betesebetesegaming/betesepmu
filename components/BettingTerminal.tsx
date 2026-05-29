@@ -110,7 +110,7 @@ const BackButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
 );
 
 export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
-    const APK_BUILD_VERSION = '20260519-2';
+    const APK_BUILD_VERSION = '20260529-1';
     const { 
         races = [], 
         betSlip, 
