@@ -100,17 +100,23 @@ const CountryPhoneInput: React.FC<CountryPhoneInputProps> = ({
                         <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
                     </svg>
                 </div>
+                {/* inputMode switches dynamically:
+                    - "numeric" + type="tel"  → numeric keypad for phone-number logins (customers)
+                    - "text"   + type="text"  → full keyboard for name-based logins (vendors, admins)
+                    Detection: if the current value already contains any letter, OR
+                    the user has typed nothing yet but then presses a letter key (handled
+                    by allowing the change), show the text keyboard immediately.           */}
                 <input
                     id={id}
                     name={id}
-                    type="tel"
-                    inputMode="numeric"
-                    autoComplete="tel-national"
+                    type={/[a-zA-Z]/.test(value) ? 'text' : 'tel'}
+                    inputMode={/[a-zA-Z]/.test(value) ? 'text' : 'numeric'}
+                    autoComplete={/[a-zA-Z]/.test(value) ? 'username' : 'tel-national'}
                     autoFocus={autoFocus}
-                    maxLength={country.nationalDigits}
+                    maxLength={/[a-zA-Z]/.test(value) ? 32 : country.nationalDigits}
                     value={value}
                     onChange={(e) => handleNationalChange(e.target.value)}
-                    placeholder={country.placeholder}
+                    placeholder="Phone number or username"
                     className="flex-1 block w-full rounded-xl border-gray-300 bg-gray-50 text-gray-900 focus:ring-2 focus:ring-green-500 focus:border-green-500 sm:text-sm py-3 px-4 transition-all tracking-widest font-semibold"
                     required
                 />
@@ -298,6 +304,9 @@ const LoginForm: React.FC<{ onLogin: (user: User) => void; users: User[]; onSwit
     const [country, setCountry] = useState<SupportedCountry>(SUPPORTED_COUNTRIES[0]);
     const [phoneDigits, setPhoneDigits] = useState('');
     const [password, setPassword] = useState('');
+    // nameMode=true → vendor/staff sign in with username (text keyboard)
+    // nameMode=false → customer signs in with phone number (numeric keyboard)
+    const [nameMode, setNameMode] = useState(false);
     const [error, setError] = useState('');
     const { t } = useLanguage();
 
@@ -312,9 +321,12 @@ const LoginForm: React.FC<{ onLogin: (user: User) => void; users: User[]; onSwit
 
         const trimmedPassword = password.trim();
 
-        // Staff accounts (Admin / Supervisor / Vendor) sign in with username in this field.
+        // Staff accounts (Admin / Supervisor / Vendor) sign in with username.
+        // Use the mode toggle as the authoritative signal — nameMode is set by
+        // the user explicitly choosing "Username (Staff)" before typing.
+        // We also fall back to letter-detection for backward compatibility.
         const staffUsername = phoneDigits.trim();
-        const isStaffUsernameLogin = /[a-zA-Z]/.test(staffUsername);
+        const isStaffUsernameLogin = nameMode || /[a-zA-Z]/.test(staffUsername);
         if (isStaffUsernameLogin) {
             const staffRoles: Role[] = ['Admin', 'Supervisor', 'Vendor'];
             const nameLower = staffUsername.toLowerCase();
@@ -463,15 +475,77 @@ const LoginForm: React.FC<{ onLogin: (user: User) => void; users: User[]; onSwit
             )}
 
             <form className="space-y-6" onSubmit={handleLogin}>
-                <CountryPhoneInput
-                    id="phone"
-                    label="Mobile number"
-                    country={country}
-                    onCountryChange={setCountry}
-                    value={phoneDigits}
-                    onChange={setPhoneDigits}
-                    autoFocus
-                />
+                {/* Login mode selector — sets keyboard type BEFORE the user taps the field */}
+                <div className="flex rounded-xl overflow-hidden border border-gray-200 shadow-sm">
+                    <button
+                        type="button"
+                        onClick={() => { setNameMode(false); setPhoneDigits(''); }}
+                        className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${
+                            !nameMode
+                                ? 'bg-green-600 text-white'
+                                : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                        }`}
+                    >
+                        📱 Phone (Customer)
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => { setNameMode(true); setPhoneDigits(''); }}
+                        className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${
+                            nameMode
+                                ? 'bg-green-600 text-white'
+                                : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                        }`}
+                    >
+                        👤 Username (Staff)
+                    </button>
+                </div>
+
+                {nameMode ? (
+                    /* Vendor / Admin / Supervisor: plain text field — opens full keyboard */
+                    <div className="space-y-1">
+                        <label htmlFor="username" className="block text-sm font-medium text-gray-700 ml-1">
+                            Username
+                        </label>
+                        <div className="relative rounded-xl shadow-sm">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                </svg>
+                            </div>
+                            <input
+                                id="username"
+                                name="username"
+                                type="text"
+                                inputMode="text"
+                                autoComplete="username"
+                                autoCapitalize="none"
+                                autoCorrect="off"
+                                spellCheck={false}
+                                autoFocus
+                                maxLength={32}
+                                value={phoneDigits}
+                                onChange={(e) => setPhoneDigits(e.target.value.replace(/[^a-zA-Z0-9_\-. ]/g, '').slice(0, 32))}
+                                placeholder="Enter your name or username"
+                                className="block w-full rounded-xl border-gray-300 bg-gray-50 text-gray-900 focus:ring-2 focus:ring-green-500 focus:border-green-500 sm:text-sm py-3 pl-10 pr-4 transition-all font-semibold"
+                                required
+                            />
+                        </div>
+                        <p className="text-[10px] text-gray-400 ml-2">Vendor &amp; staff login — type your name as registered</p>
+                    </div>
+                ) : (
+                    /* Customer: country-picker + numeric keypad */
+                    <CountryPhoneInput
+                        id="phone"
+                        label="Mobile number"
+                        country={country}
+                        onCountryChange={setCountry}
+                        value={phoneDigits}
+                        onChange={setPhoneDigits}
+                        autoFocus
+                    />
+                )}
+
                 <ModernInput
                     id="password"
                     label={t('password')}
