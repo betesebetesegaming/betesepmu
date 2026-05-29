@@ -578,7 +578,10 @@ export const dbPlaceBet = async (ticket: Ticket, user: User) => {
         tx.set(doc(db, 'tickets', ticketToInsert.id), ticketPayload);
     });
 
-    if (isOnline) await maybeUnlockCustomerBonusBalance(user.id);
+    // Fire-and-forget: bonus unlock is a background reward check.
+    // It scans the customer's full ticket history which can be slow for active
+    // customers — never await it in the bet-placement critical path.
+    if (isOnline) maybeUnlockCustomerBonusBalance(user.id).catch(() => {});
     return { success: true };
 };
 

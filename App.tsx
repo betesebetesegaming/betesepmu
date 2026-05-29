@@ -950,36 +950,17 @@ const AppContent: React.FC = () => {
           return;
       }
 
-    // ONLINE CUSTOMER WALLET CHECK
+    // ONLINE CUSTOMER WALLET CHECK — use cached balance for fast early exit.
+    // The Firestore transaction inside dbPlaceBet() is the authoritative check
+    // and will throw if the balance is actually insufficient, so there is no
+    // need for an extra network round-trip here.
     if (currentUser.role === 'Customer') {
-        let liveWalletBalance = Number(currentUser.walletBalance || 0);
-        let liveBonusBalance = Number(currentUser.bonusBalance || 0);
-
-        if (realtimeDb) {
-            try {
-                const liveBalance = await dbFetchUserBalance(currentUser.id);
-                liveWalletBalance = liveBalance.walletBalance;
-                liveBonusBalance = liveBalance.bonusBalance;
-
-                setCurrentUser(prev => prev ? {
-                    ...prev,
-                    walletBalance: liveBalance.walletBalance,
-                    bonusBalance: liveBalance.bonusBalance,
-                } : prev);
-                setUsers(prev => prev.map(user => user.id === currentUser.id
-                    ? { ...user, walletBalance: liveBalance.walletBalance, bonusBalance: liveBalance.bonusBalance }
-                    : user
-                ));
-            } catch (balanceError: any) {
-                alert(`Unable to verify wallet balance: ${balanceError.message}`);
-                return;
-            }
-        }
-
-        const totalAvailable = Number((liveWalletBalance + liveBonusBalance).toFixed(2));
+        const cachedWallet = Number(currentUser.walletBalance || 0);
+        const cachedBonus = Number(currentUser.bonusBalance || 0);
+        const totalAvailable = Number((cachedWallet + cachedBonus).toFixed(2));
         if (totalAvailable < betSlip.totalCost) {
             setWalletFlash(true);
-            alert(`INSUFFICIENT BALANCE: Available GMD ${totalAvailable.toFixed(2)} (Cash ${liveWalletBalance.toFixed(2)}, Bonus ${liveBonusBalance.toFixed(2)}), but this bet needs GMD ${betSlip.totalCost.toFixed(2)}.`);
+            alert(`INSUFFICIENT BALANCE: Available GMD ${totalAvailable.toFixed(2)} (Cash ${cachedWallet.toFixed(2)}, Bonus ${cachedBonus.toFixed(2)}), but this bet needs GMD ${betSlip.totalCost.toFixed(2)}.`);
             return;
         }
     }
@@ -1002,14 +983,24 @@ const AppContent: React.FC = () => {
     };
 
       try {
-          if (realtimeDb) { 
-              await dbPlaceBet(newTicket, currentUser); 
+          if (realtimeDb) {
+              // Await only the transaction — this is the minimum blocking work.
+              await dbPlaceBet(newTicket, currentUser);
+
+              // Show confirmation and clear the slip immediately — don't wait
+              // for the background ticket-list refresh below.
               setPlacedTickets(prev => {
                   const exists = (prev || []).some(t => t.id === newTicket.id);
                   return exists ? prev : [...(prev || []), newTicket];
               });
-              const updatedTickets = await dbFetchLiveTickets(currentUser);
-              setPlacedTickets(updatedTickets);
+              setLastTicket(newTicket);
+              setBetSlip({ selections: [], totalCost: 0 });
+
+              // Refresh full ticket list in background so the history panel
+              // stays in sync without blocking the confirmation modal.
+              dbFetchLiveTickets(currentUser)
+                  .then(updatedTickets => setPlacedTickets(updatedTickets))
+                  .catch(() => { /* non-fatal — list already has optimistic entry */ });
           } else { 
               // LOCAL MOCK WALLET DEDUCTION
               if (currentUser.role === 'Customer') {
@@ -1023,10 +1014,10 @@ const AppContent: React.FC = () => {
                   setCurrentUser(updatedUser);
                   setUsers(prev => prev.map(u => u.id === currentUser.id ? updatedUser : u));
               }
-              setPlacedTickets(prev => [...prev, newTicket]); 
+              setPlacedTickets(prev => [...prev, newTicket]);
+              setLastTicket(newTicket);
+              setBetSlip({ selections: [], totalCost: 0 });
           }
-          setLastTicket(newTicket);
-          setBetSlip({ selections: [], totalCost: 0 });
       } catch (e: any) { alert(`Transaction Failed: ${e.message}`); }
     } finally {
       isBettingInFlightRef.current = false;
