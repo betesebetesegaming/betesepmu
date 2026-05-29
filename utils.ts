@@ -229,25 +229,22 @@ export const triggerPrint = (elementId: string, options: TriggerPrintOptions = {
         ? clamp(fixedPaperWidthMm, minimumPaperWidthMm, 112)
         : clamp(measuredContentWidthMm, minimumPaperWidthMm, 112);
     // Most Sunmi / Africell-issued thermal handhelds use 58 mm paper.
+    // Ensure height is not restricted so continuous thermal roll doesn't break pages
     const paperWidthMm = isAndroidTerminal ? 58 : requestedPaperWidthMm;
-    const paperHeightMm = options.direct57x40 ? 40 : null;
-    const pageSize = paperHeightMm ? `${paperWidthMm}mm ${paperHeightMm}mm` : `${paperWidthMm}mm auto`;
+    const paperHeightMm = null; // Always continuous regardless of direct 57x40 flag
+    const pageSize = `${paperWidthMm}mm auto`;
     // Use the absolute minimum margin so big text uses the full paper width.
-    const stagePaddingMm = paperHeightMm ? 0.5 : 0.8;
+    const stagePaddingMm = 0.5;
 
     console.log('📏 Paper size:', { paperWidthMm, paperHeightMm, pageSize, direct57x40: options.direct57x40 });
     const qrWidthMm = clamp(Math.round(paperWidthMm * (isTicketPrint ? 0.45 : 0.55)), 18, 48);
     const textColumns = clamp(Math.round(paperWidthMm * (32 / 58)), 24, 64);
-    // Physical sizing — all in millimetres so the print is the same on every
-    // printer/DPI combination. Bumped up ~2.5–3× the previous values so the
-    // ticket reads at arm's length on a 58 mm thermal printer. Long lines
-    // (e.g. multi-horse Pronostic numbers) will wrap to a second line, that's
-    // intentional — we keep the digits big and bold like the desired sample.
-    const baseFontMm = isTicketPrint ? 9.0 : 6.0;
-    const boldFontMm = isTicketPrint ? 10.0 : 6.5;
-    const hugeFontMm = isTicketPrint ? 16.0 : 11.0;
-    const bannerFontMm = isTicketPrint ? 13.0 : 8.5;
-    const baseLineHeight = isTicketPrint ? 1.12 : 1.25;
+    // Physical sizing — standard thermal receipt sizes to avoid wrapping
+    const baseFontMm = isTicketPrint ? 3.5 : 3.0;
+    const boldFontMm = isTicketPrint ? 4.0 : 3.5;
+    const hugeFontMm = isTicketPrint ? 6.0 : 5.0;
+    const bannerFontMm = isTicketPrint ? 5.0 : 4.5;
+    const baseLineHeight = isTicketPrint ? 1.2 : 1.25;
 
     const oldStage = document.getElementById('betese-print-stage');
     if (oldStage) oldStage.remove();
