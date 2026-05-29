@@ -62,86 +62,71 @@ const blank = (): ThermerEntry => text(' ');
 export const buildThermerTicketEntries = (ticket: Ticket): ThermerEntry[] => {
   const entries: ThermerEntry[] = [];
 
-  const ticketDate = ticket.timestamp.toLocaleDateString([], {
-    day: '2-digit',
+  const ticketDateUS = ticket.timestamp.toLocaleDateString('en-US', {
     month: '2-digit',
+    day: '2-digit',
     year: 'numeric',
   });
-  const ticketTime24 = ticket.timestamp.toLocaleTimeString([], {
+  const ticketTime12 = ticket.timestamp.toLocaleTimeString('en-US', {
     hour: '2-digit',
     minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  });
-  const ticketTimeShort = ticket.timestamp.toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
+    hour12: true,
   });
   const agent = (ticket.vendorName || ticket.vendorId || 'BETESE').toUpperCase();
-  const ref = `#${ticketDate.replace(/\//g, '')}-${agent}-${ticket.id}`;
 
-  // Banner
-  entries.push(text('BETESE', { bold: true, align: ALIGN_CENTER, format: FMT_DOUBLE_HW }));
+  // BETESE PMU banner
+  entries.push(text('BETESE PMU', { bold: true, align: ALIGN_CENTER, format: FMT_DOUBLE_HW }));
   entries.push(blank());
 
-  // Ticket reference, serial, date, agent
-  entries.push(text(`Ticket ${ref}`, { bold: true, align: ALIGN_CENTER }));
-  entries.push(
-    text(String(ticket.id), { bold: true, align: ALIGN_CENTER, format: FMT_DOUBLE_HW }),
-  );
-  entries.push(text(`${ticketDate} ${ticketTime24}`, { bold: true, align: ALIGN_CENTER }));
-  entries.push(text(`Agent ${agent}`, { bold: true, align: ALIGN_CENTER }));
+  // Meta block (left aligned like the reference)
+  entries.push(text(`REF: #${ticket.id}`, { bold: true, align: ALIGN_LEFT }));
+  entries.push(text(`${ticketDateUS} ${ticketTime12}`, { bold: true, align: ALIGN_LEFT }));
+  entries.push(text(`VENDOR: ${agent}`, { bold: true, align: ALIGN_LEFT }));
   entries.push(text('--------------------------------', { align: ALIGN_LEFT }));
 
   // Each leg of the bet
-  ticket.selections.forEach((sel, idx) => {
-    entries.push(text(sel.raceName, { bold: true, align: ALIGN_CENTER, format: FMT_DOUBLE_W }));
-    entries.push(text(ticketTimeShort, { bold: true, align: ALIGN_CENTER }));
-    entries.push(text(sel.betType, { bold: true, align: ALIGN_CENTER, format: FMT_DOUBLE_W }));
-    entries.push(text(`${sel.multiplier} ticket(s)`, { bold: true, align: ALIGN_CENTER }));
-    entries.push(
-      text(`Amount ${(sel.cost * sel.multiplier).toFixed(0)} GMD`, {
-        bold: true,
-        align: ALIGN_CENTER,
-      }),
-    );
-
-    entries.push(text('Pronostic', { bold: true, align: ALIGN_CENTER }));
-
+  ticket.selections.forEach((sel) => {
     const numbersText =
       sel.pattern && sel.pattern.length > 0
-        ? sel.pattern.join('  ')
+        ? sel.pattern.join('-')
         : (
-            (sel.xCount > 0 ? Array(sel.xCount).fill('X').join('  ') + '  ' : '') +
-            sel.numbers.join('  ')
-          ).trim();
+            (sel.xCount > 0 ? Array(sel.xCount).fill('X').join('-') + '-' : '') +
+            sel.numbers.join('-')
+          );
+    const stake = (sel.cost * sel.multiplier).toFixed(0);
 
+    entries.push(
+      text(`${sel.raceName} ${sel.betType}`.toUpperCase(), {
+        bold: true,
+        align: ALIGN_LEFT,
+      }),
+    );
+    // Approximate the boxed-number look from the reference with dashed
+    // dividers above and below. The Thermer payload format has no native
+    // border-drawing primitive.
+    entries.push(text('--------------------------------', { align: ALIGN_LEFT }));
     entries.push(
       text(numbersText, { bold: true, align: ALIGN_CENTER, format: FMT_DOUBLE_HW }),
     );
-
-    if (idx < ticket.selections.length - 1) {
-      entries.push(text('--------------------------------', { align: ALIGN_LEFT }));
-    }
+    entries.push(text('--------------------------------', { align: ALIGN_LEFT }));
+    entries.push(
+      text(`STAKE X${sel.multiplier} GMD ${stake}`, { bold: true, align: ALIGN_LEFT }),
+    );
   });
 
   entries.push(text('--------------------------------', { align: ALIGN_LEFT }));
 
   // Total
   entries.push(
-    text(`TOTAL ${ticket.totalCost.toFixed(0)} GMD`, {
+    text(`Total ${ticket.totalCost.toFixed(0)} GMD`, {
       bold: true,
       align: ALIGN_CENTER,
       format: FMT_DOUBLE_W,
     }),
   );
 
-  entries.push(text('--------------------------------', { align: ALIGN_LEFT }));
-
   // Footer
   entries.push(text('*** Valid for 7 days ***', { bold: true, align: ALIGN_CENTER }));
-  entries.push(text(ref, { bold: true, align: ALIGN_CENTER }));
 
   // QR code with the ticket reference for staff to scan on payout
   entries.push({

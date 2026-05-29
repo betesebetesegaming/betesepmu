@@ -1,8 +1,8 @@
 
 import React from 'react';
 import { Ticket, Race } from '../types';
-import { formatWinningNumbersForDisplay } from '../utils';
-import { printViaThermer, buildThermerHandoffUrl } from '../lib/printerBridge';
+import { formatWinningNumbersForDisplay, triggerPrint } from '../utils';
+import { buildThermerHandoffUrl } from '../lib/printerBridge';
 import { buildThermerTicketEntries, buildThermerPaidReceiptEntries } from '../lib/thermerReceipt';
 
 interface TicketModalProps {
@@ -35,22 +35,22 @@ export const TicketModal: React.FC<TicketModalProps> = ({ ticket, onClose, showP
   const handlePrint = React.useCallback(async () => {
     if (isPrinting) return;
     setIsPrinting(true);
-    setPrintStatus('Sending to Thermer…');
+    setPrintStatus('Sending to printer…');
+    // Single unified path for PC, Sunmi V2 Pro, and any other ePOS:
+    // triggerPrint() cascades through Sunmi built-in printer → NativePrint
+    // → Bluetooth thermal → Mate BT → RawBT, and falls back to window.print()
+    // when none of those are available. The Thermer custom-scheme handoff is
+    // still offered as a manual fallback link below the button.
     try {
-      const entries = buildEntries();
-      const result = await printViaThermer(entries);
-      if (result.ok) {
-        setPrintStatus('Sent to Thermer ✓');
-      } else {
-        setPrintStatus(result.message || 'Could not reach Thermer');
-      }
+      triggerPrint(`ticket-receipt-${ticket.id}`);
+      setPrintStatus('Sent to printer ✓');
     } catch (err) {
       console.error('Print failed:', err);
       setPrintStatus((err as Error)?.message || 'Print failed');
     } finally {
       setTimeout(() => setIsPrinting(false), 1200);
     }
-  }, [isPrinting, buildEntries]);
+  }, [isPrinting, ticket.id]);
 
   React.useEffect(() => {
     if (!showPrintButton) return;
@@ -76,46 +76,38 @@ export const TicketModal: React.FC<TicketModalProps> = ({ ticket, onClose, showP
     return `${race.name}: ${numbers === 'N/A' ? 'Pending' : numbers}`;
   });
 
-  const ticketDate = ticket.timestamp.toLocaleDateString([], {
-    day: '2-digit', month: '2-digit', year: 'numeric',
+  const ticketDateUS = ticket.timestamp.toLocaleDateString('en-US', {
+    month: '2-digit', day: '2-digit', year: 'numeric',
   });
-  const ticketTime = ticket.timestamp.toLocaleTimeString([], {
-    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  const ticketTime12 = ticket.timestamp.toLocaleTimeString('en-US', {
+    hour: '2-digit', minute: '2-digit', hour12: true,
   });
   const ticketSerial = (ticket.id || '').toString();
-  const ticketRefLong = `#${ticketDate.replace(/\//g, '')}-${(ticket.vendorName || ticket.vendorId || 'BETESE').toUpperCase()}-${ticketSerial}`;
   const agentLabel = (ticket.vendorName || ticket.vendorId || 'BETESE').toUpperCase();
 
   const renderStandardTicket = () => (
     <div className="text-black bg-white leading-tight overflow-hidden px-1 py-1" style={{ fontFamily: '"Arial Black", Arial, sans-serif' }}>
-      {/* Big BETESE banner */}
-      <div className="c banner bg-black text-white py-1 mb-1 text-center uppercase">betese</div>
+      {/* BETESE PMU banner */}
+      <div className="c banner bg-black text-white py-1 mb-1 text-center uppercase tracking-widest">BETESE PMU</div>
 
-      {/* Ticket reference + serial + date */}
-      <div className="c b text-black mt-1">Ticket {ticketRefLong}</div>
-      <div className="c huge text-black my-1">{ticketSerial}</div>
-      <div className="c b text-black">{ticketDate} at {ticketTime}</div>
-      <div className="c b text-black uppercase mb-1">Agent {agentLabel}</div>
+      {/* Meta block */}
+      <div className="b text-black">REF: #{ticketSerial}</div>
+      <div className="b text-black">{ticketDateUS} {ticketTime12}</div>
+      <div className="b text-black uppercase">VENDOR: {agentLabel}</div>
 
       <div className="solid" />
 
       {/* Race selections */}
       {ticket.selections.map((sel, i) => {
         const numbersText = sel.pattern && sel.pattern.length > 0
-          ? sel.pattern.join(' ')
-          : ((sel.xCount > 0 ? Array(sel.xCount).fill('X').join(' ') + ' ' : '') + sel.numbers.join(' ')).trim();
+          ? sel.pattern.join('-')
+          : ((sel.xCount > 0 ? Array(sel.xCount).fill('X').join('-') + '-' : '') + sel.numbers.join('-'));
+        const stake = (sel.cost * sel.multiplier).toFixed(0);
         return (
           <div key={i} className="mb-1">
-            <div className="c b text-black">{sel.raceName}</div>
-            <div className="c b text-black">
-              {ticket.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
-            </div>
-            <div className="c b text-black uppercase">{sel.betType}</div>
-            <div className="c b text-black">{sel.multiplier} ticket(s)</div>
-            <div className="c b text-black">Amount {(sel.cost * sel.multiplier).toFixed(0)} GMD</div>
-            <div className="c b text-black mt-1">Pronostic</div>
-            <div className="c huge text-black">{numbersText}</div>
-            {i < ticket.selections.length - 1 && <div className="dashed" />}
+            <div className="b text-black uppercase mt-1">{sel.raceName} {sel.betType}</div>
+            <div className="box c huge text-black border-2 border-black px-1 py-0.5 my-1">{numbersText}</div>
+            <div className="b text-black uppercase">STAKE X{sel.multiplier} GMD {stake}</div>
           </div>
         );
       })}
@@ -123,13 +115,10 @@ export const TicketModal: React.FC<TicketModalProps> = ({ ticket, onClose, showP
       <div className="solid" />
 
       {/* Total */}
-      <div className="c b text-black">Total {ticket.totalCost.toFixed(0)} GMD</div>
-
-      <div className="dashed" />
+      <div className="c huge text-black">Total {ticket.totalCost.toFixed(0)} GMD</div>
 
       {/* Footer */}
-      <div className="c b text-black">*** Valid for 7 days ***</div>
-      <div className="c b text-black mt-1">{ticketRefLong}</div>
+      <div className="c b text-black mt-1">*** Valid for 7 days ***</div>
 
       <div className="text-center mt-1">
         <img src={qrUrl} alt="QR" />

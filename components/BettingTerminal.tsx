@@ -15,7 +15,7 @@ import { TicketCheckPanel } from './TicketCheckPanel';
 import { RapportPrintPanel } from './RapportPrintPanel';
 import RaceTimerButton from './RaceTimerButton';
 import { BET_PRICING } from '../constants';
-import { BETTING_CUTOFF_MS, triggerPrint, isRawBtInstalled, launchRawBtTest } from '../utils';
+import { BETTING_CUTOFF_MS, triggerPrint } from '../utils';
 
 interface BettingTerminalProps {
   races: Race[];
@@ -148,9 +148,6 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
     const isNativeAndroid = useMemo(() => Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android', []);
     const isBackofficeApprover = useMemo(() => currentUser.role === 'Admin' || currentUser.role === 'Supervisor', [currentUser.role]);
     const [showInstallGuide, setShowInstallGuide] = useState(false);
-    const [rawBtStatus, setRawBtStatus] = useState<'checking' | 'installed' | 'not-installed' | 'error'>('checking');
-    const [rawBtMessage, setRawBtMessage] = useState('');
-    const [rawBtBusy, setRawBtBusy] = useState(false);
     const [printTestBusy, setPrintTestBusy] = useState(false);
     const [printTestMessage, setPrintTestMessage] = useState('');
     const [apkDownloadBusy, setApkDownloadBusy] = useState(false);
@@ -222,45 +219,6 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
             setApkDownloadBusy(false);
         }, 6000);
     }, [apkDownloadBusy, APK_BUILD_VERSION]);
-
-    useEffect(() => {
-        let active = true;
-        if (!isNativeAndroid) {
-            setRawBtStatus('not-installed');
-            setRawBtMessage('RawBT status available in Android app only.');
-            return;
-        }
-
-        const check = async () => {
-            try {
-                const installed = await isRawBtInstalled();
-                if (!active) return;
-                setRawBtStatus(installed ? 'installed' : 'not-installed');
-                setRawBtMessage(installed ? 'RawBT installed.' : 'RawBT not installed.');
-            } catch {
-                if (!active) return;
-                setRawBtStatus('error');
-                setRawBtMessage('Could not read RawBT status.');
-            }
-        };
-
-        check();
-        return () => {
-            active = false;
-        };
-    }, [isNativeAndroid]);
-
-    const handleRawBtTest = async () => {
-        if (rawBtBusy) return;
-        if (rawBtStatus !== 'installed') {
-            setRawBtMessage('RawBT is not installed. Install RawBT app first, then run this test.');
-            return;
-        }
-        setRawBtBusy(true);
-        const result = await launchRawBtTest();
-        setRawBtMessage(result.message);
-        setRawBtBusy(false);
-    };
 
     const timeRemaining = selectedRace ? selectedRace.endDate.getTime() - effectiveTime.getTime() : 0;
     const isBettingClosed = timeRemaining <= BETTING_CUTOFF_MS;
@@ -702,34 +660,7 @@ export const BettingTerminal: React.FC<BettingTerminalProps> = (props) => {
                                     {printTestMessage || 'Temporary test only. Remove later after printer is confirmed.'}
                                 </p>
                             </div>
-                            <div className="mt-3 rounded-xl border-2 border-gray-300 bg-white p-3">
-                                <div className="flex flex-col gap-2">
-                                    <div className="text-[11px] font-black uppercase tracking-widest text-gray-800">
-                                        RawBT Status: {rawBtStatus}
-                                    </div>
-                                    {rawBtStatus === 'installed' ? (
-                                        <button
-                                            onClick={handleRawBtTest}
-                                            disabled={rawBtBusy || !isNativeAndroid}
-                                            className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 font-black rounded-lg shadow active:scale-95 transition-all text-xs uppercase disabled:opacity-60 disabled:cursor-not-allowed"
-                                            style={{ backgroundColor: '#111827', color: '#ffffff', minHeight: '44px' }}
-                                        >
-                                            <svg viewBox="0 0 24 24" fill="none" className="w-4 h-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 12h8"/><path d="M12 8v8"/><rect x="3" y="4" width="18" height="16" rx="2"/></svg>
-                                            {rawBtBusy ? 'Checking RawBT...' : 'Run RawBT Test'}
-                                        </button>
-                                    ) : (
-                                        <div
-                                            className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 font-black rounded-lg text-xs uppercase border border-gray-300 bg-gray-200 text-gray-600"
-                                            style={{ minHeight: '44px' }}
-                                        >
-                                            <svg viewBox="0 0 24 24" fill="none" className="w-4 h-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 12h8"/><rect x="3" y="4" width="18" height="16" rx="2"/></svg>
-                                            Install RawBT First
-                                        </div>
-                                    )}
-                                </div>
-                                <p className="text-[11px] text-gray-700 font-semibold mt-2">{rawBtMessage || 'Run test to check RawBT print bridge.'}</p>
-                            </div>
-                            <p className="text-[11px] text-gray-400 mt-2 font-semibold">APK Build: {APK_BUILD_VERSION}</p>
+                            <p className="text-[11px] text-gray-400 mt-3 font-semibold">APK Build: {APK_BUILD_VERSION}</p>
                             <p className="text-[11px] text-gray-500 mt-3 font-semibold">
                                 {apkDownloadMessage || (isAndroidTerminal
                                     ? 'Android: after download, open the APK file and tap Install.'

@@ -301,6 +301,13 @@ export const triggerPrint = (elementId: string, options: TriggerPrintOptions = {
         }
         #betese-print-stage .solid { border-top: 0.4mm solid black !important; margin: 1.5mm 0 !important; }
         #betese-print-stage .dashed { border-top: 0.2mm dashed black !important; margin: 1.5mm 0 !important; }
+        #betese-print-stage .box {
+            border: 0.5mm solid black !important;
+            padding: 1mm 1.5mm !important;
+            margin: 1mm 0 !important;
+            text-align: center !important;
+        }
+        #betese-print-stage .box.huge { margin: 1mm 0 !important; }
         #betese-print-stage .flex { display: flex !important; justify-content: space-between !important; align-items: center !important; }
         #betese-print-stage img { display: block !important; margin: 1.5mm auto !important; max-width: ${qrWidthMm}mm !important; }
         #betese-print-stage, #betese-print-stage * { visibility: visible !important; }
@@ -476,6 +483,12 @@ export const triggerPrint = (elementId: string, options: TriggerPrintOptions = {
                         }
                         #betese-native-print-root .solid { border-top: 0.4mm solid black !important; margin: 1.5mm 0 !important; }
                         #betese-native-print-root .dashed { border-top: 0.2mm dashed black !important; margin: 1.5mm 0 !important; }
+                        #betese-native-print-root .box {
+                            border: 0.5mm solid black !important;
+                            padding: 1mm 1.5mm !important;
+                            margin: 1mm 0 !important;
+                            text-align: center !important;
+                        }
                         #betese-native-print-root .flex { display: flex !important; justify-content: space-between !important; align-items: center !important; }
                         #betese-native-print-root img { display: block !important; margin: 1.5mm auto !important; max-width: ${qrWidthMm}mm !important; }
 
