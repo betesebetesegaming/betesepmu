@@ -58,9 +58,12 @@ export const TicketModal: React.FC<TicketModalProps> = ({ ticket, onClose, showP
     autoPrintStartedRef.current = true;
     let cancelled = false;
     setPrintStatus('Auto print starting…');
+    // Snap printing as soon as the modal mounts. 80ms is enough for React
+    // to commit the ticket DOM (which triggerPrint() snapshots) but short
+    // enough to feel instantaneous on the Sunmi terminal.
     const timer = window.setTimeout(() => {
       if (!cancelled) handlePrint();
-    }, 280);
+    }, 80);
     return () => {
       cancelled = true;
       window.clearTimeout(timer);

@@ -34,11 +34,10 @@ import {
     subscribeDeposits, subscribeWithdrawals,
 } from './firebaseClient';
 import {
-    PaymentResultModal,
     buildDepositResult,
     buildWithdrawalResult,
     type PaymentResultPayload,
-} from './components/PaymentResultModal';
+} from './lib/paymentResultPayload';
 
 const LAZY_CHUNK_RETRY_KEY = 'betese_lazy_chunk_retry';
 
@@ -133,6 +132,7 @@ const lazyWithChunkRecovery = <T extends React.ComponentType<any>>(importer: () 
         }
     });
 
+const PaymentResultModal = lazyWithChunkRecovery(() => import('./components/PaymentResultModal').then(m => ({ default: m.PaymentResultModal })));
 const LoginScreen = lazyWithChunkRecovery(() => import('./components/LoginScreen').then(m => ({ default: m.LoginScreen })));
 const BettingTerminal = lazyWithChunkRecovery(() => import('./components/BettingTerminal').then(m => ({ default: m.BettingTerminal })));
 const AdminDashboard = lazyWithChunkRecovery(() => import('./components/AdminDashboard').then(m => ({ default: m.AdminDashboard })));

@@ -1,40 +1,74 @@
 /* eslint-disable no-undef */
-// KILL-SWITCH service worker.
+// Offline app-shell cache for the Sunmi V2 Pro (and any other terminal).
 //
-// Previous Vite-based deployments registered a caching SW that, after the
-// Next.js migration, kept serving cached HTML referencing assets that no
-// longer exist (e.g. /index.tsx) — leaving users on a blank white page.
+// Strategy: stale-while-revalidate for the Next.js build output, network-only
+// for Firebase / API / dynamic pages. The terminal opens instantly on the
+// second-and-later launch because the JS/CSS shell is read from cache;
+// the SW kicks off a background fetch so the next launch already has fresh
+// code. Firebase reads (auth, races, tickets) always hit the network so we
+// never serve stale data for anything that matters.
 //
-// This version takes over, deletes every cache it owns, and unregisters
-// itself so subsequent loads bypass the SW entirely and go straight to the
-// network (and Next.js's own asset hashing handles cache busting).
-//
-// Once it's been live long enough that the vast majority of users have
-// picked it up, /public/service-worker.js can be deleted outright.
+// Bump CACHE_VERSION to invalidate everything on rollouts that change the
+// caching strategy itself. Day-to-day code changes are picked up
+// automatically because Next.js fingerprints filenames in /_next/static/.
+
+const CACHE_VERSION = 'betese-shell-v2';
+const SHELL_CACHE = `${CACHE_VERSION}-shell`;
+
+// Paths that are safe to cache aggressively and serve from cache first.
+// Everything else is network-first / network-only.
+const SHELL_MATCHES = [
+  /^\/_next\/static\//,
+  /^\/icon\.png$/,
+  /^\/logo\.png$/,
+  /^\/manifest\.json$/,
+  /^\/animations\//,
+  /^\/payment-logos\//,
+];
+
+const isShellRequest = (url) => {
+  if (url.origin !== self.location.origin) return false;
+  return SHELL_MATCHES.some((re) => re.test(url.pathname));
+};
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
+  // Drop every legacy cache from the previous kill-switch SW so we start
+  // clean without surfacing pre-Next.js artefacts.
   event.waitUntil(
-    caches.keys().then((names) => Promise.all(names.map((n) => caches.delete(n))))
+    caches.keys().then((names) =>
+      Promise.all(
+        names
+          .filter((name) => name !== SHELL_CACHE)
+          .map((name) => caches.delete(name)),
+      ),
+    ),
   );
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    (async () => {
-      const names = await caches.keys();
-      await Promise.all(names.map((n) => caches.delete(n)));
-      await self.registration.unregister();
-      const clients = await self.clients.matchAll({ type: 'window' });
-      clients.forEach((client) => {
-        try { client.navigate(client.url); } catch { /* navigate may be blocked; fall through */ }
-      });
-    })()
-  );
+  event.waitUntil(self.clients.claim());
 });
 
-// Pass-through fetch — never serve cached responses. Required because the
-// SW remains active for the current page until activation completes; without
-// this, Chrome's default no-op fetch handler is used (which is fine), but
-// declaring it explicitly avoids any chance of intercepting with stale data.
-self.addEventListener('fetch', () => { /* network only */ });
+self.addEventListener('fetch', (event) => {
+  const req = event.request;
+  if (req.method !== 'GET') return;
+
+  const url = new URL(req.url);
+  if (!isShellRequest(url)) return; // fall through to network
+
+  event.respondWith(
+    caches.open(SHELL_CACHE).then(async (cache) => {
+      const cached = await cache.match(req);
+      const network = fetch(req)
+        .then((res) => {
+          if (res && res.status === 200 && res.type === 'basic') {
+            cache.put(req, res.clone()).catch(() => {});
+          }
+          return res;
+        })
+        .catch(() => cached);
+      return cached || network;
+    }),
+  );
+});
