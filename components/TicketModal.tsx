@@ -89,9 +89,9 @@ export const TicketModal: React.FC<TicketModalProps> = ({ ticket, onClose, showP
   const agentLabel = (ticket.vendorName || ticket.vendorId || 'BETESE').toUpperCase();
 
   const renderStandardTicket = () => (
-    <div className="text-black bg-white leading-tight overflow-hidden px-1 py-1" style={{ fontFamily: '"Arial Black", Arial, sans-serif' }}>
+    <div className="text-black bg-white leading-tight overflow-hidden px-1" style={{ fontFamily: '"Arial Black", Arial, sans-serif' }}>
       {/* BETESE PMU banner */}
-      <div className="c banner bg-black text-white py-1 mb-1 text-center uppercase tracking-widest">BETESE PMU</div>
+      <div className="c banner bg-black text-white text-center uppercase" style={{ padding: '1mm 0', marginBottom: '0.5mm' }}>BETESE PMU</div>
 
       {/* Meta block */}
       <div className="b text-black">REF: #{ticketSerial}</div>
@@ -100,17 +100,18 @@ export const TicketModal: React.FC<TicketModalProps> = ({ ticket, onClose, showP
 
       <div className="solid" />
 
-      {/* Race selections */}
+      {/* Race selections — all on same continuous strip */}
       {ticket.selections.map((sel, i) => {
         const numbersText = sel.pattern && sel.pattern.length > 0
           ? sel.pattern.join('-')
           : ((sel.xCount > 0 ? Array(sel.xCount).fill('X').join('-') + '-' : '') + sel.numbers.join('-'));
         const stake = (sel.cost * sel.multiplier).toFixed(0);
         return (
-          <div key={i} className="mb-1">
-            <div className="b text-black uppercase mt-1">{sel.raceName} {sel.betType}</div>
-            <div className="box c huge text-black border-2 border-black px-1 py-0.5 my-1">{numbersText}</div>
+          <div key={i} style={{ marginBottom: '0.5mm' }}>
+            <div className="b text-black uppercase">{sel.raceName} {sel.betType}</div>
+            <div className="box c huge text-black">{numbersText}</div>
             <div className="b text-black uppercase">STAKE X{sel.multiplier} GMD {stake}</div>
+            {i < ticket.selections.length - 1 && <div className="dashed" />}
           </div>
         );
       })}
@@ -121,9 +122,9 @@ export const TicketModal: React.FC<TicketModalProps> = ({ ticket, onClose, showP
       <div className="c huge text-black">Total {ticket.totalCost.toFixed(0)} GMD</div>
 
       {/* Footer */}
-      <div className="c b text-black mt-1">*** Valid for 7 days ***</div>
+      <div className="c b text-black">*** Valid for 7 days ***</div>
 
-      <div className="text-center mt-1">
+      <div className="text-center">
         <img src={qrUrl} alt="QR" />
       </div>
     </div>

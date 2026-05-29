@@ -271,13 +271,13 @@ export const triggerPrint = (elementId: string, options: TriggerPrintOptions = {
             box-sizing: border-box;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
-            page-break-inside: avoid !important;
-            break-inside: avoid-page !important;
             font-weight: 900 !important;
             white-space: normal !important;
             overflow-wrap: anywhere !important;
             word-break: break-word !important;
             max-width: 100% !important;
+            page-break-before: avoid !important;
+            page-break-after: avoid !important;
         }
         #betese-print-stage .c { text-align: center !important; }
         #betese-print-stage .b { font-weight: 900 !important; font-size: ${boldFontMm}mm !important; }
@@ -296,17 +296,17 @@ export const triggerPrint = (elementId: string, options: TriggerPrintOptions = {
             line-height: 1.1 !important;
             letter-spacing: 0.4mm !important;
         }
-        #betese-print-stage .solid { border-top: 0.4mm solid black !important; margin: 1.5mm 0 !important; }
-        #betese-print-stage .dashed { border-top: 0.2mm dashed black !important; margin: 1.5mm 0 !important; }
+        #betese-print-stage .solid { border-top: 0.4mm solid black !important; margin: 0.8mm 0 !important; }
+        #betese-print-stage .dashed { border-top: 0.2mm dashed black !important; margin: 0.8mm 0 !important; }
         #betese-print-stage .box {
             border: 0.5mm solid black !important;
-            padding: 1mm 1.5mm !important;
-            margin: 1mm 0 !important;
+            padding: 0.5mm 1mm !important;
+            margin: 0.5mm 0 !important;
             text-align: center !important;
         }
-        #betese-print-stage .box.huge { margin: 1mm 0 !important; }
+        #betese-print-stage .box.huge { margin: 0.5mm 0 !important; }
         #betese-print-stage .flex { display: flex !important; justify-content: space-between !important; align-items: center !important; }
-        #betese-print-stage img { display: block !important; margin: 1.5mm auto !important; max-width: ${qrWidthMm}mm !important; }
+        #betese-print-stage img { display: block !important; margin: 1mm auto !important; max-width: ${qrWidthMm}mm !important; }
         #betese-print-stage, #betese-print-stage * { visibility: visible !important; }
         #betese-print-stage { page: receipt !important; }
         @media print {
@@ -339,7 +339,9 @@ export const triggerPrint = (elementId: string, options: TriggerPrintOptions = {
                 page-break-before: avoid !important;
                 page-break-after: avoid !important;
                 page-break-inside: avoid !important;
-                break-inside: avoid-page !important;
+                break-before: avoid !important;
+                break-after: avoid !important;
+                break-inside: avoid !important;
             }
             @page receipt { margin: 0; size: ${pageSize}; }
             @page { margin: 0; size: ${pageSize}; }
