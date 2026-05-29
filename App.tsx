@@ -5,6 +5,7 @@ import { BetSlip, BetTypeOption, Ticket, BetSelection, User, Role, WithdrawalReq
 import { BET_PRICING } from './constants';
 import { Header } from './components/Header';
 import { ConfirmationModal } from './components/ConfirmationModal';
+import { PlaceBetConfirmModal } from './components/PlaceBetConfirmModal';
 import { BookingCodeModal } from './components/BookingCodeModal';
 import { WithdrawalCodeModal } from './components/WithdrawalCodeModal';
 import { SEVEN_DAYS_IN_MS, BETTING_CUTOFF_MS, calculateTicketWinnings, validateTicketForPlacement, validateTicketAgainstRaceState, normalizeGambiaPhone } from './utils';
@@ -260,6 +261,7 @@ const AppContent: React.FC = () => {
   const [betSlip, setBetSlip] = useState<BetSlip>({ selections: [], totalCost: 0 });
   const isBettingInFlightRef = useRef(false); // prevents double-click on Place Bet / Book Bet
     const [isBettingInProgress, setIsBettingInProgress] = useState(false);
+  const [showPlaceBetConfirm, setShowPlaceBetConfirm] = useState(false);
   const [lastTicket, setLastTicket] = useState<Ticket | null>(null);
   const [paidTicketModal, setPaidTicketModal] = useState<Ticket | null>(null);
   const [ticketToReprint, setTicketToReprint] = useState<Ticket | null>(null);
@@ -2400,8 +2402,8 @@ const AppContent: React.FC = () => {
                 betSlip={betSlip}
                 onUpdateBetSlip={updateBetSlip}
                 onClearBetSlip={() => setBetSlip({ selections: [], totalCost: 0 })}
-                onInitiatePlaceBet={placeBet}
-                onInitiateBookBet={bookBet}
+                onInitiatePlaceBet={() => setShowPlaceBetConfirm(true)}
+                onInitiateBookBet={() => setShowPlaceBetConfirm(true)}
                 lastTicket={lastTicket}
                 onCloseTicket={() => setLastTicket(null)}
                 onRemoveSelection={(idx) => setBetSlip(prev => { const s = prev.selections.filter((_, i) => i !== idx); return { selections: s, totalCost: Number(s.reduce((sum, x) => sum + (x.cost * x.multiplier), 0).toFixed(2)) }; })}
@@ -2431,6 +2433,17 @@ const AppContent: React.FC = () => {
             <Suspense fallback={null}>
                     {paidTicketModal && <TicketModal ticket={paidTicketModal} onClose={() => setPaidTicketModal(null)} showPrintButton={true} races={races} />}
                     {ticketToReprint && <TicketModal ticket={ticketToReprint} onClose={() => setTicketToReprint(null)} showPrintButton={true} races={races} />}
+                    {currentUser && showPlaceBetConfirm && (
+                      <PlaceBetConfirmModal
+                        isOpen={showPlaceBetConfirm}
+                        onClose={() => setShowPlaceBetConfirm(false)}
+                        onPlaceBet={placeBet}
+                        onBookBet={bookBet}
+                        betSlip={betSlip}
+                        availableBalance={Number(((currentUser.walletBalance || 0) + (currentUser.bonusBalance || 0)).toFixed(2))}
+                        isPlacingBet={isBettingInProgress}
+                      />
+                    )}
                     <ChatPanel isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} currentUser={currentUser} users={users} threads={threads} messages={messages} onSendMessage={handleSendMessage} onMarkAsRead={handleMarkThreadAsRead} />
                     <PaymentResultModal result={paymentResult} onClose={() => setPaymentResult(null)} />
             </Suspense>
