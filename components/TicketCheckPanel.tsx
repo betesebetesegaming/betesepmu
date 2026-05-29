@@ -171,7 +171,14 @@ export const TicketCheckPanel: React.FC<TicketCheckPanelProps> = ({ allTickets, 
                   <div className="space-y-1 max-h-28 overflow-y-auto pr-1">
                     {foundTicket.selections.map((selection, index) => (
                       <div key={`${foundTicket.id}-sel-${index}`} className="flex justify-between gap-2">
-                        <span className="font-semibold">{selection.betType}</span>
+                        <span className="font-semibold">
+                          {selection.betType}
+                          {Number(selection.multiplier) > 1 && (
+                            <span className="ml-1.5 inline-flex items-center rounded bg-amber-100 px-1 py-0 text-[10px] font-black uppercase text-amber-800 align-middle">
+                              ×{selection.multiplier}
+                            </span>
+                          )}
+                        </span>
                         <span className="font-mono text-right">
                           {selection.pattern && selection.pattern.length > 0
                             ? selection.pattern.join('-')

@@ -86,7 +86,14 @@ const TicketItem: React.FC<{ ticket: Ticket; isCancellable: boolean; onCancel: (
                             <div key={index} className="text-xs bg-white/50 p-2 rounded">
                                 <div className="flex justify-between items-start">
                                     <div>
-                                        <p className="font-bold">{selection.raceName} - {selection.betType}</p>
+                                        <p className="font-bold">
+                                            {selection.raceName} - {selection.betType}
+                                            {Number(selection.multiplier) > 1 && (
+                                                <span className="ml-2 inline-flex items-center rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-amber-800 align-middle">
+                                                    × {selection.multiplier}
+                                                </span>
+                                            )}
+                                        </p>
                                         <p className="font-mono">
                                             Your Bet: {selection.pattern && selection.pattern.length > 0
                                                 ? selection.pattern.join('-')

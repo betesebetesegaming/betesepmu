@@ -451,7 +451,8 @@ const LoginForm: React.FC<{ onLogin: (user: User) => void; users: User[]; onSwit
                 <div className="flex justify-center mb-4 transform hover:scale-105 transition-transform duration-500">
                     <Logo className="h-20 w-auto drop-shadow-md" />
                 </div>
-                <h2 className="text-2xl font-bold text-gray-800">{t('welcome')} BETESEPMU</h2>
+                <h2 className="text-2xl font-bold text-gray-800">{t('welcome')}</h2>
+                <p className="text-3xl font-extrabold text-green-600 tracking-wide mt-1">BETESEPMU</p>
             </div>
 
             {error && (

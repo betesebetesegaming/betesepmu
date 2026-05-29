@@ -1692,7 +1692,10 @@ const AppContent: React.FC = () => {
                   throw new Error('Unable to generate a unique withdrawal code. Please try again.');
               }
 
-              setWithdrawalRequests(prev => [savedRequest!, ...(prev || [])]);
+              // Dedupe by id — the RTDB onValue subscription may have already
+              // delivered this row before we get here, producing a phantom
+              // second card with the same code in the withdrawal history.
+              setWithdrawalRequests(prev => [savedRequest!, ...((prev || []).filter(r => r.id !== savedRequest!.id))]);
               return savedRequest;
           } else {
               const newRequest: WithdrawalRequest = {
