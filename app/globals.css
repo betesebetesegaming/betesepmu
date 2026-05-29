@@ -12,6 +12,20 @@
   }
 }
 
+/* Server-rendered splash shown before the React app hydrates.
+ * Kept here (not Tailwind) so it survives even if Tailwind hasn't loaded yet.
+ */
+@keyframes betese-splash-spin { to { transform: rotate(360deg); } }
+.betese-splash-spinner {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #ffffff;
+  animation: betese-splash-spin 0.9s linear infinite;
+  margin-top: 18px;
+}
+
 /* High-contrast styles for printing via html2canvas */
 .print-mode {
     &, & * {
