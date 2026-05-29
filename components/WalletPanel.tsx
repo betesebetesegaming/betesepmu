@@ -6,6 +6,7 @@ import { WithdrawalCodeModal } from './WithdrawalCodeModal';
 import { PaymentSheet } from './PaymentSheet';
 import { Smartphone, Hash, Phone, Banknote, ArrowDownToLine, Loader2, AlertCircle } from 'lucide-react';
 import { apiUrl } from '../lib/apiUrl';
+import { BONUS_UNLOCK_WAGER_COUNT } from '../constants';
 
 const WAVE_LOGO = '/payment-logos/wave.png';
 const AFRIMONEY_LOGO = '/payment-logos/afrimoney.png';
@@ -144,8 +145,8 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
         return {
             distinctRaceCount: distinctRaceIds.size,
             sameRaceBestCount,
-            optionAQualified: distinctRaceIds.size >= 3,
-            optionBQualified: sameRaceBestCount >= 3,
+            optionAQualified: distinctRaceIds.size >= BONUS_UNLOCK_WAGER_COUNT,
+            optionBQualified: sameRaceBestCount >= BONUS_UNLOCK_WAGER_COUNT,
         };
     }, [bonusPlayTickets]);
 
@@ -245,18 +246,18 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <div className={`rounded-xl border p-4 ${bonusUnlockProgress.optionAQualified ? 'bg-green-50 border-green-300' : 'bg-white border-amber-200'}`}>
-                                <p className="text-sm font-black text-gray-800 uppercase">Option A: 3 Different Games</p>
-                                <p className="text-xs text-gray-600 mt-1">Play bonus across 3 different races to unlock fast.</p>
-                                <p className="mt-3 text-2xl font-black text-betese-dark">{Math.min(bonusUnlockProgress.distinctRaceCount, 3)}/3</p>
+                                <p className="text-sm font-black text-gray-800 uppercase">Option A: {BONUS_UNLOCK_WAGER_COUNT} Different Games</p>
+                                <p className="text-xs text-gray-600 mt-1">Play bonus across {BONUS_UNLOCK_WAGER_COUNT} different races to unlock fast.</p>
+                                <p className="mt-3 text-2xl font-black text-betese-dark">{Math.min(bonusUnlockProgress.distinctRaceCount, BONUS_UNLOCK_WAGER_COUNT)}/{BONUS_UNLOCK_WAGER_COUNT}</p>
                                 <p className={`text-xs font-bold mt-1 ${bonusUnlockProgress.optionAQualified ? 'text-green-700' : 'text-amber-700'}`}>
                                     {bonusUnlockProgress.optionAQualified ? 'Qualified: bonus should move to actual wallet.' : 'Not yet qualified'}
                                 </p>
                             </div>
 
                             <div className={`rounded-xl border p-4 ${bonusUnlockProgress.optionBQualified ? 'bg-green-50 border-green-300' : 'bg-white border-amber-200'}`}>
-                                <p className="text-sm font-black text-gray-800 uppercase">Option B: Same Game 3 Days</p>
-                                <p className="text-xs text-gray-600 mt-1">Play one race with bonus on 3 different days.</p>
-                                <p className="mt-3 text-2xl font-black text-betese-dark">{Math.min(bonusUnlockProgress.sameRaceBestCount, 3)}/3</p>
+                                <p className="text-sm font-black text-gray-800 uppercase">Option B: Same Game {BONUS_UNLOCK_WAGER_COUNT} Days</p>
+                                <p className="text-xs text-gray-600 mt-1">Play one race with bonus on {BONUS_UNLOCK_WAGER_COUNT} different days.</p>
+                                <p className="mt-3 text-2xl font-black text-betese-dark">{Math.min(bonusUnlockProgress.sameRaceBestCount, BONUS_UNLOCK_WAGER_COUNT)}/{BONUS_UNLOCK_WAGER_COUNT}</p>
                                 <p className={`text-xs font-bold mt-1 ${bonusUnlockProgress.optionBQualified ? 'text-green-700' : 'text-amber-700'}`}>
                                     {bonusUnlockProgress.optionBQualified ? 'Qualified: bonus should move to actual wallet.' : 'Not yet qualified'}
                                 </p>
@@ -266,9 +267,9 @@ export const WalletPanel: React.FC<WalletPanelProps> = ({ user, onWithdrawalRequ
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
                             <div className="rounded-xl bg-white border border-amber-200 p-3">
                                 <p className="font-black text-gray-800 uppercase mb-1">Strict Rule Summary</p>
-                                <p className="text-gray-600">Fast unlock = play all 3 races once.</p>
-                                <p className="text-gray-600">Slow unlock = play one race on 3 different days.</p>
-                                <p className="text-gray-600">Repeating the same race 3 times in one day does not qualify.</p>
+                                <p className="text-gray-600">Fast unlock = play {BONUS_UNLOCK_WAGER_COUNT} different races.</p>
+                                <p className="text-gray-600">Slow unlock = play one race on {BONUS_UNLOCK_WAGER_COUNT} different days.</p>
+                                <p className="text-gray-600">Repeating the same race {BONUS_UNLOCK_WAGER_COUNT} times in one day does not qualify.</p>
                             </div>
                             <div className="rounded-xl bg-white border border-amber-200 p-3">
                                 <p className="font-black text-gray-800 uppercase mb-1">How Bonus Is Used</p>

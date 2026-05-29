@@ -131,13 +131,11 @@ export const Header: React.FC<HeaderProps> = ({
                 {user.role === 'Customer' && (
                   <div className="flex items-center gap-1.5 flex-shrink-0">
                     <div className={`p-1 px-2 rounded-lg transition-all ${isFlashing ? 'bg-red-100 animate-pulse' : 'bg-green-100'}`}>
-                      <span className="font-bold text-betese-green text-[11px] sm:text-sm">Cash {user.walletBalance?.toFixed(2)}</span>
+                      <span className="font-bold text-betese-green text-[11px] sm:text-sm">Cash {(user.walletBalance ?? 0).toFixed(2)}</span>
                     </div>
-                    {(user.bonusBalance ?? 0) > 0 && (
-                      <div className="p-1 px-2 rounded-lg bg-yellow-100 border border-yellow-200">
-                        <span className="font-bold text-yellow-700 text-[11px] sm:text-sm">Bonus {user.bonusBalance?.toFixed(2)}</span>
-                      </div>
-                    )}
+                    <div className="p-1 px-2 rounded-lg bg-yellow-100 border border-yellow-200">
+                      <span className="font-bold text-yellow-700 text-[11px] sm:text-sm">Bonus {(user.bonusBalance ?? 0).toFixed(2)}</span>
+                    </div>
                   </div>
                 )}
 

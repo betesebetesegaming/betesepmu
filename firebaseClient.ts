@@ -28,6 +28,7 @@ import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage
 import { getStorage } from 'firebase/storage';
 import { db, firebaseApp } from './lib/firebase/client';
 import { apiUrl } from './lib/apiUrl';
+import { BONUS_UNLOCK_WAGER_COUNT } from './constants';
 import {
     depositToRtdb,
     withdrawalToRtdb,
@@ -266,7 +267,9 @@ const evaluateBonusUnlockProgress = (tickets: Ticket[]) => {
     return {
         distinctRaceCount: distinctRaceIds.size,
         sameRaceBestCount,
-        qualified: distinctRaceIds.size >= 3 || sameRaceBestCount >= 3,
+        qualified:
+            distinctRaceIds.size >= BONUS_UNLOCK_WAGER_COUNT ||
+            sameRaceBestCount >= BONUS_UNLOCK_WAGER_COUNT,
     };
 };
 

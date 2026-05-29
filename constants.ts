@@ -1,6 +1,13 @@
 
 import { BetTypeOption, Race, BetPricing, User, ChatThread, ChatMessage, Promotion } from './types';
 
+// Bonus rollover requirement: how many distinct races (or how many days
+// replaying the same race) a customer must wager their bonus on before any
+// remaining bonus balance converts to real cash. Loses to zero bonus still
+// forfeit it as normal. Two paths are equivalent — whichever hits the
+// threshold first qualifies.
+export const BONUS_UNLOCK_WAGER_COUNT = 2;
+
 export const BET_PRICING: Record<BetTypeOption, BetPricing> = {
   [BetTypeOption.SimpleGagnant]: { minHorses: 1, perHorsePrice: 30, priceMap: {} },
   [BetTypeOption.SimplePlace]: { minHorses: 1, perHorsePrice: 30, priceMap: {} },
