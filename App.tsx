@@ -985,7 +985,9 @@ const AppContent: React.FC = () => {
       try {
           if (realtimeDb) {
               // Await only the transaction — this is the minimum blocking work.
-              await dbPlaceBet(newTicket, currentUser);
+              // Pass the already-loaded races so dbPlaceBet can skip its own
+              // pre-transaction race doc fetches (those were already validated above).
+              await dbPlaceBet(newTicket, currentUser, races || []);
 
               // Show confirmation and clear the slip immediately — don't wait
               // for the background ticket-list refresh below.

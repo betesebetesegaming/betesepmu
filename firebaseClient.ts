@@ -505,30 +505,36 @@ export const dbRecalculateAllTicketsSafely = async () => {
     return { success: true };
 };
 
-export const dbPlaceBet = async (ticket: Ticket, user: User) => {
+export const dbPlaceBet = async (ticket: Ticket, user: User, knownRaces?: Race[]) => {
     const placement = validateTicketForPlacement({ selections: ticket.selections, totalCost: ticket.totalCost });
     if (!placement.valid) throw new Error(`Invalid ticket formula: ${placement.message}`);
 
     const raceIds = Array.from(new Set((ticket.selections || []).map((s) => s.raceId).filter(Boolean)));
     if (raceIds.length === 0) throw new Error('Ticket has no race selections');
 
-    // Firestore `in` is limited to 30 values; raceIds is typically small for one ticket.
-    const raceDocs = await Promise.all(raceIds.map((id) => getDoc(doc(db, 'races', id))));
-    const raceRows = raceDocs
-        .filter((d) => d.exists())
-        .map((d) => {
-            const data = d.data() as any;
-            return {
-                id: d.id,
-                name: data.name,
-                horseCount: Number(data.horse_count || 0),
-                nonRunners: Array.isArray(data.non_runners) ? data.non_runners : [],
-                disabledBetTypes: Array.isArray(data.disabled_bet_types) ? data.disabled_bet_types : [],
-            };
-        });
-
-    const stateCheck = validateTicketAgainstRaceState(ticket.selections, raceRows);
-    if (!stateCheck.valid) throw new Error(`Selection blocked: ${stateCheck.message}`);
+    // If the caller (App.tsx) already validated the ticket against fresh race data
+    // from the realtime listener, skip the redundant round-trips to fetch race
+    // docs again — those were the main source of pre-transaction latency.
+    // Only fall back to fetching if races weren’t provided (e.g. direct API calls).
+    if (!knownRaces || knownRaces.length === 0) {
+        const raceDocs = await Promise.all(raceIds.map((id) => getDoc(doc(db, 'races', id))));
+        const raceRows = raceDocs
+            .filter((d) => d.exists())
+            .map((d) => {
+                const data = d.data() as any;
+                return {
+                    id: d.id,
+                    name: data.name,
+                    horseCount: Number(data.horse_count || 0),
+                    nonRunners: Array.isArray(data.non_runners) ? data.non_runners : [],
+                    disabledBetTypes: Array.isArray(data.disabled_bet_types) ? data.disabled_bet_types : [],
+                };
+            });
+        const stateCheck = validateTicketAgainstRaceState(ticket.selections, raceRows);
+        if (!stateCheck.valid) throw new Error(`Selection blocked: ${stateCheck.message}`);
+    }
+    // When knownRaces are provided the caller already ran validateTicketAgainstRaceState
+    // with those same race objects, so no re-check is needed here.
 
     const isOnline = user.role === 'Customer';
     const shouldChargeWallet = isOnline && ticket.status !== 'Booked';
