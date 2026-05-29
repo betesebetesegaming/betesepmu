@@ -158,24 +158,30 @@ type PrintPaperMode = 'auto' | 'fixed';
 
 const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
 
+// Safe localStorage helpers — fall back silently when storage is blocked
+// (private/incognito mode, cross-origin iframes, Firefox with strict tracking
+// protection, or browsers with storage disabled by policy).
+const lsGet = (key: string): string | null => { try { return localStorage.getItem(key); } catch { return null; } };
+const lsSet = (key: string, value: string): void => { try { localStorage.setItem(key, value); } catch { /* storage blocked */ } };
+
 export const getPrintPaperMode = (): PrintPaperMode => {
-    const raw = localStorage.getItem(PRINT_PAPER_MODE_KEY);
+    const raw = lsGet(PRINT_PAPER_MODE_KEY);
     return raw === 'fixed' ? 'fixed' : 'auto';
 };
 
 export const setPrintPaperMode = (mode: PrintPaperMode): void => {
-    localStorage.setItem(PRINT_PAPER_MODE_KEY, mode === 'fixed' ? 'fixed' : 'auto');
+    lsSet(PRINT_PAPER_MODE_KEY, mode === 'fixed' ? 'fixed' : 'auto');
 };
 
 export const getPrintPaperWidthMm = (): number => {
-    const raw = Number(localStorage.getItem(PRINT_PAPER_WIDTH_MM_KEY) || '57');
+    const raw = Number(lsGet(PRINT_PAPER_WIDTH_MM_KEY) || '57');
     if (!Number.isFinite(raw)) return 57;
     return clamp(Math.round(raw), 48, 112);
 };
 
 export const setPrintPaperWidthMm = (widthMm: number): void => {
     const normalized = clamp(Math.round(Number(widthMm) || 57), 48, 112);
-    localStorage.setItem(PRINT_PAPER_WIDTH_MM_KEY, String(normalized));
+    lsSet(PRINT_PAPER_WIDTH_MM_KEY, String(normalized));
 };
 
 export const getEffectiveTicketStatus = (ticket: Ticket, now: Date): Ticket['status'] | 'Expired' => {

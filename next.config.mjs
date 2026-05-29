@@ -40,6 +40,19 @@ const nextConfig = {
           { key: 'Service-Worker-Allowed', value: '/' },
         ],
       },
+      {
+        // Apply cross-browser compatibility headers to all pages.
+        // These ensure Chrome, Edge, Firefox and Safari all behave consistently.
+        source: '/(.*)',
+        headers: [
+          // Prevent MIME sniffing — ensures JS/CSS loads correctly in all browsers
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          // Allow Edge and Chrome to render at full speed (not in compatibility mode)
+          { key: 'X-UA-Compatible', value: 'IE=edge,chrome=1' },
+          // Prevent browsers caching stale HTML pages that break the SW
+          { key: 'Cache-Control', value: 'no-cache, must-revalidate' },
+        ],
+      },
     ];
   },
 };

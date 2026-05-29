@@ -42,6 +42,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        {/* Force all browsers (IE/legacy Edge/Chrome) to use the latest engine */}
+        <meta httpEquiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+        {/* Prevent MIME-type sniffing — required for correct JS/CSS loading in all browsers */}
+        <meta httpEquiv="Content-Type" content="text/html; charset=utf-8" />
         <script dangerouslySetInnerHTML={{ __html: envScript }} />
       </head>
       <body className="bg-gray-100">

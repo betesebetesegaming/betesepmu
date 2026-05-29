@@ -181,15 +181,17 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   // Load saved language preference on mount
   useEffect(() => {
-    const savedLang = localStorage.getItem('betese-language') as Language;
-    if (savedLang && (savedLang === 'en' || savedLang === 'fr')) {
-      setLanguage(savedLang);
-    }
+    try {
+      const savedLang = localStorage.getItem('betese-language') as Language;
+      if (savedLang && (savedLang === 'en' || savedLang === 'fr')) {
+        setLanguage(savedLang);
+      }
+    } catch { /* storage blocked in private/restricted mode */ }
   }, []);
 
   const handleSetLanguage = (lang: Language) => {
     setLanguage(lang);
-    localStorage.setItem('betese-language', lang);
+    try { localStorage.setItem('betese-language', lang); } catch { /* ignore */ }
   };
 
   const t = (key: string): string => {
