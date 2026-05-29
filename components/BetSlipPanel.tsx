@@ -11,11 +11,12 @@ interface BetSlipPanelProps {
   onUpdateSelectionMultiplier: (index: number, multiplier: number) => void;
   onInitiateBookBet?: () => void;
   onTopUp?: (amount: number) => void;
+  onAddMore?: () => void;
   availableBalance?: number;
   isPlacingBet?: boolean;
 }
 
-export const BetSlipPanel: React.FC<BetSlipPanelProps> = ({ betSlip, onClear, onInitiatePlaceBet, onRemove, onUpdateSelectionMultiplier, onInitiateBookBet, onTopUp, availableBalance, isPlacingBet = false }) => {
+export const BetSlipPanel: React.FC<BetSlipPanelProps> = ({ betSlip, onClear, onInitiatePlaceBet, onRemove, onUpdateSelectionMultiplier, onInitiateBookBet, onTopUp, onAddMore, availableBalance, isPlacingBet = false }) => {
   const hasSelections = betSlip.selections.length === 0;
   const { t } = useLanguage();
   const shortfall = availableBalance != null ? Math.max(0, betSlip.totalCost - availableBalance) : 0;
@@ -124,6 +125,17 @@ export const BetSlipPanel: React.FC<BetSlipPanelProps> = ({ betSlip, onClear, on
       )}
 
       <div className="mt-6 space-y-3">
+        {onAddMore && (
+          <button
+            onClick={onAddMore}
+            className="w-full py-3.5 border-2 border-betese-green text-betese-green font-black rounded-2xl hover:bg-green-50 transition-all active:scale-95 text-sm uppercase tracking-widest flex items-center justify-center gap-2"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.4}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+            Add More Bet
+          </button>
+        )}
         <button
           onClick={onInitiatePlaceBet}
           disabled={hasSelections || isPlacingBet}

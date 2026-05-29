@@ -15,6 +15,7 @@ interface BetSheetProps {
   effectiveTime: Date;
   onAddToSlip: (selection: Omit<BetSelection, 'cost' | 'multiplier'>) => void;
   initialRaceId?: string | null;
+  onPlaceBet?: () => void;
 }
 
 type Step = 1 | 2 | 3 | 4;
@@ -33,6 +34,7 @@ export const BetSheet: React.FC<BetSheetProps> = ({
   effectiveTime,
   onAddToSlip,
   initialRaceId,
+  onPlaceBet,
 }) => {
   const { t } = useLanguage();
   const [step, setStep] = useState<Step>(1);
@@ -308,7 +310,7 @@ export const BetSheet: React.FC<BetSheetProps> = ({
                   <svg viewBox="0 0 24 24" className="w-5 h-5 text-betese-green flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={3}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                   </svg>
-                  <p className="text-sm font-black text-betese-dark uppercase tracking-wide">Added to slip! Pick more horses or hit Done.</p>
+                  <p className="text-sm font-black text-betese-dark uppercase tracking-wide">Added to slip! Pick more horses or press Place Bet.</p>
                 </div>
               )}
               <div className="rounded-xl bg-gray-50 border border-gray-200 p-3 mb-3 flex items-center justify-between">
@@ -339,12 +341,20 @@ export const BetSheet: React.FC<BetSheetProps> = ({
               >
                 Review Bet
               </button>
-              <button
-                onClick={onClose}
-                className="mt-2 w-full py-3 bg-gray-100 text-gray-700 font-black rounded-xl active:scale-95 transition-all text-sm uppercase tracking-widest"
-              >
-                Done
-              </button>
+              <div className="mt-2 flex gap-2">
+                <button
+                  onClick={onClose}
+                  className="flex-1 py-3.5 bg-yellow-400 text-black font-black rounded-xl active:scale-95 transition-all text-sm uppercase tracking-widest shadow"
+                >
+                  ← Back
+                </button>
+                <button
+                  onClick={() => { onClose(); onPlaceBet?.(); }}
+                  className="flex-1 py-3.5 bg-betese-green text-white font-black rounded-xl active:scale-95 transition-all text-sm uppercase tracking-widest shadow"
+                >
+                  Place Bet
+                </button>
+              </div>
             </div>
           )}
 
