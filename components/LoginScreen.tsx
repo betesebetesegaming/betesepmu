@@ -497,7 +497,7 @@ const LoginForm: React.FC<{ onLogin: (user: User) => void; users: User[]; onSwit
                                 : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
                         }`}
                     >
-                        👤 Username (Staff)
+                        👤 Username (Agent)
                     </button>
                 </div>
 
