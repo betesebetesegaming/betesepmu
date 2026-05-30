@@ -6,13 +6,14 @@ import { getEffectiveTicketStatus, formatWinningNumbersForDisplay } from '../uti
 interface TicketHistoryPanelProps {
   tickets: Ticket[];
   onCancelTicket: (ticketId: string) => void;
+    onEditTicket?: (ticketId: string) => Promise<void> | void;
   races: Race[];
   effectiveTime: Date;
 }
 
 type TicketFilter = 'all' | 'active' | 'winning' | 'paid' | 'lost' | 'canceled';
 
-const TicketItem: React.FC<{ ticket: Ticket; isCancellable: boolean; onCancel: () => void; effectiveTime: Date; races: Race[]; }> = ({ ticket, isCancellable, onCancel, effectiveTime, races }) => {
+const TicketItem: React.FC<{ ticket: Ticket; isModifiable: boolean; onCancel: () => void; onEdit?: () => Promise<void> | void; effectiveTime: Date; races: Race[]; }> = ({ ticket, isModifiable, onCancel, onEdit, effectiveTime, races }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     
     const effectiveStatus = getEffectiveTicketStatus(ticket, effectiveTime);
@@ -56,14 +57,25 @@ const TicketItem: React.FC<{ ticket: Ticket; isCancellable: boolean; onCancel: (
                     )}
                 </div>
                 <div className="flex flex-col items-end gap-2">
-                    {isCancellable && (
-                         <button 
-                            onClick={(e) => { e.stopPropagation(); onCancel(); }}
-                            className="px-3 py-1 text-xs font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:bg-gray-400"
-                            title="Cancel Ticket"
-                        >
-                            Cancel
-                        </button>
+                    {isModifiable && (
+                        <div className="flex items-center gap-1.5">
+                            {onEdit && (
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); onEdit(); }}
+                                    className="px-3 py-1 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+                                    title="Edit Ticket"
+                                >
+                                    Edit
+                                </button>
+                            )}
+                            <button
+                                onClick={(e) => { e.stopPropagation(); onCancel(); }}
+                                className="px-3 py-1 text-xs font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:bg-gray-400"
+                                title="Cancel Ticket"
+                            >
+                                Cancel
+                            </button>
+                        </div>
                     )}
                     <span className="text-xs text-gray-500">{ticket.timestamp.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}</span>
                 </div>
@@ -145,7 +157,7 @@ const TicketItem: React.FC<{ ticket: Ticket; isCancellable: boolean; onCancel: (
     );
 }
 
-export const TicketHistoryPanel: React.FC<TicketHistoryPanelProps> = ({ tickets, onCancelTicket, races, effectiveTime }) => {
+export const TicketHistoryPanel: React.FC<TicketHistoryPanelProps> = ({ tickets, onCancelTicket, onEditTicket, races, effectiveTime }) => {
     const historySummary = useMemo(() => {
         const activeCount = tickets.filter((ticket) => {
             const status = getEffectiveTicketStatus(ticket, effectiveTime);
@@ -164,14 +176,15 @@ export const TicketHistoryPanel: React.FC<TicketHistoryPanelProps> = ({ tickets,
         return [...tickets].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
     }, [tickets]);
 
-    const isTicketCancellable = (ticket: Ticket): boolean => {
-        if (ticket.status === 'Booked') return true;
-        if (ticket.status !== 'Active') return false;
-        const hasRaceStarted = ticket.selections.some(selection => {
+    const isTicketModifiable = (ticket: Ticket): boolean => {
+        if (!['Active', 'Booked'].includes(ticket.status)) return false;
+        const reachedLockWindow = ticket.selections.some(selection => {
             const race = races.find(r => r.id === selection.raceId);
-            return race && effectiveTime >= race.startDate;
+            if (!race) return false;
+            const cancelDeadline = race.startDate.getTime() - (2 * 60 * 1000);
+            return effectiveTime.getTime() >= cancelDeadline;
         });
-        return !hasRaceStarted;
+        return !reachedLockWindow;
     };
 
     return (
@@ -213,8 +226,9 @@ export const TicketHistoryPanel: React.FC<TicketHistoryPanelProps> = ({ tickets,
                         <TicketItem
                             key={ticket.id}
                             ticket={ticket}
-                            isCancellable={isTicketCancellable(ticket)}
+                            isModifiable={isTicketModifiable(ticket)}
                             onCancel={() => onCancelTicket(ticket.id)}
+                            onEdit={onEditTicket ? () => onEditTicket(ticket.id) : undefined}
                             effectiveTime={effectiveTime}
                             races={races}
                         />

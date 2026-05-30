@@ -913,7 +913,7 @@ const AppContent: React.FC = () => {
       }
   };
 
-  const updateBetSlip = (newSelection: Omit<BetSelection, 'cost' | 'multiplier'>) => {
+    const updateBetSlip = (newSelection: Omit<BetSelection, 'cost' | 'multiplier'> & { multiplier?: number }) => {
     const pricing = BET_PRICING[newSelection.betType];
     let cost = 0;
     if (pricing) {
@@ -922,7 +922,7 @@ const AppContent: React.FC = () => {
         else cost = pricing.priceMap[newSelection.numbers.length] ?? 0;
     }
     setBetSlip(prev => {
-      const updated = { ...newSelection, cost, multiplier: 1 };
+            const updated = { ...newSelection, cost, multiplier: Math.max(1, Number(newSelection.multiplier || 1)) };
       const newSelections = [...prev.selections, updated];
       const totalCost = Number(newSelections.reduce((sum, s) => sum + (s.cost * s.multiplier), 0).toFixed(2));
       return { selections: newSelections, totalCost };
@@ -1481,6 +1481,16 @@ const AppContent: React.FC = () => {
       return { success: true, message: 'Paid', ticket: updated };
   };
 
+  const canModifyPendingTicket = useCallback((ticket: Ticket): boolean => {
+      if (!['Active', 'Booked'].includes(ticket.status)) return false;
+      return !ticket.selections.some((selection) => {
+          const race = (races || []).find((item) => item.id === selection.raceId);
+          if (!race) return false;
+          const cancelDeadline = race.startDate.getTime() - BETTING_CUTOFF_MS;
+          return effectiveTime.getTime() >= cancelDeadline;
+      });
+  }, [races, effectiveTime]);
+
   const cancelTicket = async (ticketRef: string) => {
       if (!currentUser) return;
       const normalizedRef = (ticketRef || '').trim();
@@ -1508,13 +1518,7 @@ const AppContent: React.FC = () => {
           return;
       }
 
-      const reachedCancelLockWindow = targetTicket.selections.some((selection) => {
-          const race = (races || []).find((item) => item.id === selection.raceId);
-          if (!race) return false;
-          const cancelDeadline = race.startDate.getTime() - BETTING_CUTOFF_MS;
-          return effectiveTime.getTime() >= cancelDeadline;
-      });
-      if (reachedCancelLockWindow) {
+      if (!canModifyPendingTicket(targetTicket)) {
           alert('Cannot cancel ticket now. Cancellation is only allowed more than 2 minutes before race start.');
           return;
       }
@@ -1547,6 +1551,63 @@ const AppContent: React.FC = () => {
           }));
       } catch (e: any) {
           alert('Cancel failed: ' + (e.message || e));
+      }
+  };
+
+  const editPendingTicket = async (ticketId: string): Promise<boolean> => {
+      if (!currentUser) return false;
+      const targetTicket = (placedTickets || []).find((ticket) => ticket.id === ticketId);
+      if (!targetTicket) {
+          alert('Ticket not found.');
+          return false;
+      }
+
+      if (currentUser.role === 'Customer' && targetTicket.customerId !== currentUser.id) {
+          alert('You can only edit your own ticket.');
+          return false;
+      }
+
+      if (!canModifyPendingTicket(targetTicket)) {
+          alert('Cannot edit ticket now. Editing is only allowed more than 2 minutes before race start.');
+          return false;
+      }
+
+      if (!confirm(`Edit ticket #${targetTicket.id}? This will cancel the current pending ticket and move it back to your slip.`)) {
+          return false;
+      }
+
+      try {
+          if (realtimeDb) {
+              const result = await dbCancelTicket(targetTicket.id, currentUser.id, currentUser.name, effectiveTime);
+              if (!result.success) {
+                  alert(result.message || 'Edit failed while canceling current ticket.');
+                  return false;
+              }
+              await loadLiveSystemData(currentUser);
+          } else {
+              setPlacedTickets((prev) => (prev || []).map((ticket) => {
+                  if (ticket.id !== targetTicket.id) return ticket;
+                  return {
+                      ...ticket,
+                      status: 'Canceled',
+                      canceledAt: effectiveTime,
+                      canceledById: currentUser.id,
+                      canceledByName: currentUser.name
+                  };
+              }));
+          }
+
+          const movedSelections = (targetTicket.selections || []).map((selection) => ({
+              ...selection,
+              multiplier: Math.max(1, Number(selection.multiplier || 1)),
+          }));
+          const totalCost = Number(movedSelections.reduce((sum, selection) => sum + (selection.cost * selection.multiplier), 0).toFixed(2));
+          setBetSlip({ selections: movedSelections, totalCost });
+          alert('Ticket moved to your slip. You can now edit and place it again.');
+          return true;
+      } catch (e: any) {
+          alert('Edit failed: ' + (e.message || e));
+          return false;
       }
   };
 
@@ -2410,6 +2471,7 @@ const AppContent: React.FC = () => {
                 onUpdateSelectionMultiplier={(idx, m) => setBetSlip(prev => { const s = [...prev.selections]; if(s[idx]) s[idx].multiplier = Math.max(1, m); return { selections: s, totalCost: Number(s.reduce((sum, x) => sum + (x.cost * x.multiplier), 0).toFixed(2)) }; })}
                 placedTickets={placedTickets}
                 onCancelTicket={cancelTicket}
+                                onEditPendingTicket={editPendingTicket}
                 seenWinningTickets={seenWinningTickets}
                 onMarkWinningTicketAsSeen={(id) => setSeenWinningTickets(prev => new Set(prev).add(id))}
                 onWithdrawalRequest={handleWithdrawalRequest}

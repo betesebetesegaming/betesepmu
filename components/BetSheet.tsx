@@ -13,7 +13,7 @@ interface BetSheetProps {
   onClose: () => void;
   races: Race[];
   effectiveTime: Date;
-  onAddToSlip: (selection: Omit<BetSelection, 'cost' | 'multiplier'>) => void;
+  onAddToSlip: (selection: Omit<BetSelection, 'cost' | 'multiplier'> & { multiplier?: number }) => void;
   initialRaceId?: string | null;
   onPlaceBet?: () => void;
 }
@@ -43,6 +43,7 @@ export const BetSheet: React.FC<BetSheetProps> = ({
   const [selectedNumbers, setSelectedNumbers] = useState<number[]>([]);
   const [xCount, setXCount] = useState<number>(0);
   const [pattern, setPattern] = useState<string[]>([]);
+  const [betCount, setBetCount] = useState<number>(1);
   const [horseSelectorKey, setHorseSelectorKey] = useState(0);
   const [justAdded, setJustAdded] = useState(false);
 
@@ -64,6 +65,7 @@ export const BetSheet: React.FC<BetSheetProps> = ({
     setSelectedNumbers([]);
     setXCount(0);
     setPattern([]);
+    setBetCount(1);
     setJustAdded(false);
     setHorseSelectorKey((k) => k + 1);
     const snapshot = [...races]
@@ -129,6 +131,7 @@ export const BetSheet: React.FC<BetSheetProps> = ({
     setSelectedNumbers([]);
     setXCount(0);
     setPattern([]);
+    setBetCount(1);
     goNext();
   };
 
@@ -137,6 +140,7 @@ export const BetSheet: React.FC<BetSheetProps> = ({
     setSelectedNumbers([]);
     setXCount(0);
     setPattern([]);
+    setBetCount(1);
     goNext();
   };
 
@@ -151,6 +155,7 @@ export const BetSheet: React.FC<BetSheetProps> = ({
       numbers: selectedNumbers,
       xCount,
       pattern,
+      multiplier: betCount,
     });
     // Keep the sheet open: clear horses, bounce back to horse selection so the
     // user can quickly add another bet on the same race/type. Race + bet type
@@ -158,6 +163,7 @@ export const BetSheet: React.FC<BetSheetProps> = ({
     setSelectedNumbers([]);
     setXCount(0);
     setPattern([]);
+    setBetCount(1);
     setHorseSelectorKey((k) => k + 1);
     setStep(3);
     setJustAdded(true);
@@ -387,6 +393,31 @@ export const BetSheet: React.FC<BetSheetProps> = ({
                 <div className="mt-4 flex items-end justify-between border-t border-green-200 pt-3">
                   <span className="text-xs font-black uppercase text-gray-500">Base cost</span>
                   <span className="text-3xl font-black text-betese-dark">GMD {previewCost.toFixed(0)}</span>
+                </div>
+
+                <div className="mt-3 rounded-xl border border-green-200 bg-white p-3">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">Number of times</p>
+                  <div className="mt-2 flex items-center justify-between gap-3">
+                    <button
+                      onClick={() => setBetCount((prev) => Math.max(1, prev - 1))}
+                      className="w-11 h-11 rounded-xl bg-gray-100 text-betese-dark text-2xl font-black active:scale-95 transition-all"
+                      aria-label="Decrease bet count"
+                    >
+                      -
+                    </button>
+                    <span className="text-2xl font-black text-betese-dark">x{betCount}</span>
+                    <button
+                      onClick={() => setBetCount((prev) => Math.min(99, prev + 1))}
+                      className="w-11 h-11 rounded-xl bg-betese-green text-white text-2xl font-black active:scale-95 transition-all"
+                      aria-label="Increase bet count"
+                    >
+                      +
+                    </button>
+                  </div>
+                  <div className="mt-3 flex items-end justify-between border-t border-gray-200 pt-3">
+                    <span className="text-xs font-black uppercase text-gray-500">Total with quantity</span>
+                    <span className="text-2xl font-black text-betese-dark">GMD {(previewCost * betCount).toFixed(0)}</span>
+                  </div>
                 </div>
               </div>
 

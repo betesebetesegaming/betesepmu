@@ -48,6 +48,7 @@ interface CustomerDashboardProps {
   onUpdateSelectionMultiplier: (index: number, multiplier: number) => void;
   placedTickets: Ticket[];
   onCancelTicket: (ticketId: string) => void;
+  onEditPendingTicket?: (ticketId: string) => Promise<boolean>;
   seenWinningTickets: Set<string>;
   onMarkWinningTicketAsSeen: (id: string) => void;
   onWithdrawalRequest: (amount: number) => Promise<WithdrawalRequest | null>;
@@ -80,6 +81,7 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   onUpdateSelectionMultiplier,
   placedTickets,
   onCancelTicket,
+  onEditPendingTicket,
   seenWinningTickets,
   onMarkWinningTicketAsSeen,
   onWithdrawalRequest,
@@ -261,7 +263,18 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                   )}
               </div>
             )}
-            {activeTab === 'history' && <TicketHistoryPanel tickets={placedTickets} onCancelTicket={onCancelTicket} races={races} effectiveTime={effectiveTime} />}
+            {activeTab === 'history' && (
+              <TicketHistoryPanel
+                tickets={placedTickets}
+                onCancelTicket={onCancelTicket}
+                onEditTicket={onEditPendingTicket ? async (ticketId) => {
+                  const didEdit = await onEditPendingTicket(ticketId);
+                  if (didEdit) setActiveTab('bet');
+                } : undefined}
+                races={races}
+                effectiveTime={effectiveTime}
+              />
+            )}
             {activeTab === 'wallet' && (
                 <div className="space-y-6">
                     <WalletPanel user={user} onWithdrawalRequest={onWithdrawalRequest} onMobileWithdrawal={onMobileWithdrawal} withdrawalRequests={withdrawalRequests} onWalletFlash={onWalletFlash} onDepositRequest={onDepositRequest} depositRequests={depositRequests.filter(r => r.customerId === user.id)} tickets={placedTickets} onCancelWithdrawal={onCancelWithdrawal} />
