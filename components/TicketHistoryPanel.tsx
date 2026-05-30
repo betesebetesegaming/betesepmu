@@ -210,11 +210,6 @@ export const TicketHistoryPanel: React.FC<TicketHistoryPanelProps> = ({ tickets,
                     <p className="text-lg font-black text-purple-700">{historySummary.totalWinnings.toFixed(2)} GMD</p>
                 </div>
             </div>
-            <div className="mb-4 p-3 rounded-lg border bg-slate-50 text-sm flex justify-between">
-                <span className="font-semibold text-gray-700">Total Stake: <span className="font-black text-betese-dark">{historySummary.totalStake.toFixed(2)} GMD</span></span>
-                <span className="font-semibold text-gray-700">Net: <span className="font-black text-betese-dark">{(historySummary.totalWinnings - historySummary.totalStake).toFixed(2)} GMD</span></span>
-            </div>
-
             {/* Ticket count */}
             <p className="text-xs font-semibold text-gray-500 mb-3">Showing {filteredTickets.length} ticket{filteredTickets.length !== 1 ? 's' : ''}</p>
 
